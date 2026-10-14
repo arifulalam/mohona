@@ -1,0 +1,52 @@
+# Decisions
+
+Short records of choices that shape Mohona. Add a new entry when a decision changes.
+
+## ADR-0001: Rust for the engine, TypeScript for the interface
+
+- **Date:** 2026-10-14
+- **Decision:** The engine, CLI and native messaging host are written in Rust. The desktop app (Tauri 2) and the browser extension use TypeScript with React, Vite and Tailwind CSS.
+- **Why:** One small native binary per operating system, no runtime to bundle, safe concurrency for many connections, and a web-technology interface.
+- **Cost:** Rust has a steeper learning curve than Python, so we build in small, testable steps and keep every step runnable from the CLI.
+
+## ADR-0002: Name and tagline
+
+- **Date:** 2026-10-14
+- **Decision:** The project is called **Mohona** (মোহনা, Bengali for estuary), with the tagline "An estuary for your downloads".
+- **Why:** An estuary is where many rivers meet the sea, like many segments merging into one finished file. The plain English name "Estuary" was rejected because an established data-integration company already uses it.
+- **Open:** Check crates.io, npm, GitHub, a domain and a trademark search before the first public release.
+
+## ADR-0003: License is MIT OR Apache-2.0
+
+- **Date:** 2026-10-14
+- **Decision:** Mohona is dual licensed under MIT or Apache-2.0, at the user's option. This is the convention in the Rust ecosystem.
+- **Why:** Both are permissive, so anyone can use and build on Mohona. Apache-2.0 adds an explicit patent grant, and MIT is short and widely understood. Dual licensing keeps Mohona compatible with most other projects.
+- **Note:** ffmpeg runs as a separate program (not linked into Mohona), so its license does not change ours. Revisit in Phase 8 when deciding how ffmpeg ships.
+- **Not legal advice.** Check with a lawyer if the project becomes commercial.
+
+## ADR-0004: Hand-written test server
+
+- **Date:** 2026-10-14
+- **Decision:** `tools/testserver` is a small hand-written HTTP/1.1 server on tokio, not a web framework.
+- **Why:** A download manager must be tested against unusual behavior: ignored Range headers, connections cut mid-body, throttled speeds, changing ETags. Writing the protocol by hand gives exact control, and generating file content from the byte offset means a 1 GiB test file needs no disk space.
+
+## Planned crates (checked 2026-10-14)
+
+Each crate was looked up on crates.io on the date above. Versions can change, so Cargo.lock is the source of truth once a crate is added.
+
+| Crate | Latest version | Last release | Used for |
+| --- | --- | --- | --- |
+| tokio | 1.53.3 | 2026-10-13 | Async runtime |
+| reqwest | 0.13.5 | 2026-09-08 | HTTP and HTTPS client |
+| rusqlite | 0.40.2 | 2026-08-08 | SQLite storage |
+| russh | 0.64.1 | 2026-10-05 | SSH for SFTP |
+| russh-sftp | 3.0.1 | 2026-09-28 | SFTP client |
+| suppaftp | 12.2.0 | 2026-10-11 | FTP and FTPS |
+| librqbit | 9.0.1 | 2026-08-20 | BitTorrent |
+| axum | 0.8.9 | 2026-04-14 | Local API |
+| clap | 4.6.7 | 2026-09-14 | Command-line parsing |
+| m3u8-rs | 6.0.1 | 2026-07-30 | HLS playlists |
+| dash-mpd | 0.21.0 | 2026-10-04 | DASH manifests |
+| tauri | 2.12.3 | 2026-10-10 | Desktop app shell |
+
+All twelve have had a release since April 2026. librqbit is the smallest project (about 64,000 recent downloads), so we will re-check it before Phase 7.

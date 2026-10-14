@@ -1,0 +1,12 @@
+[package]
+name = "mohona-testserver"
+description = "Local HTTP server that serves generated files and misbehaves on purpose, for testing Mohona"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+publish = false
+
+[dependencies]
+clap.workspace = true
+tokio.workspace = true

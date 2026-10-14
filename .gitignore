@@ -1,1 +1,17 @@
+# Rust
 /target
+
+# Node
+node_modules/
+dist/
+
+# Editors and systems
+.idea/
+.vscode/
+*.swp
+.DS_Store
+Thumbs.db
+
+# Downloads made while testing
+*.part
+/downloads/

@@ -1,10 +1,19 @@
-[package]
-name = "mohona"
-version = "0.1.0"
-edition = "2024"
-description = "mohona is a new download manager."
-license = "MIT"
-repository = "https://github.com/mohona"
-readme = "README.md"
+[workspace]
+resolver = "2"
+members = [
+    "crates/core",
+    "crates/net",
+    "crates/store",
+    "crates/cli",
+    "tools/testserver",
+]
 
-[dependencies]
+[workspace.package]
+version = "0.0.1"
+edition = "2021"
+license = "MIT OR Apache-2.0"
+rust-version = "1.85"
+
+[workspace.dependencies]
+clap = { version = "4", features = ["derive"] }
+tokio = { version = "1", features = ["rt-multi-thread", "net", "io-util", "time", "macros"] }
