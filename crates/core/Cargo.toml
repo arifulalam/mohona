@@ -5,3 +5,12 @@ version.workspace = true
 edition.workspace = true
 license.workspace = true
 rust-version.workspace = true
+
+[dependencies]
+mohona-net = { version = "0.0.1", path = "../net" }
+thiserror = "2.0.21"
+tokio.workspace = true
+
+[dev-dependencies]
+mohona-testserver = { path = "../../tools/testserver" }
+tempfile = "3.27.0"

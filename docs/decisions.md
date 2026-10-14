@@ -30,6 +30,19 @@ Short records of choices that shape Mohona. Add a new entry when a decision chan
 - **Decision:** `tools/testserver` is a small hand-written HTTP/1.1 server on tokio, not a web framework.
 - **Why:** A download manager must be tested against unusual behavior: ignored Range headers, connections cut mid-body, throttled speeds, changing ETags. Writing the protocol by hand gives exact control, and generating file content from the byte offset means a 1 GiB test file needs no disk space.
 
+## ADR-0005: HTTP/1.1 only, TLS through rustls
+
+- **Date:** 2026-10-14
+- **Decision:** The HTTP client (reqwest) is built without HTTP/2. TLS uses rustls with the operating system's certificate store. On Windows the build enables prebuilt NASM objects for `aws-lc-rs`, so no extra tools are needed beyond the C++ Build Tools.
+- **Why:** Segmented downloads need several separate connections to one server, and HTTP/2 would multiplex them onto one. We will benchmark both in Phase 3, step 6.
+- **Open:** The test server speaks plain HTTP only, so HTTPS is not covered by automated tests yet. Test it by hand against a real site until we add an HTTPS test server.
+
+## ADR-0006: Partial files are deleted on failure, for now
+
+- **Date:** 2026-10-14
+- **Decision:** If a download fails, its `.part` file is removed.
+- **Why:** Resuming needs a record of which byte ranges are complete, and that ledger arrives in Phase 1, step 6. Until then a leftover `.part` file could not be trusted. From step 6 on, failed downloads keep their partial data.
+
 ## Planned crates (checked 2026-10-14)
 
 Each crate was looked up on crates.io on the date above. Versions can change, so Cargo.lock is the source of truth once a crate is added.

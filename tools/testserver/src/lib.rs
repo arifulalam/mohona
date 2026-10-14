@@ -38,6 +38,7 @@ Query parameters (for /file and the endpoints that serve it)
   drop_after=<bytes>  close the connection after this many body bytes
   drop=random         close the connection after a random number of body bytes
   norange=1           ignore Range requests (answer 200 with the whole file)
+  nohead=1            answer HEAD requests with 405
 
 Byte N of the file is a fixed function of N, so a client can verify any
 range without keeping a copy of the file.
@@ -250,6 +251,19 @@ async fn route<W: AsyncWrite + Unpin>(
             &[("Allow", "GET, HEAD")],
             keep_alive,
             false,
+        )
+        .await?;
+        return Ok(keep_alive);
+    }
+
+    if head_only && request.query.contains_key("nohead") {
+        simple(
+            writer,
+            "405 Method Not Allowed",
+            "HEAD is not allowed here\n",
+            &[("Allow", "GET")],
+            keep_alive,
+            true,
         )
         .await?;
         return Ok(keep_alive);

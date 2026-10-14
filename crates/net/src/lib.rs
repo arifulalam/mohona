@@ -1,7 +1,16 @@
 //! Mohona transports.
 //!
-//! HTTP(S) arrives in Phase 1. FTP, SFTP, WebDAV, proxies and authentication
+//! HTTP(S) lives here now: [`HttpClient`] can [`probe`](HttpClient::probe) a
+//! URL and start a download. FTP, SFTP, WebDAV, proxies and authentication
 //! follow in Phase 3, all behind one transport interface.
+
+mod disposition;
+mod error;
+mod http;
+
+pub use disposition::filename_from_content_disposition;
+pub use error::NetError;
+pub use http::{Body, ClientConfig, HttpClient, Probe};
 
 /// Names of the transports Mohona plans to support, in build order.
 pub const PLANNED_TRANSPORTS: &[&str] = &["http", "https", "ftp", "sftp", "webdav"];

@@ -1,4 +1,13 @@
+use std::error::Error;
+use std::io::{IsTerminal, Write};
+use std::path::PathBuf;
+use std::process::ExitCode;
+use std::time::Instant;
+
 use clap::{Parser, Subcommand};
+use mohona_core::{download, DownloadRequest, Event};
+use mohona_net::{ClientConfig, HttpClient};
+use tokio::sync::mpsc;
 
 #[derive(Parser)]
 #[command(
@@ -13,26 +22,210 @@ struct Cli {
 
 #[derive(Subcommand)]
 enum Command {
-    /// Download a URL (arrives in Phase 1)
+    /// Download a URL
     Get {
-        /// The address to download
+        /// The address to download (http or https)
         url: String,
+
+        /// Folder to save the file in
+        #[arg(short, long, default_value = ".")]
+        output: PathBuf,
     },
 }
 
-fn main() {
+#[tokio::main]
+async fn main() -> ExitCode {
     let cli = Cli::parse();
     match cli.command {
-        Some(Command::Get { url }) => {
-            eprintln!(
-                "mohona {}: downloading is not implemented yet (Phase 1). URL: {url}",
+        Some(Command::Get { url, output }) => match get(url, output).await {
+            Ok(()) => ExitCode::SUCCESS,
+            Err(message) => {
+                eprintln!("error: {message}");
+                ExitCode::FAILURE
+            }
+        },
+        None => {
+            println!(
+                "mohona {} - an estuary for your downloads. Run with --help for commands.",
                 mohona_core::VERSION
             );
-            std::process::exit(2);
+            ExitCode::SUCCESS
         }
-        None => println!(
-            "mohona {} - an estuary for your downloads. Run with --help for commands.",
-            mohona_core::VERSION
-        ),
+    }
+}
+
+async fn get(url: String, output: PathBuf) -> Result<(), String> {
+    let client = HttpClient::new(&ClientConfig::default()).map_err(|error| describe(&error))?;
+    let request = DownloadRequest {
+        url,
+        dest_dir: output,
+    };
+
+    let (sender, mut receiver) = mpsc::channel(64);
+    let worker = tokio::spawn(async move { download(&client, &request, Some(&sender)).await });
+
+    let mut display = Display::new();
+    while let Some(event) = receiver.recv().await {
+        display.handle(&event);
+    }
+
+    let outcome = worker
+        .await
+        .map_err(|error| error.to_string())?
+        .map_err(|error| describe(&error))?;
+    println!(
+        "Saved {} ({})",
+        outcome.path.display(),
+        format_bytes(outcome.bytes)
+    );
+    Ok(())
+}
+
+/// An error and everything that caused it, joined with colons.
+fn describe(error: &dyn Error) -> String {
+    let mut text = error.to_string();
+    let mut source = error.source();
+    while let Some(inner) = source {
+        let part = inner.to_string();
+        if !text.contains(&part) {
+            text.push_str(": ");
+            text.push_str(&part);
+        }
+        source = inner.source();
+    }
+    text
+}
+
+/// Draws the progress line on the terminal.
+struct Display {
+    started: Instant,
+    interactive: bool,
+    drew_line: bool,
+}
+
+impl Display {
+    fn new() -> Self {
+        Self {
+            started: Instant::now(),
+            interactive: std::io::stderr().is_terminal(),
+            drew_line: false,
+        }
+    }
+
+    fn handle(&mut self, event: &Event) {
+        match event {
+            Event::Started {
+                filename,
+                total,
+                resumable,
+                ..
+            } => {
+                self.started = Instant::now();
+                let size = total.map_or("unknown size".to_string(), format_bytes);
+                let resume = if *resumable { "" } else { ", cannot resume" };
+                eprintln!("Downloading {filename} ({size}{resume})");
+            }
+            Event::Progress { downloaded, total } => self.draw(*downloaded, *total),
+            Event::Finished { .. } => {
+                if self.drew_line {
+                    eprintln!();
+                }
+            }
+        }
+    }
+
+    fn draw(&mut self, downloaded: u64, total: Option<u64>) {
+        if !self.interactive {
+            return;
+        }
+        let elapsed = self.started.elapsed().as_secs_f64().max(0.001);
+        let speed = downloaded as f64 / elapsed;
+        let line = match total {
+            Some(total) if total > 0 => {
+                let fraction = (downloaded as f64 / total as f64).clamp(0.0, 1.0);
+                let remaining = total.saturating_sub(downloaded);
+                let eta = if speed > 0.0 {
+                    format_duration((remaining as f64 / speed).round() as u64)
+                } else {
+                    "--:--".to_string()
+                };
+                format!(
+                    "{} {:>3.0}%  {} / {}  {}/s  ETA {}",
+                    bar(fraction),
+                    fraction * 100.0,
+                    format_bytes(downloaded),
+                    format_bytes(total),
+                    format_bytes(speed as u64),
+                    eta
+                )
+            }
+            _ => format!(
+                "{}  {}/s",
+                format_bytes(downloaded),
+                format_bytes(speed as u64)
+            ),
+        };
+        // `\r` returns to the start of the line; the spaces wipe leftovers.
+        eprint!("\r{line:<79}");
+        let _ = std::io::stderr().flush();
+        self.drew_line = true;
+    }
+}
+
+fn bar(fraction: f64) -> String {
+    const WIDTH: usize = 24;
+    let filled = (fraction * WIDTH as f64).round() as usize;
+    format!("[{}{}]", "#".repeat(filled), "-".repeat(WIDTH - filled))
+}
+
+fn format_bytes(bytes: u64) -> String {
+    const UNITS: [&str; 5] = ["B", "KiB", "MiB", "GiB", "TiB"];
+    let mut value = bytes as f64;
+    let mut unit = 0;
+    while value >= 1024.0 && unit < UNITS.len() - 1 {
+        value /= 1024.0;
+        unit += 1;
+    }
+    if unit == 0 {
+        format!("{bytes} B")
+    } else {
+        format!("{value:.1} {}", UNITS[unit])
+    }
+}
+
+fn format_duration(seconds: u64) -> String {
+    let (hours, minutes, seconds) = (seconds / 3600, seconds % 3600 / 60, seconds % 60);
+    if hours > 0 {
+        format!("{hours}:{minutes:02}:{seconds:02}")
+    } else {
+        format!("{minutes}:{seconds:02}")
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{bar, format_bytes, format_duration};
+
+    #[test]
+    fn formats_sizes() {
+        assert_eq!(format_bytes(0), "0 B");
+        assert_eq!(format_bytes(1023), "1023 B");
+        assert_eq!(format_bytes(1024), "1.0 KiB");
+        assert_eq!(format_bytes(1_572_864), "1.5 MiB");
+        assert_eq!(format_bytes(1 << 30), "1.0 GiB");
+    }
+
+    #[test]
+    fn formats_durations() {
+        assert_eq!(format_duration(5), "0:05");
+        assert_eq!(format_duration(65), "1:05");
+        assert_eq!(format_duration(3_725), "1:02:05");
+    }
+
+    #[test]
+    fn bar_fills_from_the_left() {
+        assert_eq!(bar(0.0), format!("[{}]", "-".repeat(24)));
+        assert_eq!(bar(1.0), format!("[{}]", "#".repeat(24)));
+        assert_eq!(bar(0.5), format!("[{}{}]", "#".repeat(12), "-".repeat(12)));
     }
 }

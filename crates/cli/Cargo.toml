@@ -14,3 +14,5 @@ path = "src/main.rs"
 [dependencies]
 clap.workspace = true
 mohona-core = { path = "../core" }
+mohona-net = { version = "0.0.1", path = "../net" }
+tokio.workspace = true

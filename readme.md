@@ -4,7 +4,7 @@
 
 Mohona is a free, open-source download manager. It splits each file across many connections, resumes after any interruption, and brings streams, torrents and browser downloads into one place. It runs on Windows, macOS and Linux.
 
-> **Status: early development (Phase 0).** The workspace, test server and CI exist. Downloading itself arrives in Phase 1. Nothing here is ready for everyday use yet.
+> **Status: early development (Phase 1).** Mohona can probe a URL and download it as a single stream. Multiple connections, resume, queues and the rest are still to come. Nothing here is ready for everyday use yet.
 
 ## Goals
 
@@ -45,6 +45,16 @@ curl -I "http://127.0.0.1:8080/file"                         # 1 GiB file, heade
 curl -r 100-199 "http://127.0.0.1:8080/file" | wc -c          # exactly 100 bytes
 curl "http://127.0.0.1:8080/file?drop_after=5000" | wc -c     # connection cut after 5000 bytes
 ```
+
+### Download a file
+
+With the test server running in another window:
+
+```
+cargo run -p mohona-cli -- get "http://127.0.0.1:8080/file?size=50000000" --output downloads
+```
+
+The file is written as `name.part` and renamed when it is complete, and an existing file is never overwritten (the new one becomes `name (1).ext`).
 
 ## License
 
