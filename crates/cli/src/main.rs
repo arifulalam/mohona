@@ -5,7 +5,10 @@ use std::process::ExitCode;
 use std::time::Instant;
 
 use clap::{Parser, Subcommand};
-use mohona_core::{download, DownloadRequest, Event, DEFAULT_CONNECTIONS};
+use mohona_core::{
+    download, partial_progress, CancelToken, DownloadRequest, Error as CoreError, Event,
+    DEFAULT_CONNECTIONS,
+};
 use mohona_net::{ClientConfig, HttpClient};
 use tokio::sync::mpsc;
 
@@ -76,6 +79,15 @@ async fn get(
     let client = HttpClient::new(&ClientConfig::default()).map_err(|error| describe(&error))?;
     let mut request = DownloadRequest::new(url, output);
     request.connections = connections;
+    // Ctrl-C stops the download cleanly and keeps what was fetched.
+    let cancel = CancelToken::new();
+    request.cancel = cancel.clone();
+    tokio::spawn(async move {
+        if tokio::signal::ctrl_c().await.is_ok() {
+            cancel.cancel();
+        }
+    });
+    let (dest, address) = (request.dest_dir.clone(), request.url.clone());
 
     let (sender, mut receiver) = mpsc::channel(64);
     let worker = tokio::spawn(async move { download(&client, &request, Some(&sender)).await });
@@ -85,10 +97,26 @@ async fn get(
         display.handle(&event);
     }
 
-    let outcome = worker
-        .await
-        .map_err(|error| error.to_string())?
-        .map_err(|error| describe(&error))?;
+    let result = worker.await.map_err(|error| error.to_string())?;
+    let outcome = match result {
+        Ok(outcome) => outcome,
+        Err(error) => {
+            display.finish_line();
+            let mut message = if matches!(error, CoreError::Cancelled) {
+                "stopped".to_string()
+            } else {
+                describe(&error)
+            };
+            if let Some((saved, total)) = partial_progress(&dest, &address) {
+                message.push_str(&format!(
+                    "\nKept {} of {}. Run the same command again to resume.",
+                    format_bytes(saved),
+                    format_bytes(total)
+                ));
+            }
+            return Err(message);
+        }
+    };
     println!(
         "Saved {} ({})",
         outcome.path.display(),
@@ -119,6 +147,8 @@ struct Display {
     drew_line: bool,
     told_limited: bool,
     verbose: bool,
+    /// Bytes that were already on disk when this run started.
+    resumed: u64,
 }
 
 impl Display {
@@ -129,6 +159,7 @@ impl Display {
             drew_line: false,
             told_limited: false,
             verbose,
+            resumed: 0,
         }
     }
 
@@ -138,9 +169,11 @@ impl Display {
                 filename,
                 total,
                 resumable,
+                resumed,
                 connections,
                 ..
             } => {
+                self.resumed = *resumed;
                 self.started = Instant::now();
                 let size = total.map_or("unknown size".to_string(), format_bytes);
                 let resume = if *resumable { "" } else { ", cannot resume" };
@@ -149,7 +182,14 @@ impl Display {
                 } else {
                     String::new()
                 };
-                eprintln!("Downloading {filename} ({size}{resume}{lanes})");
+                if *resumed > 0 {
+                    eprintln!(
+                        "Resuming {filename} at {} ({size}{resume}{lanes})",
+                        format_bytes(*resumed)
+                    );
+                } else {
+                    eprintln!("Downloading {filename} ({size}{resume}{lanes})");
+                }
             }
             Event::Progress { downloaded, total } => self.draw(*downloaded, *total),
             Event::Note(text) => {
@@ -178,12 +218,21 @@ impl Display {
         }
     }
 
+    /// Leave the progress line, so the next message starts on a fresh line.
+    fn finish_line(&mut self) {
+        if self.drew_line {
+            eprintln!();
+            self.drew_line = false;
+        }
+    }
+
     fn draw(&mut self, downloaded: u64, total: Option<u64>) {
         if !self.interactive {
             return;
         }
         let elapsed = self.started.elapsed().as_secs_f64().max(0.001);
-        let speed = downloaded as f64 / elapsed;
+        // Only what this run fetched counts for the speed.
+        let speed = downloaded.saturating_sub(self.resumed) as f64 / elapsed;
         let line = match total {
             Some(total) if total > 0 => {
                 let fraction = (downloaded as f64 / total as f64).clamp(0.0, 1.0);

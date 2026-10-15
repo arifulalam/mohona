@@ -16,4 +16,4 @@ rust-version = "1.85"
 
 [workspace.dependencies]
 clap = { version = "4", features = ["derive"] }
-tokio = { version = "1", features = ["rt-multi-thread", "net", "io-util", "time", "macros", "fs", "sync"] }
+tokio = { version = "1", features = ["rt-multi-thread", "net", "io-util", "time", "macros", "fs", "sync", "signal"] }

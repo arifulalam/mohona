@@ -5,16 +5,20 @@
 //! otherwise it is fetched as a single stream. Resume and retries build on
 //! this in the rest of Phase 1.
 
+mod cancel;
 mod download;
 mod error;
 mod filename;
+mod ledger;
 mod parallel;
 mod retry;
 mod segments;
 mod tuner;
 
+pub use cancel::CancelToken;
 pub use download::{
-    download, DownloadRequest, Event, Outcome, DEFAULT_CONNECTIONS, MAX_CONNECTIONS,
+    download, partial_progress, DownloadRequest, Event, Outcome, DEFAULT_CONNECTIONS,
+    MAX_CONNECTIONS,
 };
 pub use error::Error;
 pub use filename::{sanitize_filename, unique_path};

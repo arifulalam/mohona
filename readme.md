@@ -4,7 +4,7 @@
 
 Mohona is a free, open-source download manager. It splits each file across many connections, resumes after any interruption, and brings streams, torrents and browser downloads into one place. It runs on Windows, macOS and Linux.
 
-> **Status: early development (Phase 1).** Mohona can probe a URL and download it over several connections at once, re-balancing them as it goes. It measures each server to find out how many connections actually help, retries failed requests, and backs off when a server limits connections. Resume after a restart, queues and the rest are still to come. Nothing here is ready for everyday use yet.
+> **Status: early development (Phase 1).** Mohona can probe a URL and download it over several connections at once, re-balancing them as it goes. It measures each server to find out how many connections actually help, retries failed requests, and backs off when a server limits connections. If a download is interrupted (Ctrl-C, a crash, a power cut, a dropped network), run the same command again and it continues where it stopped. Queues and the rest are still to come. Nothing here is ready for everyday use yet.
 
 ## Goals
 
@@ -56,7 +56,7 @@ cargo run -p mohona-cli -- get "http://127.0.0.1:8080/file?size=50000000" --outp
 
 Add `-v` to see what Mohona decides about connections. `--connections 16` (or `-c 16`) sets the most connections Mohona may use (1 to 32, default 8). It often uses fewer: it measures the server and only keeps connections that make the download faster. A file is only split when the server supports byte ranges and the file is at least 1 MiB.
 
-The file is written as `name.part` and renamed when it is complete, and an existing file is never overwritten (the new one becomes `name (1).ext`).
+While a download runs it writes `name.part` and a small progress file `name.part.mohona`. Press Ctrl-C to stop; run the same command again to resume. The file is written as `name.part` and renamed when it is complete, and an existing file is never overwritten (the new one becomes `name (1).ext`).
 
 ## License
 

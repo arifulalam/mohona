@@ -25,6 +25,9 @@ struct Segment {
     start: u64,
     /// The next byte that has not been handed out for writing.
     pos: u64,
+    /// Bytes before this one are written to the file (not just handed out).
+    /// Never ahead of `pos`.
+    committed: u64,
     end: u64,
 }
 
@@ -72,6 +75,7 @@ impl Scheduler {
             .map(|(start, end)| Segment {
                 start,
                 pos: start,
+                committed: start,
                 end,
             })
             .collect();
@@ -80,6 +84,50 @@ impl Scheduler {
             segments: Mutex::new(segments),
             orphans: Mutex::new(Vec::new()),
         }
+    }
+
+    /// Continue an earlier download: `saved` holds `(start, committed, end)`
+    /// of each segment. Like after [`Scheduler::new`], start workers from
+    /// [`Scheduler::initial_claims`] and [`Scheduler::release`] the rest.
+    pub fn restore(saved: &[(u64, u64, u64)], min_segment: u64) -> Self {
+        let segments: Vec<Segment> = saved
+            .iter()
+            .map(|&(start, committed, end)| Segment {
+                start,
+                pos: committed,
+                committed,
+                end,
+            })
+            .collect();
+        Self {
+            min_split: min_segment.max(1),
+            segments: Mutex::new(segments),
+            orphans: Mutex::new(Vec::new()),
+        }
+    }
+
+    /// Record that everything in segment `id` before `position` has been
+    /// written to the file.
+    pub fn commit(&self, id: usize, position: u64) {
+        let mut segments = self.lock();
+        let segment = &mut segments[id];
+        segment.committed = segment.committed.max(position.min(segment.pos));
+    }
+
+    /// `(start, committed, end)` of every segment, for the progress ledger.
+    pub fn snapshot(&self) -> Vec<(u64, u64, u64)> {
+        self.lock()
+            .iter()
+            .map(|segment| (segment.start, segment.committed, segment.end))
+            .collect()
+    }
+
+    /// Bytes that are written to the file.
+    pub fn committed_bytes(&self) -> u64 {
+        self.lock()
+            .iter()
+            .map(|segment| segment.committed - segment.start)
+            .sum()
     }
 
     fn lock(&self) -> MutexGuard<'_, Vec<Segment>> {
@@ -96,9 +144,10 @@ impl Scheduler {
         self.lock()
             .iter()
             .enumerate()
+            .filter(|(_, segment)| segment.pos < segment.end)
             .map(|(id, segment)| Claim {
                 id,
-                start: segment.start,
+                start: segment.pos,
                 end: segment.end,
             })
             .collect()
@@ -148,6 +197,7 @@ impl Scheduler {
         segments.push(Segment {
             start: new_start,
             pos: new_start,
+            committed: new_start,
             end: old_end,
         });
         Some(Claim {
@@ -290,6 +340,33 @@ mod tests {
         let scheduler = Scheduler::new(100, 1, 1);
         scheduler.reserve(0, 100);
         scheduler.release(0);
+        assert!(scheduler.adopt().is_none());
+    }
+
+    #[test]
+    fn commit_never_runs_ahead_of_what_was_handed_out() {
+        let scheduler = Scheduler::new(100, 1, 1);
+        scheduler.reserve(0, 40);
+        scheduler.commit(0, 30);
+        assert_eq!(scheduler.committed_bytes(), 30);
+        scheduler.commit(0, 90); // more than was handed out: capped
+        assert_eq!(scheduler.committed_bytes(), 40);
+        scheduler.commit(0, 10); // never goes backwards
+        assert_eq!(scheduler.committed_bytes(), 40);
+        assert_eq!(scheduler.snapshot(), vec![(0, 40, 100)]);
+    }
+
+    #[test]
+    fn restore_continues_where_the_ledger_says() {
+        let scheduler = Scheduler::restore(&[(0, 50, 50), (50, 70, 100)], 1);
+        assert_eq!(scheduler.committed_bytes(), 50 + 20);
+        assert_eq!(scheduler.remaining(), 30);
+        let claims = scheduler.initial_claims();
+        assert_eq!(claims.len(), 1);
+        assert_eq!((claims[0].id, claims[0].start, claims[0].end), (1, 70, 100));
+        scheduler.release(1);
+        let adopted = scheduler.adopt().unwrap();
+        assert_eq!((adopted.id, adopted.start), (1, 70));
         assert!(scheduler.adopt().is_none());
     }
 

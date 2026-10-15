@@ -61,8 +61,23 @@ fn shorten(name: String) -> String {
 /// A path in `dir` for `filename` that does not exist yet: the name itself,
 /// or `name (1).ext`, `name (2).ext`, and so on.
 pub fn unique_path(dir: &Path, filename: &str) -> PathBuf {
+    unique_path_avoiding(dir, filename, &[])
+}
+
+/// Like [`unique_path`], but a name is also taken when the name with one of
+/// `suffixes` added exists. Used so a new download never picks a name whose
+/// `.part` file belongs to an unfinished download.
+pub fn unique_path_avoiding(dir: &Path, filename: &str, suffixes: &[&str]) -> PathBuf {
+    let is_free = |path: &Path| {
+        !path.exists()
+            && suffixes.iter().all(|suffix| {
+                let mut with_suffix = path.as_os_str().to_owned();
+                with_suffix.push(suffix);
+                !Path::new(&with_suffix).exists()
+            })
+    };
     let first = dir.join(filename);
-    if !first.exists() {
+    if is_free(&first) {
         return first;
     }
     let (stem, extension) = match filename.rfind('.') {
@@ -71,7 +86,7 @@ pub fn unique_path(dir: &Path, filename: &str) -> PathBuf {
     };
     (1u32..)
         .map(|number| dir.join(format!("{stem} ({number}){extension}")))
-        .find(|candidate| !candidate.exists())
+        .find(|candidate| is_free(candidate))
         .unwrap_or(first)
 }
 
@@ -127,6 +142,18 @@ mod tests {
         let short = sanitize_filename(&long);
         assert_eq!(short.chars().count(), 200);
         assert!(short.ends_with(".mp4"));
+    }
+
+    #[test]
+    fn unique_path_avoiding_skips_names_with_a_partial_file() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::write(dir.path().join("a.txt.part"), b"x").unwrap();
+        assert_eq!(
+            super::unique_path_avoiding(dir.path(), "a.txt", &[".part"]),
+            dir.path().join("a (1).txt")
+        );
+        // Without the suffix list the name is considered free.
+        assert_eq!(unique_path(dir.path(), "a.txt"), dir.path().join("a.txt"));
     }
 
     #[test]

@@ -4,7 +4,9 @@ use std::net::SocketAddr;
 use std::path::Path;
 use std::time::Duration;
 
-use mohona_core::{download, DownloadRequest, Error, Event, RetryPolicy};
+use mohona_core::{
+    download, partial_progress, CancelToken, DownloadRequest, Error, Event, RetryPolicy,
+};
 use mohona_net::{ClientConfig, HttpClient, NetError};
 use mohona_testserver::{bind, content_byte, serve, Config};
 use tokio::sync::mpsc;
@@ -437,4 +439,176 @@ async fn gives_up_on_a_connection_the_server_ignores_and_finishes_with_one() {
             .any(|note| note.contains("did not make it faster")),
         "notes: {notes:?}"
     );
+}
+
+/// Start a download, cancel it after `after`, and return the error it gave.
+async fn download_then_cancel(
+    request: &mut DownloadRequest,
+    after: Duration,
+) -> Result<mohona_core::Outcome, Error> {
+    let cancel = CancelToken::new();
+    request.cancel = cancel.clone();
+    tokio::spawn(async move {
+        tokio::time::sleep(after).await;
+        cancel.cancel();
+    });
+    download(&client(), request, None).await
+}
+
+/// Run a download and report how many bytes it said were already on disk.
+async fn download_reporting_resume(request: &DownloadRequest) -> (mohona_core::Outcome, u64) {
+    let (sender, mut receiver) = mpsc::channel(256);
+    let outcome = download(&client(), request, Some(&sender)).await.unwrap();
+    drop(sender);
+    let mut resumed = None;
+    while let Some(event) = receiver.recv().await {
+        if let Event::Started { resumed: bytes, .. } = event {
+            resumed = Some(bytes);
+        }
+    }
+    (outcome, resumed.expect("a Started event"))
+}
+
+#[tokio::test]
+async fn a_cancelled_download_keeps_its_progress_and_resumes() {
+    let addr = start().await;
+    let dir = tempfile::tempdir().unwrap();
+    let size = 12_000_000;
+    let path = format!("/file?size={size}&limit=3000000");
+
+    let mut first = request(addr, &path, dir.path());
+    first.connections = 1;
+    let error = download_then_cancel(&mut first, Duration::from_millis(1500))
+        .await
+        .unwrap_err();
+    assert!(matches!(error, Error::Cancelled), "{error}");
+    assert_eq!(
+        file_names(dir.path()),
+        ["mohona-test.bin.part", "mohona-test.bin.part.mohona"]
+    );
+    let (saved, total) = partial_progress(dir.path(), &first.url).unwrap();
+    assert_eq!(total, size as u64);
+    assert!(saved > 0 && saved < total, "saved {saved} of {total}");
+
+    let mut second = request(addr, &path, dir.path());
+    second.connections = 1;
+    let (outcome, resumed) = download_reporting_resume(&second).await;
+    assert_eq!(
+        resumed, saved,
+        "it should continue exactly where it stopped"
+    );
+    assert_generated_content(&outcome.path, size);
+    assert_eq!(file_names(dir.path()), ["mohona-test.bin"]);
+    assert!(partial_progress(dir.path(), &second.url).is_none());
+}
+
+#[tokio::test]
+async fn resuming_works_when_the_file_was_split_over_several_connections() {
+    let addr = start().await;
+    let dir = tempfile::tempdir().unwrap();
+    let size = 20 * 1024 * 1024 + 321;
+    let path = format!("/file?size={size}&limit=2000000");
+
+    let mut first = request(addr, &path, dir.path());
+    first.connections = 4;
+    let error = download_then_cancel(&mut first, Duration::from_millis(1800))
+        .await
+        .unwrap_err();
+    assert!(matches!(error, Error::Cancelled));
+    let (saved, _) = partial_progress(dir.path(), &first.url).unwrap();
+    assert!(saved > 0);
+
+    let mut second = request(addr, &path, dir.path());
+    second.connections = 4;
+    let (outcome, resumed) = download_reporting_resume(&second).await;
+    assert_eq!(resumed, saved);
+    assert_generated_content(&outcome.path, size);
+    assert_eq!(file_names(dir.path()), ["mohona-test.bin"]);
+}
+
+#[tokio::test]
+async fn a_download_that_changed_on_the_server_starts_over() {
+    let addr = start().await;
+    let dir = tempfile::tempdir().unwrap();
+    let size = 8_000_000;
+    let path = format!("/file?size={size}&limit=3000000");
+
+    let mut first = request(addr, &path, dir.path());
+    first.connections = 1;
+    let _ = download_then_cancel(&mut first, Duration::from_millis(1200)).await;
+    let ledger_path = dir.path().join("mohona-test.bin.part.mohona");
+    // Pretend the server's file had another ETag when the ledger was written.
+    let text = std::fs::read_to_string(&ledger_path).unwrap();
+    assert!(text.contains(&format!("mohona-{size}-1")));
+    std::fs::write(
+        &ledger_path,
+        text.replace(&format!("mohona-{size}-1"), &format!("mohona-{size}-9")),
+    )
+    .unwrap();
+
+    let mut second = request(addr, &path, dir.path());
+    second.connections = 1;
+    let (outcome, resumed) = download_reporting_resume(&second).await;
+    assert_eq!(resumed, 0, "stale data must not be reused");
+    assert_generated_content(&outcome.path, size);
+    assert_eq!(file_names(dir.path()), ["mohona-test.bin"]);
+}
+
+#[tokio::test]
+async fn unfinished_downloads_of_different_urls_do_not_mix() {
+    let addr = start().await;
+    let dir = tempfile::tempdir().unwrap();
+
+    let mut first = request(addr, "/file?size=12000000&limit=3000000", dir.path());
+    first.connections = 1;
+    let _ = download_then_cancel(&mut first, Duration::from_millis(1000)).await;
+    let (saved_before, _) = partial_progress(dir.path(), &first.url).unwrap();
+
+    // Another file with the same name must not touch the first one's data.
+    let other = request(addr, "/file?size=3000000", dir.path());
+    let outcome = download(&client(), &other, None).await.unwrap();
+    assert_eq!(outcome.path, dir.path().join("mohona-test (1).bin"));
+    assert_generated_content(&outcome.path, 3_000_000);
+    assert_eq!(
+        partial_progress(dir.path(), &first.url).unwrap().0,
+        saved_before
+    );
+}
+
+#[tokio::test]
+async fn an_edited_ledger_cannot_send_the_file_outside_the_folder() {
+    let addr = start().await;
+    let root = tempfile::tempdir().unwrap();
+    let dir = root.path().join("downloads");
+    let path = "/file?size=6000000&limit=3000000";
+
+    let mut first = request(addr, path, &dir);
+    first.connections = 1;
+    let _ = download_then_cancel(&mut first, Duration::from_millis(1000)).await;
+    let ledger_path = dir.join("mohona-test.bin.part.mohona");
+    let text = std::fs::read_to_string(&ledger_path).unwrap();
+    std::fs::write(
+        &ledger_path,
+        text.replace("\"mohona-test.bin\"", "\"../evil.bin\""),
+    )
+    .unwrap();
+
+    let mut second = request(addr, path, &dir);
+    second.connections = 1;
+    let outcome = download(&client(), &second, None).await.unwrap();
+    assert_eq!(outcome.path, dir.join("evil.bin"));
+    assert!(!root.path().join("evil.bin").exists());
+}
+
+#[tokio::test]
+async fn cancelling_before_the_start_leaves_nothing() {
+    let addr = start().await;
+    let dir = tempfile::tempdir().unwrap();
+    let req = request(addr, "/file?size=3000000", dir.path());
+    req.cancel.cancel();
+    assert!(matches!(
+        download(&client(), &req, None).await,
+        Err(Error::Cancelled)
+    ));
+    assert!(file_names(dir.path()).is_empty());
 }

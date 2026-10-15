@@ -37,7 +37,7 @@ Short records of choices that shape Mohona. Add a new entry when a decision chan
 - **Why:** Segmented downloads need several separate connections to one server, and HTTP/2 would multiplex them onto one. We will benchmark both in Phase 3, step 6.
 - **Open:** The test server speaks plain HTTP only, so HTTPS is not covered by automated tests yet. Test it by hand against a real site until we add an HTTPS test server.
 
-## ADR-0006: Partial files are deleted on failure, for now
+## ADR-0006: Partial files are deleted on failure, for now (superseded by ADR-0009)
 
 - **Date:** 2026-10-14
 - **Decision:** If a download fails, its `.part` file is removed.
@@ -60,6 +60,15 @@ Short records of choices that shape Mohona. Add a new entry when a decision chan
 - **One request first:** An adaptive download starts as a single request for the whole file, like a browser, and the tuner cuts it up only when more connections prove worth it. The first version pre-cut the file into 16 pieces, which meant a new request and TCP connection per piece even with one connection in use, and that fails on servers that ignore new connections. A connection attempt that is stuck waiting can be cancelled when the tuner decides it is not worth it.
 - **Diagnosing real servers:** `mohona get -v` prints what the download decides and why (connections added or dropped, server pushback), so a failing run on a real server can be understood from its output.
 - **Limits for now:** The connection count is decided once per download, from the first few seconds, and is not remembered per server (planned for Phase 3). Reaching full speed on a fast, per-connection-limited server takes a few seconds of measuring. The single-stream path (no range support) does not retry, since it cannot resume.
+
+## ADR-0009: A progress ledger makes downloads resumable
+
+- **Date:** 2026-10-15
+- **Decision:** A download that uses byte ranges writes `<name>.part` and a small ledger `<name>.part.mohona` (JSON). The ledger lists every segment as `(start, committed, end)`: the segment covers `start..end` and `start..committed` is on disk. If the download fails or is stopped (Ctrl-C, or `CancelToken`) after saving some data, both files are kept. The next run with the same URL and folder finds them, probes the server again, and continues if the size and `ETag`/`Last-Modified` still match; otherwise the old data is deleted and it starts over. Downloads without range support cannot resume and still delete their partial file on failure.
+- **Crash safety:** Workers collect bytes in a buffer and mark them committed only after writing them. A checkpoint (every second, at the start, and on stopping) takes the list of committed bytes first, then flushes the `.part` file to disk, then replaces the ledger atomically (temporary file, `fsync`, rename). So the ledger never claims bytes that might not be on disk, and a power cut leaves either the old ledger or the new one. Before the final rename the file is flushed again.
+- **Found by testing:** The first version wrote its first checkpoint after 2 s. Killing the program (`kill -9`) earlier left a `.part` file with no ledger, which the next run could not find, so it started fresh under a new name and left the orphan behind. The ledger is now written before any data arrives. A test that kills the real program 14 times at random moments and resumes each time ends with a file identical to a clean download.
+- **Safety details:** The file name in the ledger is sanitized again on resume (a ledger is a file anyone can edit). A new download never picks a name whose `.part` file exists. Partial files from the file changing on the server (`If-Range` mismatch) are deleted, since they are useless.
+- **Limits for now:** Two Mohona processes downloading the same URL into the same folder are not guarded against (a lock file is planned). A `.part` file with no readable ledger is left alone, since it may belong to something else. When a failed run's worker handles are still closing on Windows, deleting the partial files can fail and leave them behind.
 
 ## Planned crates (checked 2026-10-14)
 

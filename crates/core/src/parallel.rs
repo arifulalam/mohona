@@ -12,20 +12,22 @@
 //! segment back, the download lowers its number of connections, and the
 //! segment is picked up again after a pause.
 
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, AtomicUsize, Ordering};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use mohona_net::{Failure, HttpClient, NetError};
 use tokio::fs::OpenOptions;
-use tokio::io::{AsyncSeekExt, AsyncWriteExt, BufWriter};
+use tokio::io::{AsyncSeekExt, AsyncWriteExt};
 use tokio::sync::mpsc::Sender;
 use tokio::sync::Notify;
 use tokio::task::JoinSet;
 use tokio::time::{interval, sleep, MissedTickBehavior};
 
+use crate::cancel::CancelToken;
 use crate::download::{emit, report_progress, Event};
+use crate::ledger::Ledger;
 use crate::retry::RetryPolicy;
 use crate::segments::{Claim, Scheduler};
 use crate::tuner::{Action, Tuner};
@@ -35,13 +37,15 @@ use crate::Error;
 pub(crate) const MIN_SEGMENT: u64 = 512 * 1024;
 const WRITE_BUFFER: usize = 256 * 1024;
 const PROGRESS_INTERVAL: Duration = Duration::from_millis(100);
+/// How often progress is saved to the ledger.
+const CHECKPOINT_INTERVAL: Duration = Duration::from_secs(1);
 
 /// What a worker needs to know, shared by all of them.
 struct Shared {
     client: HttpClient,
     url: String,
     etag: Option<String>,
-    part_path: std::path::PathBuf,
+    part_path: PathBuf,
     policy: RetryPolicy,
     scheduler: Scheduler,
     downloaded: AtomicU64,
@@ -94,6 +98,23 @@ enum Ended {
     },
 }
 
+/// Why a download stopped, and whether its partial file is worth keeping.
+pub(crate) struct FetchFailed {
+    pub error: Error,
+    /// Some data is safely on disk and recorded in the ledger, so the
+    /// download can be resumed. When `false`, the caller deletes the files.
+    pub keep: bool,
+}
+
+impl FetchFailed {
+    fn discard(error: impl Into<Error>) -> Self {
+        Self {
+            error: error.into(),
+            keep: false,
+        }
+    }
+}
+
 /// What to fetch and where to put it.
 pub(crate) struct Job<'a> {
     pub client: &'a HttpClient,
@@ -107,6 +128,14 @@ pub(crate) struct Job<'a> {
     pub connections: usize,
     pub policy: &'a RetryPolicy,
     pub part_path: &'a Path,
+    /// The segments of an earlier, interrupted attempt, as `(start,
+    /// committed, end)`. The `.part` file must already have the right size.
+    pub resume: Option<&'a [(u64, u64, u64)]>,
+    /// What is written to the ledger (its `segments` are filled in at each
+    /// checkpoint) and where.
+    pub ledger: &'a Ledger,
+    pub ledger_path: &'a Path,
+    pub cancel: &'a CancelToken,
 }
 
 /// Fill the job's `.part` file with its bytes using up to `job.connections`
@@ -114,7 +143,7 @@ pub(crate) struct Job<'a> {
 pub(crate) async fn fetch_segmented(
     job: &Job<'_>,
     events: Option<&Sender<Event>>,
-) -> Result<Fetched, Error> {
+) -> Result<Fetched, FetchFailed> {
     let Job {
         client,
         url,
@@ -123,12 +152,22 @@ pub(crate) async fn fetch_segmented(
         connections,
         policy,
         part_path,
+        resume,
+        ledger,
+        ledger_path,
+        cancel,
     } = *job;
-    // Create the file at full size now: a full disk fails here, before any
-    // download time is spent, and workers can write anywhere in it.
-    let file = tokio::fs::File::create(part_path).await?;
-    file.set_len(total).await?;
-    drop(file.into_std().await);
+    if resume.is_none() {
+        // Create the file at full size now: a full disk fails here, before
+        // any download time is spent, and workers can write anywhere in it.
+        let create = async {
+            let file = tokio::fs::File::create(part_path).await?;
+            file.set_len(total).await?;
+            drop(file.into_std().await);
+            std::io::Result::Ok(())
+        };
+        create.await.map_err(FetchFailed::discard)?;
+    }
 
     let shared = Arc::new(Shared {
         client: client.clone(),
@@ -138,15 +177,32 @@ pub(crate) async fn fetch_segmented(
         policy: policy.clone(),
         // An adaptive download starts as one long request, like a browser's;
         // the tuner cuts it up when more connections prove worth it.
-        scheduler: Scheduler::new(
-            total,
-            if policy.adaptive { 1 } else { connections },
-            MIN_SEGMENT,
-        ),
+        scheduler: match resume {
+            Some(saved) => Scheduler::restore(saved, MIN_SEGMENT),
+            None => Scheduler::new(
+                total,
+                if policy.adaptive { 1 } else { connections },
+                MIN_SEGMENT,
+            ),
+        },
         downloaded: AtomicU64::new(0),
         retire: AtomicUsize::new(0),
         wake: Notify::new(),
     });
+
+    shared
+        .downloaded
+        .store(shared.scheduler.committed_bytes(), Ordering::Relaxed);
+    // Record the download before any data arrives. If the program is killed
+    // at any moment from here on, the next run finds the `.part` file and
+    // continues with it instead of leaving it behind as an orphan.
+    if let Err(error) = checkpoint(&shared, ledger, ledger_path).await {
+        emit(
+            events,
+            Event::Note(format!("could not save progress: {error}")),
+        )
+        .await;
+    }
 
     let mut workers: JoinSet<Result<Ended, Error>> = JoinSet::new();
     let mut opened = 0usize;
@@ -181,7 +237,8 @@ pub(crate) async fn fetch_segmented(
     let mut sampler = interval(policy.sample_interval.max(Duration::from_millis(1)));
     sampler.set_missed_tick_behavior(MissedTickBehavior::Delay);
     sampler.tick().await; // the first tick is immediate
-    let mut last_sample = (Instant::now(), 0u64);
+    let mut last_sample = (Instant::now(), shared.downloaded.load(Ordering::Relaxed));
+    let mut last_checkpoint = Instant::now();
 
     let result = loop {
         tokio::select! {
@@ -270,7 +327,14 @@ pub(crate) async fn fetch_segmented(
             }
             _ = ticker.tick() => {
                 report_progress(events, shared.downloaded.load(Ordering::Relaxed), Some(total));
+                if last_checkpoint.elapsed() >= CHECKPOINT_INTERVAL {
+                    if let Err(error) = checkpoint(&shared, ledger, ledger_path).await {
+                        emit(events, Event::Note(format!("could not save progress: {error}"))).await;
+                    }
+                    last_checkpoint = Instant::now();
+                }
             }
+            () = cancel.cancelled() => break Err(Error::Cancelled),
         }
         // Requests to stop that nobody is left to obey would hit the wrong
         // worker later, so drop them once the count is where it should be.
@@ -280,20 +344,26 @@ pub(crate) async fn fetch_segmented(
     };
 
     if let Err(error) = result {
-        // Wait for the workers to really stop, so their file handles are
-        // closed before the caller deletes the file (Windows needs that).
+        // Let the workers write what they hold and stop, so their file
+        // handles are closed before anything is renamed or deleted (Windows
+        // needs that), and so the ledger can record their last bytes.
         workers.abort_all();
         while workers.join_next().await.is_some() {}
-        return Err(error);
+        return Err(finish_failed(&shared, ledger, ledger_path, error).await);
     }
 
     let bytes = shared.downloaded.load(Ordering::Relaxed);
     if bytes != total || shared.scheduler.remaining() != 0 {
-        return Err(Error::Incomplete {
+        let error = Error::Incomplete {
             expected: total,
             received: bytes,
-        });
+        };
+        return Err(finish_failed(&shared, ledger, ledger_path, error).await);
     }
+    // Make sure the bytes are on disk before the caller renames the file.
+    sync_part_file(shared.part_path.clone())
+        .await
+        .map_err(FetchFailed::discard)?;
     report_progress(events, bytes, Some(total));
     Ok(Fetched {
         bytes,
@@ -316,6 +386,49 @@ fn start_next(
         return false;
     }
     true
+}
+
+/// Flush the `.part` file to disk.
+async fn sync_part_file(path: PathBuf) -> std::io::Result<()> {
+    tokio::task::spawn_blocking(move || {
+        // Write access is needed to flush on Windows.
+        std::fs::OpenOptions::new()
+            .write(true)
+            .open(path)?
+            .sync_data()
+    })
+    .await
+    .map_err(std::io::Error::other)?
+}
+
+/// Save progress to the ledger.
+///
+/// The order matters: take the list of committed bytes first, then flush the
+/// file, then write the ledger. Everything the ledger claims was written
+/// before the snapshot, so the flush that follows makes it durable.
+async fn checkpoint(shared: &Shared, template: &Ledger, ledger_path: &Path) -> std::io::Result<()> {
+    let mut ledger = template.clone();
+    ledger.segments = shared.scheduler.snapshot();
+    sync_part_file(shared.part_path.clone()).await?;
+    let path = ledger_path.to_path_buf();
+    tokio::task::spawn_blocking(move || ledger.save(&path))
+        .await
+        .map_err(std::io::Error::other)?
+}
+
+/// A download stopped early: record what is on disk, and say whether it is
+/// worth keeping.
+async fn finish_failed(
+    shared: &Shared,
+    template: &Ledger,
+    ledger_path: &Path,
+    error: Error,
+) -> FetchFailed {
+    let progress = shared.scheduler.committed_bytes() > 0;
+    let keep = progress
+        && !error.makes_partial_file_useless()
+        && checkpoint(shared, template, ledger_path).await.is_ok();
+    FetchFailed { error, keep }
 }
 
 fn spawn_worker(
@@ -449,7 +562,11 @@ async fn attempt(shared: &Shared, id: usize, position: u64, end: u64) -> Result<
         .open(&shared.part_path)
         .await?;
     file.seek(std::io::SeekFrom::Start(position)).await?;
-    let mut writer = BufWriter::with_capacity(WRITE_BUFFER, file);
+    // Received bytes are collected here and written in larger pieces. After
+    // each write, `reserved_to` is recorded as committed: the segment's bytes
+    // before it are really in the file.
+    let mut buffer: Vec<u8> = Vec::with_capacity(WRITE_BUFFER);
+    let mut reserved_to = position;
 
     let mut broken = None;
     let mut retired = false;
@@ -470,18 +587,28 @@ async fn attempt(shared: &Shared, id: usize, position: u64, end: u64) -> Result<
         if allowed == 0 {
             break 'receive;
         }
-        writer.write_all(&chunk[..allowed]).await?;
+        buffer.extend_from_slice(&chunk[..allowed]);
+        reserved_to += allowed as u64;
         shared
             .downloaded
             .fetch_add(allowed as u64, Ordering::Relaxed);
+        if buffer.len() >= WRITE_BUFFER {
+            file.write_all(&buffer).await?;
+            buffer.clear();
+            shared.scheduler.commit(id, reserved_to);
+        }
         if allowed < chunk.len() {
             // The segment ends here: the rest belongs to another worker.
             break 'receive;
         }
     }
-    writer.flush().await?;
+    if !buffer.is_empty() {
+        file.write_all(&buffer).await?;
+        shared.scheduler.commit(id, reserved_to);
+    }
+    file.flush().await?;
     // Close the handle for real before returning (see `fetch_to_part`).
-    drop(writer.into_inner().into_std().await);
+    drop(file.into_std().await);
 
     if let Some(error) = broken {
         return Err(error.into());

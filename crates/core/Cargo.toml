@@ -8,6 +8,8 @@ rust-version.workspace = true
 
 [dependencies]
 mohona-net = { version = "0.0.1", path = "../net" }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
 thiserror = "2.0.21"
 tokio.workspace = true
 
