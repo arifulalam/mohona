@@ -5,7 +5,7 @@ use std::process::ExitCode;
 use std::time::Instant;
 
 use clap::{Parser, Subcommand};
-use mohona_core::{download, DownloadRequest, Event};
+use mohona_core::{download, DownloadRequest, Event, DEFAULT_CONNECTIONS};
 use mohona_net::{ClientConfig, HttpClient};
 use tokio::sync::mpsc;
 
@@ -30,6 +30,10 @@ enum Command {
         /// Folder to save the file in
         #[arg(short, long, default_value = ".")]
         output: PathBuf,
+
+        /// Most connections to use at once (1 to 32)
+        #[arg(short = 'c', long, default_value_t = DEFAULT_CONNECTIONS as u16, value_parser = clap::value_parser!(u16).range(1..=32))]
+        connections: u16,
     },
 }
 
@@ -37,7 +41,11 @@ enum Command {
 async fn main() -> ExitCode {
     let cli = Cli::parse();
     match cli.command {
-        Some(Command::Get { url, output }) => match get(url, output).await {
+        Some(Command::Get {
+            url,
+            output,
+            connections,
+        }) => match get(url, output, usize::from(connections)).await {
             Ok(()) => ExitCode::SUCCESS,
             Err(message) => {
                 eprintln!("error: {message}");
@@ -54,12 +62,10 @@ async fn main() -> ExitCode {
     }
 }
 
-async fn get(url: String, output: PathBuf) -> Result<(), String> {
+async fn get(url: String, output: PathBuf, connections: usize) -> Result<(), String> {
     let client = HttpClient::new(&ClientConfig::default()).map_err(|error| describe(&error))?;
-    let request = DownloadRequest {
-        url,
-        dest_dir: output,
-    };
+    let mut request = DownloadRequest::new(url, output);
+    request.connections = connections;
 
     let (sender, mut receiver) = mpsc::channel(64);
     let worker = tokio::spawn(async move { download(&client, &request, Some(&sender)).await });
@@ -118,12 +124,18 @@ impl Display {
                 filename,
                 total,
                 resumable,
+                connections,
                 ..
             } => {
                 self.started = Instant::now();
                 let size = total.map_or("unknown size".to_string(), format_bytes);
                 let resume = if *resumable { "" } else { ", cannot resume" };
-                eprintln!("Downloading {filename} ({size}{resume})");
+                let lanes = if *connections > 1 {
+                    format!(", {connections} connections")
+                } else {
+                    String::new()
+                };
+                eprintln!("Downloading {filename} ({size}{resume}{lanes})");
             }
             Event::Progress { downloaded, total } => self.draw(*downloaded, *total),
             Event::Finished { .. } => {

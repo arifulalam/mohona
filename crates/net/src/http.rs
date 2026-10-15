@@ -4,7 +4,7 @@ use bytes::Bytes;
 use percent_encoding::percent_decode_str;
 use reqwest::header::{
     HeaderMap, HeaderName, HeaderValue, ACCEPT_ENCODING, ACCEPT_RANGES, CONTENT_DISPOSITION,
-    CONTENT_LENGTH, CONTENT_RANGE, CONTENT_TYPE, ETAG, LAST_MODIFIED, RANGE,
+    CONTENT_LENGTH, CONTENT_RANGE, CONTENT_TYPE, ETAG, IF_RANGE, LAST_MODIFIED, RANGE,
 };
 use reqwest::{Client, Response, StatusCode, Url};
 
@@ -144,6 +144,54 @@ impl HttpClient {
         }
         Ok(Body { response })
     }
+
+    /// Start a `GET` for bytes `first..=last` and return its body.
+    ///
+    /// The answer must be `206 Partial Content` starting at `first`; anything
+    /// else (for example the whole file, because the server ignores ranges or
+    /// the file changed) is an error, so a wrong part is never written into
+    /// the file. If `etag` is given it is sent as `If-Range`, which makes a
+    /// server whose file changed answer 200 instead of the new bytes.
+    pub async fn get_range(
+        &self,
+        url: &str,
+        first: u64,
+        last: u64,
+        etag: Option<&str>,
+    ) -> Result<Body, NetError> {
+        let url = parse_url(url)?;
+        let mut request = self
+            .client
+            .get(url.clone())
+            .header(RANGE, format!("bytes={first}-{last}"));
+        // Weak validators ("W/...") are not allowed in `If-Range`.
+        if let Some(etag) = etag.filter(|etag| !etag.starts_with("W/")) {
+            request = request.header(IF_RANGE, etag);
+        }
+        let response = request.send().await?;
+        let status = response.status();
+        if status == StatusCode::PARTIAL_CONTENT {
+            let start = header_text(&response, &CONTENT_RANGE)
+                .and_then(|value| first_byte_from_content_range(&value));
+            if start != Some(first) {
+                return Err(NetError::WrongRange(format!(
+                    "asked for bytes from {first}, got {:?}",
+                    header_text(&response, &CONTENT_RANGE)
+                )));
+            }
+            Ok(Body { response })
+        } else if status.is_success() {
+            Err(NetError::WrongRange(format!(
+                "asked for bytes {first}-{last}, got status {}",
+                status.as_u16()
+            )))
+        } else {
+            Err(NetError::Status {
+                status: status.as_u16(),
+                url: url.to_string(),
+            })
+        }
+    }
 }
 
 fn parse_url(input: &str) -> Result<Url, NetError> {
@@ -191,6 +239,12 @@ fn total_from_content_range(value: &str) -> Option<u64> {
     value.rsplit_once('/')?.1.trim().parse().ok()
 }
 
+/// `bytes 100-199/1000` gives `Some(100)`.
+fn first_byte_from_content_range(value: &str) -> Option<u64> {
+    let range = value.trim().strip_prefix("bytes")?.trim_start();
+    range.split_once('-')?.0.trim().parse().ok()
+}
+
 fn probe_from_range_response(
     response: &Response,
     from_head: Option<Probe>,
@@ -226,7 +280,18 @@ fn probe_from_range_response(
 
 #[cfg(test)]
 mod tests {
-    use super::total_from_content_range;
+    use super::{first_byte_from_content_range, total_from_content_range};
+
+    #[test]
+    fn reads_the_first_byte_from_content_range() {
+        assert_eq!(
+            first_byte_from_content_range("bytes 100-199/1000"),
+            Some(100)
+        );
+        assert_eq!(first_byte_from_content_range("bytes 0-0/*"), Some(0));
+        assert_eq!(first_byte_from_content_range("bytes */1000"), None);
+        assert_eq!(first_byte_from_content_range("garbage"), None);
+    }
 
     #[test]
     fn reads_the_total_from_content_range() {

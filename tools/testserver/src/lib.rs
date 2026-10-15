@@ -35,6 +35,8 @@ Query parameters (for /file and the endpoints that serve it)
   size=<bytes>        file size (default: the server's --size)
   etag=<text>         change the ETag, to test files that change between runs
   limit=<bytes/sec>   throttle each connection to this speed
+  slow_start=<bytes/sec>  throttle only the response that begins at byte 0,
+                      so one segment lags behind the others
   drop_after=<bytes>  close the connection after this many body bytes
   drop=random         close the connection after a random number of body bytes
   norange=1           ignore Range requests (answer 200 with the whole file)
@@ -463,6 +465,10 @@ async fn serve_file<W: AsyncWrite + Unpin>(
         return Ok(keep_alive);
     }
 
+    let rate = match query_u64(request, "slow_start").filter(|rate| *rate > 0) {
+        Some(slow) if start == 0 => Some(slow),
+        _ => rate,
+    };
     let started = Instant::now();
     let mut buffer = vec![0u8; CHUNK];
     let mut sent = 0u64;

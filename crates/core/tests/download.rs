@@ -32,10 +32,7 @@ fn client() -> HttpClient {
 }
 
 fn request(addr: SocketAddr, path: &str, dir: &Path) -> DownloadRequest {
-    DownloadRequest {
-        url: format!("http://{addr}{path}"),
-        dest_dir: dir.to_path_buf(),
-    }
+    DownloadRequest::new(format!("http://{addr}{path}"), dir)
 }
 
 fn file_names(dir: &Path) -> Vec<String> {
@@ -193,5 +190,75 @@ async fn a_missing_page_is_a_404_error_and_creates_nothing() {
         error,
         Error::Net(NetError::Status { status: 404, .. })
     ));
+    assert!(file_names(dir.path()).is_empty());
+}
+
+#[tokio::test]
+async fn a_big_file_is_split_over_several_connections_and_matches() {
+    let addr = start().await;
+    let dir = tempfile::tempdir().unwrap();
+    let (sender, mut receiver) = mpsc::channel(256);
+    let size = 20 * 1024 * 1024 + 12_345;
+    let mut req = request(addr, &format!("/file?size={size}"), dir.path());
+    req.connections = 8;
+
+    let outcome = download(&client(), &req, Some(&sender)).await.unwrap();
+    assert_eq!(outcome.bytes, size as u64);
+    assert!(outcome.connections >= 8, "used {}", outcome.connections);
+    assert_generated_content(&outcome.path, size);
+    assert_eq!(file_names(dir.path()), ["mohona-test.bin"]);
+
+    drop(sender);
+    let mut started_with = None;
+    let mut last_progress = 0;
+    while let Some(event) = receiver.recv().await {
+        match event {
+            Event::Started { connections, .. } => started_with = Some(connections),
+            Event::Progress { downloaded, .. } => {
+                assert!(downloaded >= last_progress, "progress went backwards");
+                last_progress = downloaded;
+            }
+            Event::Finished { .. } => {}
+        }
+    }
+    assert_eq!(started_with, Some(8));
+}
+
+#[tokio::test]
+async fn one_connection_is_a_single_stream() {
+    let addr = start().await;
+    let dir = tempfile::tempdir().unwrap();
+    let mut req = request(addr, "/file?size=5000000", dir.path());
+    req.connections = 1;
+    let outcome = download(&client(), &req, None).await.unwrap();
+    assert_eq!(outcome.connections, 1);
+    assert_generated_content(&outcome.path, 5_000_000);
+}
+
+#[tokio::test]
+async fn a_slow_segment_is_split_and_the_file_is_still_exact() {
+    let addr = start().await;
+    let dir = tempfile::tempdir().unwrap();
+    // The first segment crawls at 200 KB/s, so the other connections finish
+    // early and must take over half of what is left of it.
+    let size = 8 * 1024 * 1024;
+    let mut req = request(
+        addr,
+        &format!("/file?size={size}&slow_start=200000"),
+        dir.path(),
+    );
+    req.connections = 4;
+    let outcome = download(&client(), &req, None).await.unwrap();
+    assert!(outcome.connections > 4, "no split: {}", outcome.connections);
+    assert_generated_content(&outcome.path, size);
+}
+
+#[tokio::test]
+async fn a_cut_segment_fails_the_download_and_leaves_no_files() {
+    let addr = start().await;
+    let dir = tempfile::tempdir().unwrap();
+    let mut req = request(addr, "/file?size=8000000&drop_after=100000", dir.path());
+    req.connections = 4;
+    assert!(download(&client(), &req, None).await.is_err());
     assert!(file_names(dir.path()).is_empty());
 }

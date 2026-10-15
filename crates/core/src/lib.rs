@@ -1,15 +1,22 @@
 //! Mohona core engine.
 //!
-//! Today it downloads one URL as a single stream ([`download`]). The
-//! segmented, resumable engine builds on this in the rest of Phase 1.
+//! [`download`] fetches one URL. When the server supports byte ranges, the
+//! file is split over several connections that are re-balanced as they go;
+//! otherwise it is fetched as a single stream. Resume and retries build on
+//! this in the rest of Phase 1.
 
 mod download;
 mod error;
 mod filename;
+mod parallel;
+mod segments;
 
-pub use download::{download, DownloadRequest, Event, Outcome};
+pub use download::{
+    download, DownloadRequest, Event, Outcome, DEFAULT_CONNECTIONS, MAX_CONNECTIONS,
+};
 pub use error::Error;
 pub use filename::{sanitize_filename, unique_path};
+pub use segments::{split_evenly, Claim, Scheduler};
 
 /// The version of Mohona, taken from the crate manifest.
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");

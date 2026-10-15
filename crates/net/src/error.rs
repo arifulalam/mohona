@@ -20,6 +20,12 @@ pub enum NetError {
         url: String,
     },
 
+    /// A byte range was requested but the server answered with something else,
+    /// for example the whole file (status 200) or a different part.
+    /// This also happens when the file changed on the server.
+    #[error("the server did not send the requested part of the file ({0})")]
+    WrongRange(String),
+
     /// The request failed before or while receiving the response.
     #[error("network error")]
     Http(#[from] reqwest::Error),

@@ -43,6 +43,13 @@ Short records of choices that shape Mohona. Add a new entry when a decision chan
 - **Decision:** If a download fails, its `.part` file is removed.
 - **Why:** Resuming needs a record of which byte ranges are complete, and that ledger arrives in Phase 1, step 6. Until then a leftover `.part` file could not be trusted. From step 6 on, failed downloads keep their partial data.
 
+## ADR-0007: One scheduler decides who downloads which bytes
+
+- **Date:** 2026-10-15
+- **Decision:** The file is created at full size, cut into equal ranges, and each range gets its own connection and file handle. A single `Scheduler` (behind one lock) owns the ranges. Workers ask it before writing each chunk, and a worker that finishes asks it to cut the biggest unfinished range in half. Pieces smaller than 512 KiB are never split further.
+- **Why:** With one place that knows who owns which byte, two workers can never write the same byte, and a slow connection never leaves the others idle at the end. A test with random use checks that the ranges always tile the file exactly.
+- **Safety:** A range request is sent with `If-Range` (the ETag). If the server answers anything but `206` at the right offset (file changed, ranges ignored), the download fails instead of writing wrong bytes.
+
 ## Planned crates (checked 2026-10-14)
 
 Each crate was looked up on crates.io on the date above. Versions can change, so Cargo.lock is the source of truth once a crate is added.

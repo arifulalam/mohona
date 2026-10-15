@@ -7,10 +7,16 @@ use tokio::io::{AsyncWriteExt, BufWriter};
 use tokio::sync::mpsc::Sender;
 
 use crate::filename::{sanitize_filename, unique_path};
+use crate::parallel::{fetch_segmented, MIN_SEGMENT};
 use crate::Error;
 
 const WRITE_BUFFER: usize = 256 * 1024;
 const PROGRESS_INTERVAL: Duration = Duration::from_millis(100);
+
+/// How many connections a download uses unless told otherwise.
+pub const DEFAULT_CONNECTIONS: usize = 8;
+/// The most connections one download may use.
+pub const MAX_CONNECTIONS: usize = 32;
 
 /// What to download and where to put it.
 #[derive(Clone, Debug)]
@@ -19,6 +25,21 @@ pub struct DownloadRequest {
     pub url: String,
     /// The folder for the finished file. It is created if it does not exist.
     pub dest_dir: PathBuf,
+    /// The most connections to use at once (1 to [`MAX_CONNECTIONS`]; values
+    /// outside that are adjusted). Only used when the server supports byte
+    /// ranges and the file is big enough to be worth splitting.
+    pub connections: usize,
+}
+
+impl DownloadRequest {
+    /// A request with the default number of connections.
+    pub fn new(url: impl Into<String>, dest_dir: impl Into<PathBuf>) -> Self {
+        Self {
+            url: url.into(),
+            dest_dir: dest_dir.into(),
+            connections: DEFAULT_CONNECTIONS,
+        }
+    }
 }
 
 /// Something that happened during a download.
@@ -34,6 +55,9 @@ pub enum Event {
         total: Option<u64>,
         /// Whether the server supports resuming with byte ranges.
         resumable: bool,
+        /// How many connections the first requests will use. More may be
+        /// opened later when slow segments are split.
+        connections: usize,
     },
     /// Bytes received so far. May be skipped if the receiver is slow.
     Progress {
@@ -60,9 +84,16 @@ pub struct Outcome {
     pub bytes: u64,
     /// The address the file came from, after redirects.
     pub final_url: String,
+    /// How many connections were opened for the file's data, including
+    /// ones opened later to take over half of a slow segment.
+    pub connections: usize,
 }
 
-/// Download one URL as a single stream.
+/// Download one URL.
+///
+/// When the server supports byte ranges and the size is known and not tiny,
+/// the file is split over several connections (see `parallel`). Otherwise it
+/// is fetched as one stream.
 ///
 /// The data is written to `<name>.part` and renamed once it is complete and
 /// the size matches, so a finished file is never half-written. If the
@@ -84,6 +115,15 @@ pub async fn download(
     let final_path = unique_path(&request.dest_dir, &filename);
     let part_path = part_path_for(&final_path);
 
+    let wanted = request.connections.clamp(1, MAX_CONNECTIONS);
+    // Split only when it can work and can pay off.
+    let segmented_total = probe
+        .size
+        .filter(|size| probe.accepts_ranges && wanted > 1 && *size >= 2 * MIN_SEGMENT);
+    let planned = segmented_total.map_or(1, |size| {
+        usize::try_from(size / MIN_SEGMENT).map_or(wanted, |most| wanted.min(most))
+    });
+
     emit(
         events,
         Event::Started {
@@ -91,12 +131,29 @@ pub async fn download(
             filename,
             total: probe.size,
             resumable: probe.accepts_ranges,
+            connections: planned,
         },
     )
     .await;
 
-    let bytes = match fetch_to_part(client, &probe, &part_path, events).await {
-        Ok(bytes) => bytes,
+    let fetched = match segmented_total {
+        Some(total) => fetch_segmented(
+            client,
+            &probe.final_url,
+            probe.etag.as_deref(),
+            total,
+            wanted,
+            &part_path,
+            events,
+        )
+        .await
+        .map(|fetched| (fetched.bytes, fetched.connections)),
+        None => fetch_to_part(client, &probe, &part_path, events)
+            .await
+            .map(|bytes| (bytes, 1)),
+    };
+    let (bytes, connections) = match fetched {
+        Ok(done) => done,
         Err(error) => {
             let _ = fs::remove_file(&part_path).await;
             return Err(error);
@@ -120,6 +177,7 @@ pub async fn download(
         path: final_path,
         bytes,
         final_url: probe.final_url,
+        connections,
     })
 }
 
@@ -174,7 +232,7 @@ async fn emit(events: Option<&Sender<Event>>, event: Event) {
     }
 }
 
-fn report_progress(events: Option<&Sender<Event>>, downloaded: u64, total: Option<u64>) {
+pub(crate) fn report_progress(events: Option<&Sender<Event>>, downloaded: u64, total: Option<u64>) {
     if let Some(sender) = events {
         let _ = sender.try_send(Event::Progress { downloaded, total });
     }
