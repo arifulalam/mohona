@@ -522,6 +522,7 @@ async fn serve_file<W: AsyncWrite + Unpin>(
         _ => rate,
     };
     let started = Instant::now();
+    let mut crowded_due = Duration::ZERO;
     let mut buffer = vec![0u8; CHUNK];
     let mut sent = 0u64;
     while sent < len {
@@ -542,7 +543,13 @@ async fn serve_file<W: AsyncWrite + Unpin>(
             // together get only total/n: more connections, less speed.
             let open = config.active.load(Ordering::SeqCst).max(1) as f64;
             let rate = total_rate as f64 / (open * open);
-            tokio::time::sleep(Duration::from_secs_f64(count as f64 / rate)).await;
+            // Keep a running schedule instead of sleeping a fixed time per
+            // chunk: operating systems round short sleeps up (Windows to
+            // about 15 ms), and that would slow the average speed.
+            crowded_due += Duration::from_secs_f64(count as f64 / rate);
+            if let Some(wait) = crowded_due.checked_sub(started.elapsed()) {
+                tokio::time::sleep(wait).await;
+            }
         } else if let Some(rate) = rate {
             let due = Duration::from_secs_f64(sent as f64 / rate as f64);
             if let Some(wait) = due.checked_sub(started.elapsed()) {
