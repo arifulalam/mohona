@@ -216,9 +216,11 @@ pub(crate) async fn fetch_segmented(
                                 break Err(error);
                             }
                         }
+                        // Wait longer than for an ordinary hiccup: a server that
+                        // pushes back should be given time, not poked again.
                         pause = shared
                             .policy
-                            .backoff(throttles_without_progress.max(1), retry_after);
+                            .backoff(throttles_without_progress.max(1) + 2, retry_after);
                     }
                     Ok(Err(error)) => break Err(error),
                     Err(join_error) => break Err(Error::Io(std::io::Error::other(join_error))),
@@ -249,7 +251,7 @@ pub(crate) async fn fetch_segmented(
                         if started > 0 {
                             emit(events, Event::Note(format!(
                                 "speed is {}/s with {} connection(s): trying {} more",
-                                human_speed(speed), workers.len() - started, started
+                                human_speed(tuner.last_mean()), workers.len() - started, started
                             ))).await;
                         }
                         tuner.grew(started);
