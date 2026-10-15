@@ -56,6 +56,9 @@ pub fn split_evenly(total: u64, parts: usize, min_segment: u64) -> Vec<(u64, u64
 pub struct Scheduler {
     min_split: u64,
     segments: Mutex<Vec<Segment>>,
+    /// Segments whose worker gave up for now (the server refused it). They
+    /// keep their place in the file and wait for [`Scheduler::adopt`].
+    orphans: Mutex<Vec<usize>>,
 }
 
 impl Scheduler {
@@ -75,6 +78,7 @@ impl Scheduler {
         Self {
             min_split: min_segment.max(1),
             segments: Mutex::new(segments),
+            orphans: Mutex::new(Vec::new()),
         }
     }
 
@@ -151,6 +155,34 @@ impl Scheduler {
             start: new_start,
             end: old_end,
         })
+    }
+
+    /// Give segment `id` back because its worker cannot continue for now.
+    /// Nothing is lost: the segment keeps its position, and
+    /// [`Scheduler::adopt`] hands it to the next worker.
+    pub fn release(&self, id: usize) {
+        let mut orphans = self.orphans.lock().unwrap_or_else(|p| p.into_inner());
+        if !orphans.contains(&id) {
+            orphans.push(id);
+        }
+    }
+
+    /// Take a released segment that still has bytes to fetch, continuing
+    /// from where it stopped.
+    pub fn adopt(&self) -> Option<Claim> {
+        let mut orphans = self.orphans.lock().unwrap_or_else(|p| p.into_inner());
+        let segments = self.lock();
+        while let Some(id) = orphans.pop() {
+            let segment = &segments[id];
+            if segment.pos < segment.end {
+                return Some(Claim {
+                    id,
+                    start: segment.pos,
+                    end: segment.end,
+                });
+            }
+        }
+        None
     }
 
     /// Bytes not yet handed out for writing, over all segments.
@@ -237,6 +269,28 @@ mod tests {
         let allowed = claim.start - MIB;
         assert_eq!(scheduler.reserve(0, 10 * MIB), allowed);
         assert_eq!(scheduler.reserve(0, 1), 0);
+    }
+
+    #[test]
+    fn a_released_segment_is_adopted_where_it_stopped() {
+        let scheduler = Scheduler::new(4 * MIB, 2, MIB);
+        assert_eq!(scheduler.reserve(1, 300), 300);
+        scheduler.release(1);
+        scheduler.release(1); // releasing twice does not duplicate it
+        let claim = scheduler.adopt().unwrap();
+        assert_eq!(
+            (claim.id, claim.start, claim.end),
+            (1, 2 * MIB + 300, 4 * MIB)
+        );
+        assert!(scheduler.adopt().is_none());
+    }
+
+    #[test]
+    fn a_finished_released_segment_is_not_adopted() {
+        let scheduler = Scheduler::new(100, 1, 1);
+        scheduler.reserve(0, 100);
+        scheduler.release(0);
+        assert!(scheduler.adopt().is_none());
     }
 
     #[test]

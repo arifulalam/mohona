@@ -107,6 +107,7 @@ struct Display {
     started: Instant,
     interactive: bool,
     drew_line: bool,
+    told_limited: bool,
 }
 
 impl Display {
@@ -115,6 +116,7 @@ impl Display {
             started: Instant::now(),
             interactive: std::io::stderr().is_terminal(),
             drew_line: false,
+            told_limited: false,
         }
     }
 
@@ -131,13 +133,23 @@ impl Display {
                 let size = total.map_or("unknown size".to_string(), format_bytes);
                 let resume = if *resumable { "" } else { ", cannot resume" };
                 let lanes = if *connections > 1 {
-                    format!(", {connections} connections")
+                    format!(", up to {connections} connections")
                 } else {
                     String::new()
                 };
                 eprintln!("Downloading {filename} ({size}{resume}{lanes})");
             }
             Event::Progress { downloaded, total } => self.draw(*downloaded, *total),
+            Event::Limited { .. } => {
+                // The count drops one step at a time; say it only once.
+                if !self.told_limited {
+                    self.told_limited = true;
+                    if self.drew_line {
+                        eprint!("\r{:<79}\r", "");
+                    }
+                    eprintln!("The server is limiting simultaneous connections; using fewer");
+                }
+            }
             Event::Finished { .. } => {
                 if self.drew_line {
                     eprintln!();

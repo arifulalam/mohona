@@ -9,7 +9,7 @@ mod error;
 mod http;
 
 pub use disposition::filename_from_content_disposition;
-pub use error::NetError;
+pub use error::{Failure, NetError};
 pub use http::{Body, ClientConfig, HttpClient, Probe};
 
 /// Names of the transports Mohona plans to support, in build order.

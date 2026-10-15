@@ -2,8 +2,9 @@
 
 use std::net::SocketAddr;
 use std::path::Path;
+use std::time::Duration;
 
-use mohona_core::{download, DownloadRequest, Error, Event};
+use mohona_core::{download, DownloadRequest, Error, Event, RetryPolicy};
 use mohona_net::{ClientConfig, HttpClient, NetError};
 use mohona_testserver::{bind, content_byte, serve, Config};
 use tokio::sync::mpsc;
@@ -32,7 +33,10 @@ fn client() -> HttpClient {
 }
 
 fn request(addr: SocketAddr, path: &str, dir: &Path) -> DownloadRequest {
-    DownloadRequest::new(format!("http://{addr}{path}"), dir)
+    let mut request = DownloadRequest::new(format!("http://{addr}{path}"), dir);
+    // Most tests want every connection at once; adaptive ones set it back.
+    request.retry.adaptive = false;
+    request
 }
 
 fn file_names(dir: &Path) -> Vec<String> {
@@ -218,7 +222,7 @@ async fn a_big_file_is_split_over_several_connections_and_matches() {
                 assert!(downloaded >= last_progress, "progress went backwards");
                 last_progress = downloaded;
             }
-            Event::Finished { .. } => {}
+            _ => {}
         }
     }
     assert_eq!(started_with, Some(8));
@@ -253,12 +257,147 @@ async fn a_slow_segment_is_split_and_the_file_is_still_exact() {
     assert_generated_content(&outcome.path, size);
 }
 
+/// Short waits, so tests about failures do not take long.
+fn quick_retries() -> RetryPolicy {
+    RetryPolicy {
+        base_delay: Duration::from_millis(5),
+        max_delay: Duration::from_millis(50),
+        max_attempts: 3,
+        max_throttles: 3,
+        adaptive: false,
+        sample_interval: Duration::from_millis(20),
+    }
+}
+
 #[tokio::test]
-async fn a_cut_segment_fails_the_download_and_leaves_no_files() {
+async fn connections_that_keep_getting_cut_still_finish_the_file() {
     let addr = start().await;
     let dir = tempfile::tempdir().unwrap();
-    let mut req = request(addr, "/file?size=8000000&drop_after=100000", dir.path());
-    req.connections = 4;
+    // Every response stops after 100 kB, so each segment needs many requests,
+    // each continuing at the byte where the last one stopped.
+    let size = 1_500_000;
+    let mut req = request(
+        addr,
+        &format!("/file?size={size}&drop_after=100000"),
+        dir.path(),
+    );
+    req.connections = 3;
+    req.retry = RetryPolicy {
+        max_attempts: 2,
+        ..quick_retries()
+    };
+    let outcome = download(&client(), &req, None).await.unwrap();
+    assert_generated_content(&outcome.path, size);
+    assert_eq!(file_names(dir.path()), ["mohona-test.bin"]);
+}
+
+#[tokio::test]
+async fn gives_up_when_no_bytes_ever_arrive() {
+    let addr = start().await;
+    let dir = tempfile::tempdir().unwrap();
+    // The connection is closed right after the headers, every time.
+    let mut req = request(addr, "/file?size=3000000&drop_after=0", dir.path());
+    req.connections = 3;
+    req.retry = quick_retries();
     assert!(download(&client(), &req, None).await.is_err());
     assert!(file_names(dir.path()).is_empty());
+}
+
+#[tokio::test]
+async fn a_server_that_limits_connections_gets_fewer_of_them() {
+    let addr = start().await;
+    let dir = tempfile::tempdir().unwrap();
+    let (sender, mut receiver) = mpsc::channel(256);
+    // The server serves two connections at a time and answers 429 to the
+    // rest. Mohona asks for 8, backs off, and finishes with two.
+    let size = 16 * 1024 * 1024 + 7;
+    let mut req = request(
+        addr,
+        &format!("/file?size={size}&max_conns=2&limit=8000000"),
+        dir.path(),
+    );
+    req.connections = 8;
+    req.retry = quick_retries();
+
+    let outcome = download(&client(), &req, Some(&sender)).await.unwrap();
+    assert_generated_content(&outcome.path, size);
+    assert_eq!(file_names(dir.path()), ["mohona-test.bin"]);
+
+    drop(sender);
+    let mut lowest = usize::MAX;
+    while let Some(event) = receiver.recv().await {
+        if let Event::Limited { connections } = event {
+            lowest = lowest.min(connections);
+        }
+    }
+    assert!(
+        lowest <= 2,
+        "connections were never lowered to the limit ({lowest})"
+    );
+}
+
+#[tokio::test]
+async fn gives_up_when_the_server_never_lets_a_connection_in() {
+    let addr = start().await;
+    let dir = tempfile::tempdir().unwrap();
+    let mut req = request(addr, "/file?size=3000000&max_conns=0", dir.path());
+    req.connections = 4;
+    req.retry = quick_retries();
+    let error = download(&client(), &req, None).await.unwrap_err();
+    assert!(
+        matches!(&error, Error::Net(NetError::Status { status: 429, .. })),
+        "{error}"
+    );
+    assert!(file_names(dir.path()).is_empty());
+}
+
+fn adaptive_policy() -> RetryPolicy {
+    RetryPolicy {
+        adaptive: true,
+        sample_interval: Duration::from_millis(100),
+        ..RetryPolicy::default()
+    }
+}
+
+#[tokio::test]
+async fn adds_connections_when_each_one_is_throttled() {
+    let addr = start().await;
+    let dir = tempfile::tempdir().unwrap();
+    // Each connection gets 2 MB/s, so more connections mean more speed:
+    // one connection would need 15 s for 30 MB.
+    let size = 30_000_000;
+    let mut req = request(
+        addr,
+        &format!("/file?size={size}&limit=2000000"),
+        dir.path(),
+    );
+    req.connections = 16;
+    req.retry = adaptive_policy();
+    let started = std::time::Instant::now();
+    let outcome = download(&client(), &req, None).await.unwrap();
+    let took = started.elapsed();
+    assert_generated_content(&outcome.path, size);
+    assert!(took < Duration::from_secs(8), "took {took:?}");
+}
+
+#[tokio::test]
+async fn backs_off_when_more_connections_make_it_slower() {
+    let addr = start().await;
+    let dir = tempfile::tempdir().unwrap();
+    // One connection runs at 4 MB/s; with n open, all of them together get
+    // only 4/n MB/s. Using 16 connections would take about 100 s; the
+    // tuner must settle on one or two and finish in a few seconds.
+    let size = 16_000_000;
+    let mut req = request(
+        addr,
+        &format!("/file?size={size}&crowded=4000000"),
+        dir.path(),
+    );
+    req.connections = 16;
+    req.retry = adaptive_policy();
+    let started = std::time::Instant::now();
+    let outcome = download(&client(), &req, None).await.unwrap();
+    let took = started.elapsed();
+    assert_generated_content(&outcome.path, size);
+    assert!(took < Duration::from_secs(12), "took {took:?}");
 }

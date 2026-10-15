@@ -10,7 +10,8 @@
 use std::collections::HashMap;
 use std::io;
 use std::net::SocketAddr;
-use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::atomic::{AtomicU64, AtomicUsize, Ordering};
+use std::sync::Arc;
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 use tokio::io::{AsyncBufReadExt, AsyncWrite, AsyncWriteExt, BufReader};
@@ -35,6 +36,11 @@ Query parameters (for /file and the endpoints that serve it)
   size=<bytes>        file size (default: the server's --size)
   etag=<text>         change the ETag, to test files that change between runs
   limit=<bytes/sec>   throttle each connection to this speed
+  max_conns=<n>       answer 429 (Retry-After: 1) while n responses are already
+                      being sent
+  crowded=<bytes/sec> a server that punishes parallel connections: one response
+                      runs at this speed, but with n open at once the total
+                      for all of them is only this speed divided by n
   slow_start=<bytes/sec>  throttle only the response that begins at byte 0,
                       so one segment lags behind the others
   drop_after=<bytes>  close the connection after this many body bytes
@@ -118,12 +124,32 @@ pub async fn bind(addr: SocketAddr) -> io::Result<TcpListener> {
 
 /// Accept connections forever.
 pub async fn serve(listener: TcpListener, config: Config) -> io::Result<()> {
+    let shared = Arc::new(Shared {
+        config,
+        active: AtomicUsize::new(0),
+    });
     loop {
         let (stream, _) = listener.accept().await?;
-        let config = config.clone();
+        let shared = Arc::clone(&shared);
         tokio::spawn(async move {
-            let _ = handle_connection(stream, config).await;
+            let _ = handle_connection(stream, shared).await;
         });
+    }
+}
+
+/// State shared by all connections of one server.
+struct Shared {
+    config: Config,
+    /// Responses with a body being sent right now (for `max_conns`).
+    active: AtomicUsize,
+}
+
+/// Counts one active response, and stops counting when dropped.
+struct ActiveGuard<'a>(&'a AtomicUsize);
+
+impl Drop for ActiveGuard<'_> {
+    fn drop(&mut self) {
+        self.0.fetch_sub(1, Ordering::SeqCst);
     }
 }
 
@@ -136,7 +162,7 @@ struct Request {
     headers: HashMap<String, String>,
 }
 
-async fn handle_connection(stream: TcpStream, config: Config) -> io::Result<()> {
+async fn handle_connection(stream: TcpStream, config: Arc<Shared>) -> io::Result<()> {
     let _ = stream.set_nodelay(true);
     let (read_half, mut writer) = stream.into_split();
     let mut reader = BufReader::new(read_half);
@@ -241,7 +267,7 @@ async fn simple<W: AsyncWrite + Unpin>(
 async fn route<W: AsyncWrite + Unpin>(
     request: &Request,
     writer: &mut W,
-    config: &Config,
+    config: &Shared,
     keep_alive: bool,
 ) -> io::Result<bool> {
     let head_only = request.method == "HEAD";
@@ -394,11 +420,37 @@ fn random_u64() -> u64 {
 async fn serve_file<W: AsyncWrite + Unpin>(
     request: &Request,
     writer: &mut W,
-    config: &Config,
+    config: &Shared,
     keep_alive: bool,
     head_only: bool,
 ) -> io::Result<bool> {
-    let size = query_u64(request, "size").unwrap_or(config.default_size);
+    // Count this response while it is being sent, for `max_conns` and
+    // `crowded`. `max_conns=N` answers 429 while N others are being sent.
+    let max_conns = query_u64(request, "max_conns");
+    let crowded = query_u64(request, "crowded").filter(|rate| *rate > 0);
+    let _active = if head_only || (max_conns.is_none() && crowded.is_none()) {
+        None
+    } else {
+        let before = config.active.fetch_add(1, Ordering::SeqCst);
+        Some((
+            ActiveGuard(&config.active),
+            max_conns.is_some_and(|limit| before as u64 >= limit),
+        ))
+    };
+    if let Some((_, true)) = _active {
+        simple(
+            writer,
+            "429 Too Many Requests",
+            "too many connections\n",
+            &[("Retry-After", "1")],
+            keep_alive,
+            head_only,
+        )
+        .await?;
+        return Ok(keep_alive);
+    }
+
+    let size = query_u64(request, "size").unwrap_or(config.config.default_size);
     let etag_tag = request.query.get("etag").map_or("1", String::as_str);
     let etag = format!("\"mohona-{size}-{etag_tag}\"");
     let no_range = request.query.contains_key("norange");
@@ -485,7 +537,13 @@ async fn serve_file<W: AsyncWrite + Unpin>(
         fill_content(start + sent, &mut buffer[..count]);
         writer.write_all(&buffer[..count]).await?;
         sent += count as u64;
-        if let Some(rate) = rate {
+        if let Some(total_rate) = crowded {
+            // With n responses open, each runs at total/n^2, so all of them
+            // together get only total/n: more connections, less speed.
+            let open = config.active.load(Ordering::SeqCst).max(1) as f64;
+            let rate = total_rate as f64 / (open * open);
+            tokio::time::sleep(Duration::from_secs_f64(count as f64 / rate)).await;
+        } else if let Some(rate) = rate {
             let due = Duration::from_secs_f64(sent as f64 / rate as f64);
             if let Some(wait) = due.checked_sub(started.elapsed()) {
                 tokio::time::sleep(wait).await;

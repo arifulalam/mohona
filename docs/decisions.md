@@ -50,6 +50,14 @@ Short records of choices that shape Mohona. Add a new entry when a decision chan
 - **Why:** With one place that knows who owns which byte, two workers can never write the same byte, and a slow connection never leaves the others idle at the end. A test with random use checks that the ranges always tile the file exactly.
 - **Safety:** A range request is sent with `If-Range` (the ETag). If the server answers anything but `206` at the right offset (file changed, ranges ignored), the download fails instead of writing wrong bytes.
 
+## ADR-0008: Retry small failures, back off when the server pushes back
+
+- **Date:** 2026-10-15
+- **Decision:** Errors are sorted into three kinds (`Failure` in `mohona-net`). *Fatal* (404, file changed, bad URL, disk errors) stops the download. *Transient* (dropped connection, 500, 502, 504, timeouts mid-body) makes a worker wait and continue from the byte where it stopped, up to 6 failures in a row without progress. *Throttled* (429, 503, refused or timed-out new connections) makes the worker hand its segment back; the download lowers its connection count to the number that still work, and the segment is taken up again after a pause. Waits are exponential with random jitter, capped at 30 s, and `Retry-After` is honored.
+- **Why:** Found on a real server (proof.ovh.net): 2 or more connections from one address got 429 or silent connect timeouts, and the first version of Mohona failed the whole download. Real servers limit connections per client, so backing off is normal operation, not an error.
+- **Measuring instead of guessing:** More connections are not always faster. On a real server (proof.ovh.net) one connection ran at 1.4 MiB/s while 16 together crawled at 167 KiB/s. So a download starts with one connection and the `tuner` (in `mohona-core`) measures the total speed, doubles the connections, waits for the speed to settle, and keeps the extra ones only if the total rose by at least 20%. Otherwise it asks the extra workers to stop (their segments are handed back, nothing is lost) and stops trying. Servers that limit each connection get the full benefit of parallelism; servers that punish it get one or two connections.
+- **Limits for now:** The connection count is decided once per download, from the first few seconds, and is not remembered per server (planned for Phase 3). Reaching full speed on a fast, per-connection-limited server takes a few seconds of measuring. The single-stream path (no range support) does not retry, since it cannot resume.
+
 ## Planned crates (checked 2026-10-14)
 
 Each crate was looked up on crates.io on the date above. Versions can change, so Cargo.lock is the source of truth once a crate is added.

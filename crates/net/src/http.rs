@@ -4,7 +4,7 @@ use bytes::Bytes;
 use percent_encoding::percent_decode_str;
 use reqwest::header::{
     HeaderMap, HeaderName, HeaderValue, ACCEPT_ENCODING, ACCEPT_RANGES, CONTENT_DISPOSITION,
-    CONTENT_LENGTH, CONTENT_RANGE, CONTENT_TYPE, ETAG, IF_RANGE, LAST_MODIFIED, RANGE,
+    CONTENT_LENGTH, CONTENT_RANGE, CONTENT_TYPE, ETAG, IF_RANGE, LAST_MODIFIED, RANGE, RETRY_AFTER,
 };
 use reqwest::{Client, Response, StatusCode, Url};
 
@@ -137,10 +137,7 @@ impl HttpClient {
         let url = parse_url(url)?;
         let response = self.client.get(url.clone()).send().await?;
         if !response.status().is_success() {
-            return Err(NetError::Status {
-                status: response.status().as_u16(),
-                url: url.to_string(),
-            });
+            return Err(status_error(&response, &url));
         }
         Ok(Body { response })
     }
@@ -186,12 +183,23 @@ impl HttpClient {
                 status.as_u16()
             )))
         } else {
-            Err(NetError::Status {
-                status: status.as_u16(),
-                url: url.to_string(),
-            })
+            Err(status_error(&response, &url))
         }
     }
+}
+
+fn status_error(response: &Response, url: &Url) -> NetError {
+    NetError::Status {
+        status: response.status().as_u16(),
+        url: url.to_string(),
+        retry_after: header_text(response, &RETRY_AFTER).and_then(|v| parse_retry_after(&v)),
+    }
+}
+
+/// `Retry-After: 120` gives 120 seconds. The date form is not supported and
+/// gives `None`, which callers treat as "use the normal backoff".
+fn parse_retry_after(value: &str) -> Option<Duration> {
+    value.trim().parse::<u64>().ok().map(Duration::from_secs)
 }
 
 fn parse_url(input: &str) -> Result<Url, NetError> {
@@ -268,11 +276,8 @@ fn probe_from_range_response(
                 header_text(response, &CONTENT_RANGE).and_then(|v| total_from_content_range(&v));
             probe.accepts_ranges = false;
         }
-        other => {
-            return from_head.ok_or(NetError::Status {
-                status: other.as_u16(),
-                url: url.to_string(),
-            });
+        _ => {
+            return from_head.ok_or_else(|| status_error(response, url));
         }
     }
     Ok(probe)
@@ -280,7 +285,15 @@ fn probe_from_range_response(
 
 #[cfg(test)]
 mod tests {
-    use super::{first_byte_from_content_range, total_from_content_range};
+    use super::{first_byte_from_content_range, parse_retry_after, total_from_content_range};
+    use std::time::Duration;
+
+    #[test]
+    fn reads_retry_after_seconds() {
+        assert_eq!(parse_retry_after("120"), Some(Duration::from_secs(120)));
+        assert_eq!(parse_retry_after(" 3 "), Some(Duration::from_secs(3)));
+        assert_eq!(parse_retry_after("Wed, 21 Oct 2026 07:28:00 GMT"), None);
+    }
 
     #[test]
     fn reads_the_first_byte_from_content_range() {

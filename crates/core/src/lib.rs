@@ -9,13 +9,16 @@ mod download;
 mod error;
 mod filename;
 mod parallel;
+mod retry;
 mod segments;
+mod tuner;
 
 pub use download::{
     download, DownloadRequest, Event, Outcome, DEFAULT_CONNECTIONS, MAX_CONNECTIONS,
 };
 pub use error::Error;
 pub use filename::{sanitize_filename, unique_path};
+pub use retry::RetryPolicy;
 pub use segments::{split_evenly, Claim, Scheduler};
 
 /// The version of Mohona, taken from the crate manifest.

@@ -7,7 +7,8 @@ use tokio::io::{AsyncWriteExt, BufWriter};
 use tokio::sync::mpsc::Sender;
 
 use crate::filename::{sanitize_filename, unique_path};
-use crate::parallel::{fetch_segmented, MIN_SEGMENT};
+use crate::parallel::{fetch_segmented, Job, MIN_SEGMENT};
+use crate::retry::{probe_with_retry, RetryPolicy};
 use crate::Error;
 
 const WRITE_BUFFER: usize = 256 * 1024;
@@ -29,6 +30,8 @@ pub struct DownloadRequest {
     /// outside that are adjusted). Only used when the server supports byte
     /// ranges and the file is big enough to be worth splitting.
     pub connections: usize,
+    /// How to deal with failing requests.
+    pub retry: RetryPolicy,
 }
 
 impl DownloadRequest {
@@ -38,6 +41,7 @@ impl DownloadRequest {
             url: url.into(),
             dest_dir: dest_dir.into(),
             connections: DEFAULT_CONNECTIONS,
+            retry: RetryPolicy::default(),
         }
     }
 }
@@ -55,8 +59,8 @@ pub enum Event {
         total: Option<u64>,
         /// Whether the server supports resuming with byte ranges.
         resumable: bool,
-        /// How many connections the first requests will use. More may be
-        /// opened later when slow segments are split.
+        /// The most connections the download may use. It measures the
+        /// server and often uses fewer.
         connections: usize,
     },
     /// Bytes received so far. May be skipped if the receiver is slow.
@@ -65,6 +69,12 @@ pub enum Event {
         downloaded: u64,
         /// Size in bytes, if known.
         total: Option<u64>,
+    },
+    /// The server pushed back (for example with 429 Too Many Requests), so
+    /// the download now uses fewer connections.
+    Limited {
+        /// The most connections the download will use from now on.
+        connections: usize,
     },
     /// The file is complete and in place.
     Finished {
@@ -108,7 +118,7 @@ pub async fn download(
     request: &DownloadRequest,
     events: Option<&Sender<Event>>,
 ) -> Result<Outcome, Error> {
-    let probe = client.probe(&request.url).await?;
+    let probe = probe_with_retry(client, &request.url, &request.retry).await?;
     let filename = sanitize_filename(probe.filename.as_deref().unwrap_or(""));
 
     fs::create_dir_all(&request.dest_dir).await?;
@@ -138,12 +148,15 @@ pub async fn download(
 
     let fetched = match segmented_total {
         Some(total) => fetch_segmented(
-            client,
-            &probe.final_url,
-            probe.etag.as_deref(),
-            total,
-            wanted,
-            &part_path,
+            &Job {
+                client,
+                url: &probe.final_url,
+                etag: probe.etag.as_deref(),
+                total,
+                connections: wanted,
+                policy: &request.retry,
+                part_path: &part_path,
+            },
             events,
         )
         .await
@@ -226,7 +239,7 @@ async fn fetch_to_part(
     Ok(downloaded)
 }
 
-async fn emit(events: Option<&Sender<Event>>, event: Event) {
+pub(crate) async fn emit(events: Option<&Sender<Event>>, event: Event) {
     if let Some(sender) = events {
         let _ = sender.send(event).await;
     }
