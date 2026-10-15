@@ -31,6 +31,10 @@ enum Command {
         #[arg(short, long, default_value = ".")]
         output: PathBuf,
 
+        /// Print what the download is deciding (connections added or dropped, server pushback)
+        #[arg(short, long)]
+        verbose: bool,
+
         /// Most connections to use at once (1 to 32)
         #[arg(short = 'c', long, default_value_t = DEFAULT_CONNECTIONS as u16, value_parser = clap::value_parser!(u16).range(1..=32))]
         connections: u16,
@@ -45,7 +49,8 @@ async fn main() -> ExitCode {
             url,
             output,
             connections,
-        }) => match get(url, output, usize::from(connections)).await {
+            verbose,
+        }) => match get(url, output, usize::from(connections), verbose).await {
             Ok(()) => ExitCode::SUCCESS,
             Err(message) => {
                 eprintln!("error: {message}");
@@ -62,7 +67,12 @@ async fn main() -> ExitCode {
     }
 }
 
-async fn get(url: String, output: PathBuf, connections: usize) -> Result<(), String> {
+async fn get(
+    url: String,
+    output: PathBuf,
+    connections: usize,
+    verbose: bool,
+) -> Result<(), String> {
     let client = HttpClient::new(&ClientConfig::default()).map_err(|error| describe(&error))?;
     let mut request = DownloadRequest::new(url, output);
     request.connections = connections;
@@ -70,7 +80,7 @@ async fn get(url: String, output: PathBuf, connections: usize) -> Result<(), Str
     let (sender, mut receiver) = mpsc::channel(64);
     let worker = tokio::spawn(async move { download(&client, &request, Some(&sender)).await });
 
-    let mut display = Display::new();
+    let mut display = Display::new(verbose);
     while let Some(event) = receiver.recv().await {
         display.handle(&event);
     }
@@ -108,15 +118,17 @@ struct Display {
     interactive: bool,
     drew_line: bool,
     told_limited: bool,
+    verbose: bool,
 }
 
 impl Display {
-    fn new() -> Self {
+    fn new(verbose: bool) -> Self {
         Self {
             started: Instant::now(),
             interactive: std::io::stderr().is_terminal(),
             drew_line: false,
             told_limited: false,
+            verbose,
         }
     }
 
@@ -140,6 +152,14 @@ impl Display {
                 eprintln!("Downloading {filename} ({size}{resume}{lanes})");
             }
             Event::Progress { downloaded, total } => self.draw(*downloaded, *total),
+            Event::Note(text) => {
+                if self.verbose {
+                    if self.drew_line {
+                        eprint!("\r{:<79}\r", "");
+                    }
+                    eprintln!("  [{:>5.1}s] {text}", self.started.elapsed().as_secs_f64());
+                }
+            }
             Event::Limited { .. } => {
                 // The count drops one step at a time; say it only once.
                 if !self.told_limited {

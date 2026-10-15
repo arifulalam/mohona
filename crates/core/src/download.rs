@@ -76,6 +76,9 @@ pub enum Event {
         /// The most connections the download will use from now on.
         connections: usize,
     },
+    /// A message about what the engine is deciding (for example why it
+    /// uses fewer connections). Meant for a verbose mode.
+    Note(String),
     /// The file is complete and in place.
     Finished {
         /// Where the file was saved.

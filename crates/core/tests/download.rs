@@ -401,3 +401,40 @@ async fn backs_off_when_more_connections_make_it_slower() {
     assert_generated_content(&outcome.path, size);
     assert!(took < Duration::from_secs(12), "took {took:?}");
 }
+
+#[tokio::test]
+async fn gives_up_on_a_connection_the_server_ignores_and_finishes_with_one() {
+    let addr = start().await;
+    let dir = tempfile::tempdir().unwrap();
+    let (sender, mut receiver) = mpsc::channel(256);
+    // Each connection runs at 4 MB/s, but the server ignores any connection
+    // beyond the first. The tuner's second connection hangs; it must be
+    // given up on (not waited for) and the first one must carry on alone.
+    let size = 16_000_000;
+    let mut req = request(
+        addr,
+        &format!("/file?size={size}&limit=4000000&hang_above=1"),
+        dir.path(),
+    );
+    req.connections = 8;
+    req.retry = adaptive_policy();
+    let started = std::time::Instant::now();
+    let outcome = download(&client(), &req, Some(&sender)).await.unwrap();
+    let took = started.elapsed();
+    assert_generated_content(&outcome.path, size);
+    assert!(took < Duration::from_secs(12), "took {took:?}");
+
+    drop(sender);
+    let mut notes = Vec::new();
+    while let Some(event) = receiver.recv().await {
+        if let Event::Note(text) = event {
+            notes.push(text);
+        }
+    }
+    assert!(
+        notes
+            .iter()
+            .any(|note| note.contains("did not make it faster")),
+        "notes: {notes:?}"
+    );
+}

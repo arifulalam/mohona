@@ -41,6 +41,9 @@ Query parameters (for /file and the endpoints that serve it)
   crowded=<bytes/sec> a server that punishes parallel connections: one response
                       runs at this speed, but with n open at once the total
                       for all of them is only this speed divided by n
+  hang_above=<n>      stay silent for 2 s, then close, when more than n responses
+                      are already being sent (a server that ignores new
+                      connections)
   slow_start=<bytes/sec>  throttle only the response that begins at byte 0,
                       so one segment lags behind the others
   drop_after=<bytes>  close the connection after this many body bytes
@@ -428,7 +431,9 @@ async fn serve_file<W: AsyncWrite + Unpin>(
     // `crowded`. `max_conns=N` answers 429 while N others are being sent.
     let max_conns = query_u64(request, "max_conns");
     let crowded = query_u64(request, "crowded").filter(|rate| *rate > 0);
-    let _active = if head_only || (max_conns.is_none() && crowded.is_none()) {
+    let hang_above = query_u64(request, "hang_above");
+    let _active = if head_only || (max_conns.is_none() && crowded.is_none() && hang_above.is_none())
+    {
         None
     } else {
         let before = config.active.fetch_add(1, Ordering::SeqCst);
@@ -437,6 +442,15 @@ async fn serve_file<W: AsyncWrite + Unpin>(
             max_conns.is_some_and(|limit| before as u64 >= limit),
         ))
     };
+    if let (Some(limit), Some((guard, _))) = (hang_above, _active.as_ref()) {
+        // Like a server that ignores new connections: say nothing for a
+        // while, then close. The response being counted is this one.
+        if config.active.load(Ordering::SeqCst) as u64 > limit {
+            let _keep = guard;
+            tokio::time::sleep(Duration::from_secs(2)).await;
+            return Ok(false);
+        }
+    }
     if let Some((_, true)) = _active {
         simple(
             writer,

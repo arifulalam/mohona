@@ -21,6 +21,7 @@ use mohona_net::{Failure, HttpClient, NetError};
 use tokio::fs::OpenOptions;
 use tokio::io::{AsyncSeekExt, AsyncWriteExt, BufWriter};
 use tokio::sync::mpsc::Sender;
+use tokio::sync::Notify;
 use tokio::task::JoinSet;
 use tokio::time::{interval, sleep, MissedTickBehavior};
 
@@ -47,6 +48,8 @@ struct Shared {
     /// How many workers have been asked to stop because the tuner found
     /// their connection useless. Each worker that obeys takes one off.
     retire: AtomicUsize,
+    /// Wakes workers that are waiting for a connection, so they can stop.
+    wake: Notify,
 }
 
 impl Shared {
@@ -133,9 +136,16 @@ pub(crate) async fn fetch_segmented(
         etag: etag.map(str::to_string),
         part_path: part_path.to_path_buf(),
         policy: policy.clone(),
-        scheduler: Scheduler::new(total, connections, MIN_SEGMENT),
+        // An adaptive download starts as one long request, like a browser's;
+        // the tuner cuts it up when more connections prove worth it.
+        scheduler: Scheduler::new(
+            total,
+            if policy.adaptive { 1 } else { connections },
+            MIN_SEGMENT,
+        ),
         downloaded: AtomicU64::new(0),
         retire: AtomicUsize::new(0),
+        wake: Notify::new(),
     });
 
     let mut workers: JoinSet<Result<Ended, Error>> = JoinSet::new();
@@ -156,7 +166,9 @@ pub(crate) async fn fetch_segmented(
     // How many connections may run at once. It starts at the request and only
     // ever goes down: when the server pushes back, or the tuner finds that
     // more connections do not help.
-    let mut allowed = shared.scheduler.segment_count().min(connections);
+    let mut allowed = usize::try_from(total / MIN_SEGMENT)
+        .unwrap_or(usize::MAX)
+        .clamp(1, connections);
     let mut throttles_without_progress = 0u32;
     let mut progress_at_last_throttle = 0u64;
 
@@ -182,6 +194,10 @@ pub(crate) async fn fetch_segmented(
                     Ok(Ok(Ended::Throttled { id, retry_after, error })) => {
                         shared.scheduler.release(id);
                         tuner.stop();
+                        emit(events, Event::Note(format!(
+                            "the server pushed back ({error}); {} connection(s) still running",
+                            workers.len()
+                        ))).await;
                         let downloaded = shared.downloaded.load(Ordering::Relaxed);
                         if downloaded > progress_at_last_throttle {
                             throttles_without_progress = 0;
@@ -230,11 +246,22 @@ pub(crate) async fn fetch_segmented(
                             started += 1;
                         }
                         opened += started;
+                        if started > 0 {
+                            emit(events, Event::Note(format!(
+                                "speed is {}/s with {} connection(s): trying {} more",
+                                human_speed(speed), workers.len() - started, started
+                            ))).await;
+                        }
                         tuner.grew(started);
                     }
                     Action::Retire(count) => {
                         let count = count.min(workers.len().saturating_sub(1));
                         shared.retire.fetch_add(count, Ordering::Relaxed);
+                        shared.wake.notify_waiters();
+                        emit(events, Event::Note(format!(
+                            "more connections did not make it faster: going back to {}",
+                            workers.len().max(1) - count
+                        ))).await;
                         allowed = workers.len().max(1) - count;
                     }
                 }
@@ -398,10 +425,22 @@ enum Stop {
 /// received is written, and flushed, before this returns, so the scheduler's
 /// position always matches what is in the file.
 async fn attempt(shared: &Shared, id: usize, position: u64, end: u64) -> Result<Stop, Attempt> {
-    let mut body = shared
+    // Waiting for a connection can take a long time on a server that ignores
+    // new ones, so a retire request must be able to interrupt it.
+    let request = shared
         .client
-        .get_range(&shared.url, position, end - 1, shared.etag.as_deref())
-        .await?;
+        .get_range(&shared.url, position, end - 1, shared.etag.as_deref());
+    tokio::pin!(request);
+    let mut body = loop {
+        if shared.should_retire() {
+            return Ok(Stop::Retired);
+        }
+        let woken = shared.wake.notified();
+        tokio::select! {
+            result = &mut request => break result?,
+            () = woken => {}
+        }
+    };
 
     let mut file = OpenOptions::new()
         .write(true)
@@ -461,4 +500,13 @@ async fn attempt(shared: &Shared, id: usize, position: u64, end: u64) -> Result<
         });
     }
     Ok(Stop::Reached)
+}
+
+/// "1.4 MiB", "170 KiB" and so on, for notes.
+fn human_speed(bytes_per_second: f64) -> String {
+    if bytes_per_second >= 1024.0 * 1024.0 {
+        format!("{:.1} MiB", bytes_per_second / (1024.0 * 1024.0))
+    } else {
+        format!("{:.0} KiB", bytes_per_second / 1024.0)
+    }
 }
