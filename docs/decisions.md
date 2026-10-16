@@ -90,3 +90,11 @@ Each crate was looked up on crates.io on the date above. Versions can change, so
 | tauri | 2.12.3 | 2026-10-10 | Desktop app shell |
 
 All twelve have had a release since April 2026. librqbit is the smallest project (about 64,000 recent downloads), so we will re-check it before Phase 7.
+
+## ADR-0010: SQLite schema and migrations
+
+Status: accepted (16 October 2026)
+
+The database is a single SQLite file in WAL mode, opened through `rusqlite` with the bundled SQLite (no system library needed on Windows). The schema follows the plan: downloads, segments, queues, categories, settings, log. The segments table replaces the Phase 1 sidecar ledger later in Phase 2.
+
+Versioning uses SQLite's `user_version`. Each numbered SQL file in `crates/store/src/migrations` runs in its own transaction, so a failed upgrade leaves the previous version intact. A database from a newer Mohona is refused rather than modified. Foreign keys are on; deleting a download removes its segments and log. A default queue ("Main", 3 at once) and five default categories are created by migration 1.
