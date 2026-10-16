@@ -1,5 +1,9 @@
 //! Mohona storage: the SQLite database (WAL mode) with versioned migrations.
 
+mod downloads;
+
+pub use downloads::{DownloadRow, QueueRow, Status};
+
 use rusqlite::Connection;
 use std::path::Path;
 
@@ -9,13 +13,19 @@ struct Migration {
     sql: &'static str,
 }
 
-const MIGRATIONS: &[Migration] = &[Migration {
-    version: 1,
-    sql: include_str!("migrations/001_initial.sql"),
-}];
+const MIGRATIONS: &[Migration] = &[
+    Migration {
+        version: 1,
+        sql: include_str!("migrations/001_initial.sql"),
+    },
+    Migration {
+        version: 2,
+        sql: include_str!("migrations/002_progress.sql"),
+    },
+];
 
 /// Version of the database schema after all migrations have run.
-pub const SCHEMA_VERSION: u32 = 1;
+pub const SCHEMA_VERSION: u32 = 2;
 
 /// Errors from the store.
 #[derive(Debug, thiserror::Error)]

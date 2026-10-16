@@ -90,9 +90,61 @@ pub fn unique_path_avoiding(dir: &Path, filename: &str, suffixes: &[&str]) -> Pa
         .unwrap_or(first)
 }
 
+/// Pick a free name in `dir` and claim it by creating the empty
+/// `<name>.part` file in the same step, so two downloads that run at the same
+/// time (even in different processes) can never pick the same name.
+/// Returns the final path; the claimed file is `<final path>.part`.
+pub fn reserve_unique_path(dir: &Path, filename: &str) -> std::io::Result<PathBuf> {
+    let (stem, extension) = match filename.rfind('.') {
+        Some(index) if index > 0 => filename.split_at(index),
+        _ => (filename, ""),
+    };
+    for number in 0u32..100_000 {
+        let name = if number == 0 {
+            filename.to_string()
+        } else {
+            format!("{stem} ({number}){extension}")
+        };
+        let path = dir.join(&name);
+        if path.exists() {
+            continue;
+        }
+        let mut part = path.as_os_str().to_owned();
+        part.push(".part");
+        match std::fs::OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(&part)
+        {
+            Ok(_) => return Ok(path),
+            Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => continue,
+            Err(error) => return Err(error),
+        }
+    }
+    Err(std::io::Error::new(
+        std::io::ErrorKind::AlreadyExists,
+        "no free file name",
+    ))
+}
+
 #[cfg(test)]
 mod tests {
-    use super::{sanitize_filename, unique_path};
+    use super::{reserve_unique_path, sanitize_filename, unique_path};
+
+    #[test]
+    fn reserving_claims_the_name_so_the_next_caller_gets_another() {
+        let dir = tempfile::tempdir().unwrap();
+        let a = reserve_unique_path(dir.path(), "f.bin").unwrap();
+        let b = reserve_unique_path(dir.path(), "f.bin").unwrap();
+        assert_eq!(a, dir.path().join("f.bin"));
+        assert_eq!(b, dir.path().join("f (1).bin"));
+        assert!(dir.path().join("f.bin.part").exists());
+        std::fs::write(dir.path().join("g.bin"), b"x").unwrap();
+        assert_eq!(
+            reserve_unique_path(dir.path(), "g.bin").unwrap(),
+            dir.path().join("g (1).bin")
+        );
+    }
 
     #[test]
     fn keeps_normal_names() {

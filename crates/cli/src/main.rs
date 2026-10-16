@@ -12,6 +12,8 @@ use mohona_core::{
 use mohona_net::{ClientConfig, HttpClient};
 use tokio::sync::mpsc;
 
+mod queue;
+
 #[derive(Parser)]
 #[command(
     name = "mohona",
@@ -19,12 +21,21 @@ use tokio::sync::mpsc;
     about = "Mohona: an estuary for your downloads"
 )]
 struct Cli {
+    /// The database file that keeps the download list
+    #[arg(long, global = true, default_value = "mohona.db")]
+    db: PathBuf,
+
     #[command(subcommand)]
     command: Option<Command>,
 }
 
 #[derive(Subcommand)]
 enum Command {
+    /// Keep a list of downloads and run it with limits on how many go at once
+    Queue {
+        #[command(subcommand)]
+        command: queue::QueueCommand,
+    },
     /// Download a URL
     Get {
         /// The address to download (http or https)
@@ -54,6 +65,13 @@ async fn main() -> ExitCode {
             connections,
             verbose,
         }) => match get(url, output, usize::from(connections), verbose).await {
+            Ok(()) => ExitCode::SUCCESS,
+            Err(message) => {
+                eprintln!("error: {message}");
+                ExitCode::FAILURE
+            }
+        },
+        Some(Command::Queue { command }) => match queue::run(command, cli.db).await {
             Ok(()) => ExitCode::SUCCESS,
             Err(message) => {
                 eprintln!("error: {message}");

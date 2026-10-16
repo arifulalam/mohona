@@ -4,6 +4,7 @@ members = [
     "crates/core",
     "crates/net",
     "crates/store",
+    "crates/manager",
     "crates/cli",
     "tools/testserver",
 ]

@@ -761,7 +761,9 @@ version = "0.0.1"
 dependencies = [
  "clap",
  "mohona-core",
+ "mohona-manager",
  "mohona-net",
+ "mohona-store",
  "tokio",
 ]
 
@@ -773,6 +775,19 @@ dependencies = [
  "mohona-testserver",
  "serde",
  "serde_json",
+ "tempfile",
+ "thiserror",
+ "tokio",
+]
+
+[[package]]
+name = "mohona-manager"
+version = "0.0.1"
+dependencies = [
+ "mohona-core",
+ "mohona-net",
+ "mohona-store",
+ "mohona-testserver",
  "tempfile",
  "thiserror",
  "tokio",

@@ -1,0 +1,18 @@
+[package]
+name = "mohona-manager"
+description = "Mohona download manager: many downloads, queues and saved state"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+mohona-core = { path = "../core" }
+mohona-net = { version = "0.0.1", path = "../net" }
+mohona-store = { path = "../store" }
+thiserror = "2"
+tokio.workspace = true
+
+[dev-dependencies]
+mohona-testserver = { path = "../../tools/testserver" }
+tempfile = "3"

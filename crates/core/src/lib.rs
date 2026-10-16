@@ -17,8 +17,8 @@ mod tuner;
 
 pub use cancel::CancelToken;
 pub use download::{
-    download, partial_progress, DownloadRequest, Event, Outcome, DEFAULT_CONNECTIONS,
-    MAX_CONNECTIONS,
+    discard_partial, download, partial_progress, DownloadRequest, Event, Outcome,
+    DEFAULT_CONNECTIONS, MAX_CONNECTIONS,
 };
 pub use error::Error;
 pub use filename::{sanitize_filename, unique_path};

@@ -7,7 +7,7 @@ use tokio::io::{AsyncWriteExt, BufWriter};
 use tokio::sync::mpsc::Sender;
 
 use crate::cancel::CancelToken;
-use crate::filename::{sanitize_filename, unique_path, unique_path_avoiding};
+use crate::filename::{reserve_unique_path, sanitize_filename, unique_path};
 use crate::ledger::Ledger;
 use crate::parallel::{fetch_segmented, Job, MIN_SEGMENT};
 use crate::retry::{probe_with_retry, RetryPolicy};
@@ -179,7 +179,7 @@ pub async fn download(
             Some(ledger.segments.as_slice()),
         ),
         None => {
-            let final_path = unique_path_avoiding(&request.dest_dir, &filename, &[".part"]);
+            let final_path = reserve_unique_path(&request.dest_dir, &filename)?;
             let part_path = part_path_for(&final_path);
             (final_path, part_path, None)
         }
@@ -297,6 +297,17 @@ pub async fn download(
 /// there, if the server still has the same file.
 pub fn partial_progress(dest_dir: &Path, url: &str) -> Option<(u64, u64)> {
     Ledger::find(dest_dir, url.trim()).map(|(_, ledger)| (ledger.committed_bytes(), ledger.total))
+}
+
+/// Delete the partial file and progress ledger an interrupted download of
+/// `url` left in `dest_dir`. Returns whether there was anything to delete.
+pub fn discard_partial(dest_dir: &Path, url: &str) -> bool {
+    let Some((part, _)) = Ledger::find(dest_dir, url.trim()) else {
+        return false;
+    };
+    let _ = std::fs::remove_file(&part);
+    let _ = std::fs::remove_file(Ledger::path_for(&part));
+    true
 }
 
 /// Whether an earlier attempt can be continued: the server still describes

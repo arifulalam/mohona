@@ -98,3 +98,17 @@ Status: accepted (16 October 2026)
 The database is a single SQLite file in WAL mode, opened through `rusqlite` with the bundled SQLite (no system library needed on Windows). The schema follows the plan: downloads, segments, queues, categories, settings, log. The segments table replaces the Phase 1 sidecar ledger later in Phase 2.
 
 Versioning uses SQLite's `user_version`. Each numbered SQL file in `crates/store/src/migrations` runs in its own transaction, so a failed upgrade leaves the previous version intact. A database from a newer Mohona is refused rather than modified. Foreign keys are on; deleting a download removes its segments and log. A default queue ("Main", 3 at once) and five default categories are created by migration 1.
+
+## ADR-0011: The download manager
+
+Status: accepted (16 October 2026)
+
+`mohona-manager` runs one long-lived task (an actor) that owns every download. Front ends hold a cloneable `Manager` handle, send commands (add, pause, resume, cancel, remove, list, set queue limit, shutdown) over a channel and watch a broadcast stream of events. The database is written before an event is published, so it is always the truth; events are only a convenience and slow receivers may miss them.
+
+- **States.** queued, probing, downloading, paused, retrying, completed, failed, canceled. `retrying` exists in the schema but is not used yet: the engine retries inside one download and has no event for it. Every change is saved.
+- **Queues.** After every change the manager asks the database which queued downloads fit in the free slots of each queue (by position) and starts them. A queue never runs more than its `max_active`.
+- **Pause and cancel.** Both stop the engine through its cancel token. Pause keeps the partial data and the `.part.mohona` ledger. Cancel deletes them (`discard_partial`). Removing a running download cancels it first.
+- **Shutdown and crashes.** Shutdown stops everything cleanly and marks running downloads queued again. After a crash or kill the same is done at start-up (`reset_interrupted`). They resume from their ledgers.
+- **Progress** is written to the database about once a second and when a download stops.
+- **File names.** Two downloads with the same file name in one folder used to be able to pick the same name at the same moment. The engine now claims a name by creating its `.part` file with "create new" in the same step, so this is safe even across processes.
+- **Not done yet:** the segments table still is not used (resume still reads the sidecar ledger), speed limits, scheduling, duplicate detection.
