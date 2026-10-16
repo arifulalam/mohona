@@ -14,6 +14,7 @@
 use std::fs::{self, File};
 use std::io::{self, Write};
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
 
 use serde::{Deserialize, Serialize};
 
@@ -23,7 +24,7 @@ const SUFFIX: &str = ".mohona";
 
 /// What is known about a download in progress.
 #[derive(Clone, Debug, Serialize, Deserialize)]
-pub(crate) struct Ledger {
+pub struct Ledger {
     pub version: u32,
     /// The address as the user gave it. Used to find this ledger again.
     pub url: String,
@@ -37,6 +38,53 @@ pub(crate) struct Ledger {
     pub last_modified: Option<String>,
     /// `(start, committed, end)` of each segment.
     pub segments: Vec<(u64, u64, u64)>,
+}
+
+/// Where a download's progress is kept. By default it is a sidecar file next
+/// to the `.part` file; an application can provide its own (the manager keeps
+/// it in its database) through `DownloadRequest::progress`.
+///
+/// Implementations must make `save` atomic: after a crash, `load` returns
+/// either the previous snapshot or the new one, never a mix. `save` is
+/// called from a blocking thread and may take its time.
+pub trait ProgressStore: Send + Sync + std::fmt::Debug {
+    /// The saved progress of this download, if any.
+    fn load(&self) -> Option<Ledger>;
+    /// Replace the saved progress.
+    fn save(&self, progress: &Ledger) -> io::Result<()>;
+    /// Forget the saved progress (the download finished or was discarded).
+    fn clear(&self);
+}
+
+/// Where checkpoints go during one download.
+#[derive(Clone, Debug)]
+pub(crate) enum Sink {
+    /// The sidecar file at this path.
+    File(PathBuf),
+    /// An application-provided store. The path is the sidecar file of the
+    /// same download, removed when finished (it may exist from an older run).
+    Store(Arc<dyn ProgressStore>, PathBuf),
+}
+
+impl Sink {
+    pub fn save(&self, ledger: &Ledger) -> io::Result<()> {
+        match self {
+            Sink::File(path) => ledger.save(path),
+            Sink::Store(store, _) => store.save(ledger),
+        }
+    }
+
+    pub fn clear(&self) {
+        match self {
+            Sink::File(path) => {
+                let _ = fs::remove_file(path);
+            }
+            Sink::Store(store, sidecar) => {
+                store.clear();
+                let _ = fs::remove_file(sidecar);
+            }
+        }
+    }
 }
 
 impl Ledger {
@@ -57,7 +105,7 @@ impl Ledger {
 
     /// Whether the segments make sense: they tile `0..total` exactly and
     /// no segment has progress outside itself.
-    fn is_consistent(&self) -> bool {
+    pub fn is_consistent(&self) -> bool {
         if self.version != VERSION || self.segments.is_empty() {
             return false;
         }

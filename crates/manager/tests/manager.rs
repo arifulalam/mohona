@@ -4,6 +4,7 @@ use std::net::SocketAddr;
 use std::path::Path;
 use std::time::{Duration, Instant};
 
+use mohona_core::RetryPolicy;
 use mohona_manager::{DownloadStatus as Status, Manager, ManagerConfig, ManagerEvent};
 use mohona_net::{ClientConfig, HttpClient};
 use mohona_store::Store;
@@ -36,6 +37,17 @@ fn config() -> ManagerConfig {
     ManagerConfig {
         adaptive: false,
         connections: 1,
+        // Failing requests give up fast; the manager's own retries are what
+        // these tests look at.
+        retry: RetryPolicy {
+            base_delay: Duration::from_millis(1),
+            max_delay: Duration::from_millis(5),
+            max_attempts: 1,
+            max_throttles: 1,
+            ..RetryPolicy::default()
+        },
+        max_retries: 3,
+        retry_delay: Duration::from_millis(100),
     }
 }
 
@@ -367,4 +379,145 @@ async fn removing_a_running_download_cleans_up() {
         );
         tokio::time::sleep(Duration::from_millis(20)).await;
     }
+}
+
+/// An address nothing listens on.
+async fn dead_address() -> SocketAddr {
+    let listener = bind("127.0.0.1:0".parse().unwrap()).await.unwrap();
+    listener.local_addr().unwrap()
+}
+
+#[tokio::test]
+async fn progress_lives_in_the_database_not_in_a_sidecar_file() {
+    let addr = start_server().await;
+    let dir = tempfile::tempdir().unwrap();
+    let db = dir.path().join("m.db");
+    let out = dir.path().join("out");
+    let manager = manager_at(&db);
+    let id = manager
+        .add(
+            format!("http://{addr}/file?size=2000000&limit=1000000"),
+            &out,
+        )
+        .await
+        .unwrap();
+    wait_for_bytes(&manager, id, 300_000).await;
+    manager.pause(id).await.unwrap();
+    wait_for(&manager, id, Status::Paused).await;
+
+    assert_eq!(names(&out), ["mohona-test.bin.part"]);
+    let record = Store::open(&db)
+        .unwrap()
+        .load_progress(id)
+        .unwrap()
+        .unwrap();
+    assert_eq!(record.total, 2_000_000);
+    assert!(record.segments.iter().map(|(s, c, _)| c - s).sum::<u64>() > 0);
+
+    manager.resume(id).await.unwrap();
+    wait_for(&manager, id, Status::Completed).await;
+    assert!(Store::open(&db)
+        .unwrap()
+        .load_progress(id)
+        .unwrap()
+        .is_none());
+    assert_eq!(names(&out), ["mohona-test.bin"]);
+}
+
+#[tokio::test]
+async fn a_download_that_loses_the_network_tries_again_by_itself() {
+    let dead = dead_address().await;
+    let dir = tempfile::tempdir().unwrap();
+    let manager = manager_at(&dir.path().join("m.db"));
+    let mut events = manager.subscribe();
+    let id = manager
+        .add(
+            format!("http://{dead}/file?size=200000"),
+            dir.path().join("out"),
+        )
+        .await
+        .unwrap();
+    wait_for(&manager, id, Status::Retrying).await;
+
+    // The server comes back.
+    let listener = bind(dead).await.unwrap();
+    tokio::spawn(async move {
+        let _ = serve(
+            listener,
+            Config {
+                default_size: 1_000_000,
+            },
+        )
+        .await;
+    });
+    wait_for(&manager, id, Status::Completed).await;
+    let mut retrying = 0;
+    while let Ok(e) = events.try_recv() {
+        if matches!(
+            e,
+            ManagerEvent::State {
+                status: Status::Retrying,
+                ..
+            }
+        ) {
+            retrying += 1;
+        }
+    }
+    assert!(retrying >= 1);
+}
+
+#[tokio::test]
+async fn it_gives_up_after_too_many_retries() {
+    let dead = dead_address().await;
+    let dir = tempfile::tempdir().unwrap();
+    let manager = manager_at(&dir.path().join("m.db"));
+    let mut events = manager.subscribe();
+    let id = manager
+        .add(
+            format!("http://{dead}/file?size=200000"),
+            dir.path().join("out"),
+        )
+        .await
+        .unwrap();
+    wait_for(&manager, id, Status::Failed).await;
+    let mut retrying = 0;
+    while let Ok(e) = events.try_recv() {
+        if matches!(
+            e,
+            ManagerEvent::State {
+                status: Status::Retrying,
+                ..
+            }
+        ) {
+            retrying += 1;
+        }
+    }
+    assert_eq!(retrying, 3, "max_retries is 3");
+    // The person can still start it again by hand.
+    manager.resume(id).await.unwrap();
+    wait_for(&manager, id, Status::Failed).await;
+}
+
+#[tokio::test]
+async fn a_download_waiting_to_retry_can_be_paused() {
+    let dead = dead_address().await;
+    let dir = tempfile::tempdir().unwrap();
+    let manager = manager_at(&dir.path().join("m.db"));
+    let id = manager
+        .add(
+            format!("http://{dead}/file?size=200000"),
+            dir.path().join("out"),
+        )
+        .await
+        .unwrap();
+    wait_for(&manager, id, Status::Retrying).await;
+    manager.pause(id).await.unwrap();
+    wait_for(&manager, id, Status::Paused).await;
+    tokio::time::sleep(Duration::from_millis(500)).await;
+    let rows = manager.list().await.unwrap();
+    assert_eq!(
+        rows[0].status,
+        Status::Paused,
+        "the timer must not restart it"
+    );
 }

@@ -1,4 +1,5 @@
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use mohona_net::{HttpClient, Probe};
@@ -8,7 +9,7 @@ use tokio::sync::mpsc::Sender;
 
 use crate::cancel::CancelToken;
 use crate::filename::{reserve_unique_path, sanitize_filename, unique_path};
-use crate::ledger::Ledger;
+use crate::ledger::{Ledger, ProgressStore, Sink};
 use crate::parallel::{fetch_segmented, Job, MIN_SEGMENT};
 use crate::retry::{probe_with_retry, RetryPolicy};
 use crate::Error;
@@ -37,6 +38,9 @@ pub struct DownloadRequest {
     /// Call [`CancelToken::cancel`] on a clone of this to stop the download
     /// cleanly. What was downloaded is kept and can be resumed.
     pub cancel: CancelToken,
+    /// Where to keep the progress of a ranged download. `None` uses a
+    /// sidecar file `<name>.part.mohona` next to the `.part` file.
+    pub progress: Option<Arc<dyn ProgressStore>>,
 }
 
 impl DownloadRequest {
@@ -48,6 +52,7 @@ impl DownloadRequest {
             connections: DEFAULT_CONNECTIONS,
             retry: RetryPolicy::default(),
             cancel: CancelToken::new(),
+            progress: None,
         }
     }
 }
@@ -153,12 +158,15 @@ pub async fn download(
 
     // An unfinished download of this URL? Use it if it is still valid.
     let mut earlier = None;
-    if let Some((part, ledger)) = Ledger::find(&request.dest_dir, &url_key) {
+    if let Some((part, ledger)) = find_earlier(request, &url_key) {
         if ranged_total.is_some_and(|total| can_resume(&ledger, &probe, total, &part)) {
             earlier = Some((part, ledger));
         } else {
             // The file changed on the server (or cannot be resumed any more).
             let _ = fs::remove_file(Ledger::path_for(&part)).await;
+            if let Some(store) = &request.progress {
+                store.clear();
+            }
             let _ = fs::remove_file(&part).await;
             emit(
                 events,
@@ -184,7 +192,11 @@ pub async fn download(
             (final_path, part_path, None)
         }
     };
-    let ledger_path = Ledger::path_for(&part_path);
+    let sidecar = Ledger::path_for(&part_path);
+    let sink = match &request.progress {
+        Some(store) => Sink::Store(store.clone(), sidecar),
+        None => Sink::File(sidecar),
+    };
     let resumed = earlier
         .as_ref()
         .map_or(0, |(_, ledger)| ledger.committed_bytes());
@@ -234,7 +246,7 @@ pub async fn download(
                     part_path: &part_path,
                     resume: saved,
                     ledger: &template,
-                    ledger_path: &ledger_path,
+                    sink: &sink,
                     cancel: &request.cancel,
                 },
                 events,
@@ -253,7 +265,7 @@ pub async fn download(
         Err((error, keep)) => {
             if !keep {
                 let _ = fs::remove_file(&part_path).await;
-                let _ = fs::remove_file(&ledger_path).await;
+                sink.clear();
             }
             return Err(error);
         }
@@ -271,10 +283,10 @@ pub async fn download(
     };
     if let Err(error) = fs::rename(&part_path, &final_path).await {
         let _ = fs::remove_file(&part_path).await;
-        let _ = fs::remove_file(&ledger_path).await;
+        sink.clear();
         return Err(error.into());
     }
-    let _ = fs::remove_file(&ledger_path).await;
+    sink.clear();
 
     emit(
         events,
@@ -297,6 +309,24 @@ pub async fn download(
 /// there, if the server still has the same file.
 pub fn partial_progress(dest_dir: &Path, url: &str) -> Option<(u64, u64)> {
     Ledger::find(dest_dir, url.trim()).map(|(_, ledger)| (ledger.committed_bytes(), ledger.total))
+}
+
+/// An unfinished download of `url`: its `.part` file and saved progress.
+/// The request's progress store is asked first; the sidecar file is the
+/// fallback (and how downloads started by older versions are found).
+fn find_earlier(request: &DownloadRequest, url: &str) -> Option<(PathBuf, Ledger)> {
+    if let Some(ledger) = request
+        .progress
+        .as_ref()
+        .and_then(|store| store.load())
+        .filter(|ledger| ledger.is_consistent() && ledger.url == url)
+    {
+        let part = part_path_for(&request.dest_dir.join(sanitize_filename(&ledger.filename)));
+        if part.is_file() {
+            return Some((part, ledger));
+        }
+    }
+    Ledger::find(&request.dest_dir, url)
 }
 
 /// Delete the partial file and progress ledger an interrupted download of

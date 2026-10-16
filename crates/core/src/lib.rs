@@ -22,6 +22,7 @@ pub use download::{
 };
 pub use error::Error;
 pub use filename::{sanitize_filename, unique_path};
+pub use ledger::{Ledger as Progress, ProgressStore};
 pub use retry::RetryPolicy;
 pub use segments::{split_evenly, Claim, Scheduler};
 

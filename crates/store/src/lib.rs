@@ -2,7 +2,7 @@
 
 mod downloads;
 
-pub use downloads::{DownloadRow, QueueRow, Status};
+pub use downloads::{DownloadRow, ProgressRecord, QueueRow, Status};
 
 use rusqlite::Connection;
 use std::path::Path;
@@ -48,27 +48,39 @@ pub enum StoreError {
 /// An open Mohona database.
 pub struct Store {
     conn: Connection,
+    path: Option<std::path::PathBuf>,
+}
+
+impl std::fmt::Debug for Store {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Store").field("path", &self.path).finish()
+    }
 }
 
 impl Store {
     /// Open (creating if needed) the database at `path` and bring it up to date.
     pub fn open(path: &Path) -> Result<Store, StoreError> {
-        Self::init(Connection::open(path)?)
+        Self::init(Connection::open(path)?, Some(path.to_path_buf()))
     }
 
     /// An in-memory database, for tests.
     pub fn open_in_memory() -> Result<Store, StoreError> {
-        Self::init(Connection::open_in_memory()?)
+        Self::init(Connection::open_in_memory()?, None)
     }
 
-    fn init(conn: Connection) -> Result<Store, StoreError> {
+    fn init(conn: Connection, path: Option<std::path::PathBuf>) -> Result<Store, StoreError> {
         conn.pragma_update(None, "journal_mode", "WAL")?;
         conn.pragma_update(None, "synchronous", "NORMAL")?;
         conn.pragma_update(None, "foreign_keys", "ON")?;
         conn.busy_timeout(std::time::Duration::from_secs(5))?;
-        let mut store = Store { conn };
+        let mut store = Store { conn, path };
         store.migrate()?;
         Ok(store)
+    }
+
+    /// The file this database lives in (`None` for an in-memory database).
+    pub fn path(&self) -> Option<&Path> {
+        self.path.as_deref()
     }
 
     /// The schema version stored in the file.

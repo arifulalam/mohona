@@ -7,12 +7,15 @@
 
 use std::collections::HashMap;
 use std::path::PathBuf;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
-use mohona_core::{CancelToken, DownloadRequest, Error as CoreError, Event, Outcome};
+use mohona_core::{
+    CancelToken, DownloadRequest, Error as CoreError, Event, Outcome, Progress, ProgressStore,
+    RetryPolicy,
+};
 use mohona_net::HttpClient;
-use mohona_store::{DownloadRow, Status, Store, StoreError};
+use mohona_store::{DownloadRow, ProgressRecord, Status, Store, StoreError};
 use tokio::sync::{broadcast, mpsc, oneshot};
 
 pub use mohona_store::{DownloadRow as Download, Status as DownloadStatus};
@@ -118,6 +121,8 @@ enum Command {
         id: i64,
         downloaded: u64,
     },
+    /// A retry timer ran out.
+    RetryNow(i64),
 }
 
 type Reply = oneshot::Sender<Result<(), ManagerError>>;
@@ -137,6 +142,15 @@ pub struct ManagerConfig {
     pub adaptive: bool,
     /// The most connections one download may use.
     pub connections: usize,
+    /// How each download deals with failing requests.
+    pub retry: RetryPolicy,
+    /// How many times a download that failed on the network is started
+    /// again by itself before it is marked failed. The count starts over
+    /// whenever an attempt got new data.
+    pub max_retries: u32,
+    /// The wait before the first automatic retry; each further one doubles
+    /// it (up to 5 minutes).
+    pub retry_delay: Duration,
 }
 
 impl Default for ManagerConfig {
@@ -144,6 +158,9 @@ impl Default for ManagerConfig {
         Self {
             adaptive: true,
             connections: mohona_core::DEFAULT_CONNECTIONS,
+            retry: RetryPolicy::default(),
+            max_retries: 5,
+            retry_delay: Duration::from_secs(5),
         }
     }
 }
@@ -169,6 +186,7 @@ impl Manager {
             events: events.clone(),
             running: HashMap::new(),
             stopping: false,
+            retries: HashMap::new(),
         };
         tokio::spawn(actor.run());
         Ok(Manager { commands, events })
@@ -277,6 +295,8 @@ struct Actor {
     running: HashMap<i64, RunningDownload>,
     /// Set once shutdown starts: nothing new may begin.
     stopping: bool,
+    /// Automatic retries: `(attempts in a row, bytes at the last failure)`.
+    retries: HashMap<i64, (u32, u64)>,
 }
 
 impl Actor {
@@ -385,6 +405,15 @@ impl Actor {
                 let _ = self.store.set_downloaded(id, downloaded);
             }
             Command::Ended { id, result } => self.ended(id, result),
+            Command::RetryNow(id) => {
+                if !self.stopping && !self.running.contains_key(&id) {
+                    if let Ok(row) = self.row(id) {
+                        if row.status == Status::Retrying {
+                            self.start(row);
+                        }
+                    }
+                }
+            }
         }
     }
 
@@ -402,11 +431,14 @@ impl Actor {
             return Ok(());
         }
         match (row.status, intent) {
-            (Status::Queued, Intent::Pause) => {
+            (Status::Queued | Status::Retrying, Intent::Pause) => {
                 self.set_status(id, Status::Paused, None);
                 Ok(())
             }
-            (Status::Queued | Status::Paused | Status::Failed, Intent::Cancel) => {
+            (
+                Status::Queued | Status::Retrying | Status::Paused | Status::Failed,
+                Intent::Cancel,
+            ) => {
                 self.discard(&row);
                 self.set_status(id, Status::Canceled, None);
                 Ok(())
@@ -419,6 +451,7 @@ impl Actor {
         let row = self.row(id)?;
         match row.status {
             Status::Paused | Status::Failed | Status::Canceled => {
+                self.retries.remove(&id);
                 self.set_status(id, Status::Queued, None);
                 Ok(())
             }
@@ -447,9 +480,20 @@ impl Actor {
     }
 
     fn discard(&self, row: &DownloadRow) {
-        if row.status != Status::Completed {
-            mohona_core::discard_partial(std::path::Path::new(&row.dest_dir), &row.url);
+        if row.status == Status::Completed {
+            return;
         }
+        let dir = std::path::Path::new(&row.dest_dir);
+        if let Ok(Some(record)) = self.store.load_progress(row.id) {
+            let mut part = dir
+                .join(mohona_core::sanitize_filename(&record.filename))
+                .into_os_string();
+            part.push(".part");
+            let _ = std::fs::remove_file(part);
+        }
+        let _ = self.store.clear_progress(row.id);
+        // Progress kept in a sidecar file by an older version.
+        mohona_core::discard_partial(dir, &row.url);
     }
 
     fn ended(&mut self, id: i64, result: Result<Outcome, CoreError>) {
@@ -484,11 +528,46 @@ impl Actor {
                 self.set_status(id, Status::Canceled, None);
             }
             (Err(error), None) => {
-                let message = describe(&error);
-                self.set_status(id, Status::Failed, Some(&message));
+                if is_temporary(&error) && self.schedule_retry(&row) {
+                    // A timer will start it again.
+                } else {
+                    self.retries.remove(&id);
+                    let message = describe(&error);
+                    self.set_status(id, Status::Failed, Some(&message));
+                }
             }
         }
         self.pump();
+    }
+
+    /// Wait and try again, if the download has retries left. The download
+    /// keeps its place in the queue while it waits.
+    fn schedule_retry(&mut self, row: &DownloadRow) -> bool {
+        if self.stopping {
+            return false;
+        }
+        let entry = self.retries.entry(row.id).or_insert((0, row.downloaded));
+        if row.downloaded > entry.1 {
+            // It got somewhere since the last failure: start counting over.
+            *entry = (0, row.downloaded);
+        }
+        if entry.0 >= self.config.max_retries {
+            return false;
+        }
+        entry.0 += 1;
+        let wait = self
+            .config
+            .retry_delay
+            .saturating_mul(1u32 << (entry.0 - 1).min(16))
+            .min(Duration::from_secs(300));
+        self.set_status(row.id, Status::Retrying, None);
+        let commands = self.commands.clone();
+        let id = row.id;
+        tokio::spawn(async move {
+            tokio::time::sleep(wait).await;
+            let _ = commands.send(Command::RetryNow(id)).await;
+        });
+        true
     }
 
     /// Start whatever the queues have room for.
@@ -522,7 +601,16 @@ impl Actor {
         self.set_status(row.id, Status::Probing, None);
         let mut request = DownloadRequest::new(row.url.clone(), row.dest_dir.clone());
         request.connections = self.config.connections;
+        request.retry = self.config.retry.clone();
         request.retry.adaptive = self.config.adaptive;
+        if let Some(path) = self.store.path() {
+            request.progress = Some(Arc::new(DbProgress {
+                id: row.id,
+                url: row.url.clone(),
+                path: path.to_path_buf(),
+                connection: Mutex::new(None),
+            }));
+        }
         request.cancel = cancel;
         tokio::spawn(run_download(
             Arc::new(self.client.clone()),
@@ -596,4 +684,66 @@ fn describe(error: &dyn std::error::Error) -> String {
         source = inner.source();
     }
     text
+}
+
+/// Whether trying again later may help.
+fn is_temporary(error: &CoreError) -> bool {
+    match error {
+        CoreError::Net(net) => net.failure() != mohona_net::Failure::Fatal,
+        CoreError::Incomplete { .. } => true,
+        CoreError::Io(_) | CoreError::Cancelled => false,
+    }
+}
+
+/// A download's progress, kept in the database. It has its own connection
+/// (opened on first use): the workers save from other threads while the
+/// manager task uses its own.
+#[derive(Debug)]
+struct DbProgress {
+    id: i64,
+    url: String,
+    path: PathBuf,
+    connection: Mutex<Option<Store>>,
+}
+
+impl DbProgress {
+    fn with<T>(&self, work: impl FnOnce(&Store) -> Result<T, StoreError>) -> std::io::Result<T> {
+        let mut guard = self.connection.lock().unwrap_or_else(|e| e.into_inner());
+        if guard.is_none() {
+            *guard = Some(Store::open(&self.path).map_err(std::io::Error::other)?);
+        }
+        work(guard.as_ref().expect("opened above")).map_err(std::io::Error::other)
+    }
+}
+
+impl ProgressStore for DbProgress {
+    fn load(&self) -> Option<Progress> {
+        let record = self.with(|s| s.load_progress(self.id)).ok()??;
+        Some(Progress {
+            version: 1,
+            url: self.url.clone(),
+            final_url: record.final_url,
+            filename: record.filename,
+            total: record.total,
+            etag: record.etag,
+            last_modified: record.last_modified,
+            segments: record.segments,
+        })
+    }
+
+    fn save(&self, progress: &Progress) -> std::io::Result<()> {
+        let record = ProgressRecord {
+            final_url: progress.final_url.clone(),
+            filename: progress.filename.clone(),
+            total: progress.total,
+            etag: progress.etag.clone(),
+            last_modified: progress.last_modified.clone(),
+            segments: progress.segments.clone(),
+        };
+        self.with(|s| s.save_progress(self.id, &record))
+    }
+
+    fn clear(&self) {
+        let _ = self.with(|s| s.clear_progress(self.id));
+    }
 }

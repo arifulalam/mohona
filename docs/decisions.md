@@ -111,4 +111,14 @@ Status: accepted (16 October 2026)
 - **Shutdown and crashes.** Shutdown stops everything cleanly and marks running downloads queued again. After a crash or kill the same is done at start-up (`reset_interrupted`). They resume from their ledgers.
 - **Progress** is written to the database about once a second and when a download stops.
 - **File names.** Two downloads with the same file name in one folder used to be able to pick the same name at the same moment. The engine now claims a name by creating its `.part` file with "create new" in the same step, so this is safe even across processes.
-- **Not done yet:** the segments table still is not used (resume still reads the sidecar ledger), speed limits, scheduling, duplicate detection.
+- **Not done yet:** speed limits, scheduling, duplicate detection (see ADR-0012 for progress storage and automatic retries).
+
+## ADR-0012: Progress in the database, and automatic retries
+
+Status: accepted (16 October 2026)
+
+**Progress storage.** The engine asks a `ProgressStore` (a small trait in `mohona-core`: load, save, clear) where to keep a download's progress. With none given, it uses the sidecar file `<name>.part.mohona` as before, so `mohona get` is unchanged. The manager gives each download a store that writes to the `segments` table (and the size, `ETag` and `Last-Modified` columns of the `downloads` row) in one transaction. The checkpoint order is unchanged: snapshot the segments, flush the `.part` file, then save, so saved progress never claims bytes that are not on disk. Each store opens its own database connection, because workers save from other threads (WAL mode allows this). `mohona-core` does not depend on `mohona-store`.
+
+A download that has a sidecar file from an older version still resumes: the engine falls back to the sidecar when the database has nothing, and removes the sidecar when the download ends.
+
+**Automatic retries.** A download that fails with a network error that may pass (anything but a fatal one, such as a 404) goes to `retrying` and is started again after 5 s, 10 s, 20 s, ... up to 5 minutes, at most 5 times in a row. The count starts over when an attempt downloaded new bytes. While waiting it keeps its slot in the queue and can be paused or canceled. After the last retry it is marked failed; resuming by hand starts the count over. A failure that is not temporary (a missing file, a full disk) fails at once.

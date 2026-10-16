@@ -4,6 +4,7 @@ use std::net::SocketAddr;
 use std::path::Path;
 use std::time::Duration;
 
+use mohona_core::ProgressStore as _;
 use mohona_core::{
     download, partial_progress, CancelToken, DownloadRequest, Error, Event, RetryPolicy,
 };
@@ -611,4 +612,50 @@ async fn cancelling_before_the_start_leaves_nothing() {
         Err(Error::Cancelled)
     ));
     assert!(file_names(dir.path()).is_empty());
+}
+
+#[derive(Debug, Default)]
+struct MemoryProgress(std::sync::Mutex<Option<mohona_core::Progress>>);
+
+impl mohona_core::ProgressStore for MemoryProgress {
+    fn load(&self) -> Option<mohona_core::Progress> {
+        self.0.lock().unwrap().clone()
+    }
+    fn save(&self, progress: &mohona_core::Progress) -> std::io::Result<()> {
+        *self.0.lock().unwrap() = Some(progress.clone());
+        Ok(())
+    }
+    fn clear(&self) {
+        *self.0.lock().unwrap() = None;
+    }
+}
+
+#[tokio::test]
+async fn progress_can_be_kept_in_a_store_instead_of_a_sidecar_file() {
+    let addr = start().await;
+    let dir = tempfile::tempdir().unwrap();
+    let size = 12_000_000;
+    let path = format!("/file?size={size}&limit=3000000");
+    let store = std::sync::Arc::new(MemoryProgress::default());
+
+    let mut first = request(addr, &path, dir.path());
+    first.connections = 1;
+    first.progress = Some(store.clone());
+    let error = download_then_cancel(&mut first, Duration::from_millis(1500))
+        .await
+        .unwrap_err();
+    assert!(matches!(error, Error::Cancelled), "{error}");
+    // Only the data file is on disk; the progress is in the store.
+    assert_eq!(file_names(dir.path()), ["mohona-test.bin.part"]);
+    let saved = store.load().expect("progress was saved").committed_bytes();
+    assert!(saved > 0 && saved < size as u64);
+
+    let mut second = request(addr, &path, dir.path());
+    second.connections = 1;
+    second.progress = Some(store.clone());
+    let (outcome, resumed) = download_reporting_resume(&second).await;
+    assert_eq!(resumed, saved);
+    assert_generated_content(&outcome.path, size);
+    assert_eq!(file_names(dir.path()), ["mohona-test.bin"]);
+    assert!(store.load().is_none(), "cleared when finished");
 }

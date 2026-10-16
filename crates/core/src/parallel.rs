@@ -27,7 +27,7 @@ use tokio::time::{interval, sleep, MissedTickBehavior};
 
 use crate::cancel::CancelToken;
 use crate::download::{emit, report_progress, Event};
-use crate::ledger::Ledger;
+use crate::ledger::{Ledger, Sink};
 use crate::retry::RetryPolicy;
 use crate::segments::{Claim, Scheduler};
 use crate::tuner::{Action, Tuner};
@@ -134,7 +134,7 @@ pub(crate) struct Job<'a> {
     /// What is written to the ledger (its `segments` are filled in at each
     /// checkpoint) and where.
     pub ledger: &'a Ledger,
-    pub ledger_path: &'a Path,
+    pub sink: &'a Sink,
     pub cancel: &'a CancelToken,
 }
 
@@ -154,7 +154,7 @@ pub(crate) async fn fetch_segmented(
         part_path,
         resume,
         ledger,
-        ledger_path,
+        sink,
         cancel,
     } = *job;
     if resume.is_none() {
@@ -196,7 +196,7 @@ pub(crate) async fn fetch_segmented(
     // Record the download before any data arrives. If the program is killed
     // at any moment from here on, the next run finds the `.part` file and
     // continues with it instead of leaving it behind as an orphan.
-    if let Err(error) = checkpoint(&shared, ledger, ledger_path).await {
+    if let Err(error) = checkpoint(&shared, ledger, sink).await {
         emit(
             events,
             Event::Note(format!("could not save progress: {error}")),
@@ -328,7 +328,7 @@ pub(crate) async fn fetch_segmented(
             _ = ticker.tick() => {
                 report_progress(events, shared.downloaded.load(Ordering::Relaxed), Some(total));
                 if last_checkpoint.elapsed() >= CHECKPOINT_INTERVAL {
-                    if let Err(error) = checkpoint(&shared, ledger, ledger_path).await {
+                    if let Err(error) = checkpoint(&shared, ledger, sink).await {
                         emit(events, Event::Note(format!("could not save progress: {error}"))).await;
                     }
                     last_checkpoint = Instant::now();
@@ -349,7 +349,7 @@ pub(crate) async fn fetch_segmented(
         // needs that), and so the ledger can record their last bytes.
         workers.abort_all();
         while workers.join_next().await.is_some() {}
-        return Err(finish_failed(&shared, ledger, ledger_path, error).await);
+        return Err(finish_failed(&shared, ledger, sink, error).await);
     }
 
     let bytes = shared.downloaded.load(Ordering::Relaxed);
@@ -358,7 +358,7 @@ pub(crate) async fn fetch_segmented(
             expected: total,
             received: bytes,
         };
-        return Err(finish_failed(&shared, ledger, ledger_path, error).await);
+        return Err(finish_failed(&shared, ledger, sink, error).await);
     }
     // Make sure the bytes are on disk before the caller renames the file.
     sync_part_file(shared.part_path.clone())
@@ -406,12 +406,12 @@ async fn sync_part_file(path: PathBuf) -> std::io::Result<()> {
 /// The order matters: take the list of committed bytes first, then flush the
 /// file, then write the ledger. Everything the ledger claims was written
 /// before the snapshot, so the flush that follows makes it durable.
-async fn checkpoint(shared: &Shared, template: &Ledger, ledger_path: &Path) -> std::io::Result<()> {
+async fn checkpoint(shared: &Shared, template: &Ledger, sink: &Sink) -> std::io::Result<()> {
     let mut ledger = template.clone();
     ledger.segments = shared.scheduler.snapshot();
     sync_part_file(shared.part_path.clone()).await?;
-    let path = ledger_path.to_path_buf();
-    tokio::task::spawn_blocking(move || ledger.save(&path))
+    let sink = sink.clone();
+    tokio::task::spawn_blocking(move || sink.save(&ledger))
         .await
         .map_err(std::io::Error::other)?
 }
@@ -421,13 +421,13 @@ async fn checkpoint(shared: &Shared, template: &Ledger, ledger_path: &Path) -> s
 async fn finish_failed(
     shared: &Shared,
     template: &Ledger,
-    ledger_path: &Path,
+    sink: &Sink,
     error: Error,
 ) -> FetchFailed {
     let progress = shared.scheduler.committed_bytes() > 0;
     let keep = progress
         && !error.makes_partial_file_useless()
-        && checkpoint(shared, template, ledger_path).await.is_ok();
+        && checkpoint(shared, template, sink).await.is_ok();
     FetchFailed { error, keep }
 }
 

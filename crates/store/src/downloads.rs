@@ -108,6 +108,23 @@ pub struct QueueRow {
     pub max_active: u32,
 }
 
+/// What is saved about a download in progress (see `Store::save_progress`).
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct ProgressRecord {
+    /// The address after redirects.
+    pub final_url: String,
+    /// The file name the result gets.
+    pub filename: String,
+    /// Size of the whole file.
+    pub total: u64,
+    /// `ETag` the server sent, if any.
+    pub etag: Option<String>,
+    /// `Last-Modified` the server sent, if any.
+    pub last_modified: Option<String>,
+    /// `(start, committed, end)` of each segment.
+    pub segments: Vec<(u64, u64, u64)>,
+}
+
 const COLUMNS: &str = "id,url,final_url,filename,dest_dir,size,downloaded,status,error,path,\
                        queue_id,position,created_at,finished_at";
 
@@ -243,6 +260,90 @@ impl Store {
         self.set_status(id, Status::Completed, None)
     }
 
+    /// Save a download's progress: what the server said about the file and
+    /// how far each segment is. It is all-or-nothing (one transaction), so
+    /// after a crash the previous snapshot or the new one is there.
+    pub fn save_progress(&self, id: i64, record: &ProgressRecord) -> Result<(), StoreError> {
+        let tx = self.conn.unchecked_transaction()?;
+        let committed: u64 = record.segments.iter().map(|(s, c, _)| c - s).sum();
+        tx.execute(
+            "UPDATE downloads SET final_url=?2, filename=?3, size=?4, etag=?5, \
+             last_modified=?6, downloaded=?7 WHERE id=?1",
+            params![
+                id,
+                record.final_url,
+                record.filename,
+                record.total as i64,
+                record.etag,
+                record.last_modified,
+                committed as i64
+            ],
+        )?;
+        tx.execute("DELETE FROM segments WHERE download_id=?1", [id])?;
+        let mut insert = tx.prepare(
+            "INSERT INTO segments (download_id,start,committed,\"end\") VALUES (?1,?2,?3,?4)",
+        )?;
+        for (start, done, end) in &record.segments {
+            insert.execute(params![id, *start as i64, *done as i64, *end as i64])?;
+        }
+        drop(insert);
+        tx.commit()?;
+        Ok(())
+    }
+
+    /// The saved progress of a download, if it has any segments.
+    pub fn load_progress(&self, id: i64) -> Result<Option<ProgressRecord>, StoreError> {
+        let head = self
+            .conn
+            .query_row(
+                "SELECT final_url,filename,size,etag,last_modified FROM downloads WHERE id=?1",
+                [id],
+                |r| {
+                    Ok((
+                        r.get::<_, Option<String>>(0)?,
+                        r.get::<_, Option<String>>(1)?,
+                        r.get::<_, Option<i64>>(2)?,
+                        r.get::<_, Option<String>>(3)?,
+                        r.get::<_, Option<String>>(4)?,
+                    ))
+                },
+            )
+            .optional()?;
+        let Some((Some(final_url), Some(filename), Some(total), etag, last_modified)) = head else {
+            return Ok(None);
+        };
+        let mut stmt = self.conn.prepare(
+            "SELECT start,committed,\"end\" FROM segments WHERE download_id=?1 ORDER BY start",
+        )?;
+        let segments = stmt
+            .query_map([id], |r| {
+                Ok((
+                    r.get::<_, i64>(0)? as u64,
+                    r.get::<_, i64>(1)? as u64,
+                    r.get::<_, i64>(2)? as u64,
+                ))
+            })?
+            .collect::<Result<Vec<_>, _>>()?;
+        if segments.is_empty() {
+            return Ok(None);
+        }
+        Ok(Some(ProgressRecord {
+            final_url,
+            filename,
+            total: total as u64,
+            etag,
+            last_modified,
+            segments,
+        }))
+    }
+
+    /// Forget a download's segments.
+    pub fn clear_progress(&self, id: i64) -> Result<(), StoreError> {
+        self.conn
+            .execute("DELETE FROM segments WHERE download_id=?1", [id])?;
+        Ok(())
+    }
+
     /// Remove a download (and, by cascade, its segments and log).
     pub fn delete_download(&self, id: i64) -> Result<(), StoreError> {
         self.conn
@@ -332,6 +433,29 @@ mod tests {
         assert_eq!(ra.status, Status::Queued);
         assert!(rb.position > ra.position);
         assert_eq!(s.list_downloads().unwrap().len(), 2);
+    }
+
+    #[test]
+    fn progress_round_trips_and_replaces_the_earlier_snapshot() {
+        let s = store();
+        let id = s.add_download("u", "d", None).unwrap();
+        assert_eq!(s.load_progress(id).unwrap(), None);
+        let mut record = ProgressRecord {
+            final_url: "u2".into(),
+            filename: "f.bin".into(),
+            total: 100,
+            etag: Some("\"x\"".into()),
+            last_modified: None,
+            segments: vec![(0, 30, 50), (50, 50, 100)],
+        };
+        s.save_progress(id, &record).unwrap();
+        assert_eq!(s.load_progress(id).unwrap(), Some(record.clone()));
+        assert_eq!(s.download(id).unwrap().unwrap().downloaded, 30);
+        record.segments = vec![(0, 50, 100)];
+        s.save_progress(id, &record).unwrap();
+        assert_eq!(s.load_progress(id).unwrap(), Some(record));
+        s.clear_progress(id).unwrap();
+        assert_eq!(s.load_progress(id).unwrap(), None);
     }
 
     #[test]
