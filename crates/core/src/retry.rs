@@ -77,12 +77,13 @@ pub(crate) async fn probe_with_retry(
     url: &str,
     policy: &RetryPolicy,
 ) -> Result<Probe, NetError> {
-    const ATTEMPTS: u32 = 3;
+    // At most three tries, fewer when the policy allows fewer attempts.
+    let attempts = policy.max_attempts.clamp(1, 3);
     let mut attempt = 1;
     loop {
         match client.probe(url).await {
             Ok(probe) => return Ok(probe),
-            Err(error) if attempt < ATTEMPTS && error.failure() != Failure::Fatal => {
+            Err(error) if attempt < attempts && error.failure() != Failure::Fatal => {
                 tokio::time::sleep(policy.backoff(attempt, error.retry_after())).await;
                 attempt += 1;
             }

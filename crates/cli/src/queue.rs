@@ -173,8 +173,15 @@ async fn run_queue(store: Store) -> Result<(), String> {
     loop {
         tokio::select! {
             event = events.recv() => {
-                if let Ok(ManagerEvent::State { id, status }) = event {
-                    announce(&manager, id, status).await;
+                match event {
+                    Ok(ManagerEvent::State { id, status }) => announce(&manager, id, status).await,
+                    Ok(ManagerEvent::RetryScheduled { id, attempt, wait, message }) => {
+                        println!(
+                            "#{id} network problem ({message}); trying again in {} s (retry {attempt})",
+                            wait.as_secs()
+                        );
+                    }
+                    _ => {}
                 }
             }
             _ = tick.tick() => {

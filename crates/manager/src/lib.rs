@@ -71,6 +71,17 @@ pub enum ManagerEvent {
         /// What went wrong.
         message: String,
     },
+    /// A download failed on the network and will be started again.
+    RetryScheduled {
+        /// Its id.
+        id: i64,
+        /// Which automatic retry this is (1 for the first).
+        attempt: u32,
+        /// How long it waits before starting again.
+        wait: Duration,
+        /// What went wrong this time.
+        message: String,
+    },
     /// A download was removed.
     Removed {
         /// Its id.
@@ -626,7 +637,7 @@ impl Actor {
                 self.set_status(id, Status::Canceled, None);
             }
             (Err(error), None) => {
-                if is_temporary(&error) && self.schedule_retry(&row) {
+                if is_temporary(&error) && self.schedule_retry(&row, &describe(&error)) {
                     // A timer will start it again.
                 } else {
                     self.retries.remove(&id);
@@ -640,7 +651,7 @@ impl Actor {
 
     /// Wait and try again, if the download has retries left. The download
     /// keeps its place in the queue while it waits.
-    fn schedule_retry(&mut self, row: &DownloadRow) -> bool {
+    fn schedule_retry(&mut self, row: &DownloadRow, message: &str) -> bool {
         if self.stopping {
             return false;
         }
@@ -658,7 +669,14 @@ impl Actor {
             .retry_delay
             .saturating_mul(1u32 << (entry.0 - 1).min(16))
             .min(Duration::from_secs(300));
+        let attempt = entry.0;
         self.set_status(row.id, Status::Retrying, None);
+        self.emit(ManagerEvent::RetryScheduled {
+            id: row.id,
+            attempt,
+            wait,
+            message: message.to_string(),
+        });
         let commands = self.commands.clone();
         let id = row.id;
         tokio::spawn(async move {
