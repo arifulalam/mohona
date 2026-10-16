@@ -63,8 +63,10 @@ async fn wait_for(manager: &Manager, id: i64, status: Status) {
         if row.status == status {
             return;
         }
+        // Generous: on Windows a refused connection takes about 2 s to
+        // report, and the retry tests make several of them.
         assert!(
-            start.elapsed() < Duration::from_secs(30),
+            start.elapsed() < Duration::from_secs(120),
             "download {id} is {:?}, expected {status:?}",
             row.status
         );
