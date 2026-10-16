@@ -8,7 +8,7 @@ use mohona_manager::{DownloadStatus, Manager, ManagerConfig, ManagerEvent};
 use mohona_net::{ClientConfig, HttpClient};
 use mohona_store::Store;
 
-use crate::{describe, format_bytes};
+use crate::{describe, format_bytes, parse_rate};
 
 #[derive(Subcommand)]
 pub enum QueueCommand {
@@ -28,6 +28,17 @@ pub enum QueueCommand {
         /// How many downloads may run at once
         #[arg(short, long)]
         simultaneous: Option<u32>,
+        /// Speed limit for everything together, like 1M, or `off`. It is saved.
+        #[arg(short = 'l', long, value_parser = parse_rate)]
+        max_speed: Option<u64>,
+    },
+    /// Limit the speed of one download, like `queue speed 3 500K` (or `off`)
+    Speed {
+        /// The number shown by `queue list`
+        id: i64,
+        /// The limit, like 500K or 1.5M, or `off`
+        #[arg(value_parser = parse_rate)]
+        limit: u64,
     },
     /// Put a paused, failed or canceled download back in the list to run
     Retry {
@@ -80,11 +91,34 @@ pub async fn run(command: QueueCommand, db: PathBuf) -> Result<(), String> {
                 .ok_or(format!("no download #{id}"))?;
             store.delete_download(id).map_err(|e| e.to_string())
         }
-        QueueCommand::Run { simultaneous } => {
+        QueueCommand::Speed { id, limit } => {
+            store
+                .download(id)
+                .map_err(|e| e.to_string())?
+                .ok_or(format!("no download #{id}"))?;
+            store
+                .set_download_speed_limit(id, (limit > 0).then_some(limit))
+                .map_err(|e| e.to_string())
+        }
+        QueueCommand::Run {
+            simultaneous,
+            max_speed,
+        } => {
             if let Some(n) = simultaneous {
                 store
                     .set_queue_max_active(1, n)
                     .map_err(|e| e.to_string())?;
+            }
+            if let Some(rate) = max_speed {
+                if rate > 0 {
+                    store
+                        .set_setting("speed_limit", &rate.to_string())
+                        .map_err(|e| e.to_string())?;
+                } else {
+                    store
+                        .remove_setting("speed_limit")
+                        .map_err(|e| e.to_string())?;
+                }
             }
             run_queue(store).await
         }

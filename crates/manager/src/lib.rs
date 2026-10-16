@@ -12,7 +12,7 @@ use std::time::{Duration, Instant};
 
 use mohona_core::{
     CancelToken, DownloadRequest, Error as CoreError, Event, Outcome, Progress, ProgressStore,
-    RetryPolicy,
+    RateLimit, RetryPolicy,
 };
 use mohona_net::HttpClient;
 use mohona_store::{DownloadRow, ProgressRecord, Status, Store, StoreError};
@@ -78,6 +78,20 @@ pub enum ManagerEvent {
     },
 }
 
+/// A speed limit the manager can change.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum SpeedTarget {
+    /// Applies to everything.
+    Global,
+    /// Applies to the downloads of one queue (together).
+    Queue(i64),
+    /// Applies to one download.
+    Download(i64),
+}
+
+/// The settings key of the global speed limit.
+const GLOBAL_SPEED_KEY: &str = "speed_limit";
+
 /// What a running download's task has been asked to do when it stops.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum Intent {
@@ -103,6 +117,8 @@ enum Command {
     },
     List(oneshot::Sender<Result<Vec<DownloadRow>, ManagerError>>),
     SetQueueLimit(i64, u32, Reply),
+    /// Which speed limit to change, and to what (`None` removes it).
+    SetSpeed(SpeedTarget, Option<u64>, Reply),
     Shutdown(oneshot::Sender<()>),
     /// Sent by a download's own task when it ends.
     Ended {
@@ -177,6 +193,10 @@ impl Manager {
         store.reset_interrupted()?;
         let (commands, inbox) = mpsc::channel(256);
         let (events, _) = broadcast::channel(1024);
+        let global = store
+            .setting(GLOBAL_SPEED_KEY)?
+            .and_then(|text| text.parse::<u64>().ok())
+            .unwrap_or(0);
         let actor = Actor {
             store,
             client,
@@ -187,6 +207,9 @@ impl Manager {
             running: HashMap::new(),
             stopping: false,
             retries: HashMap::new(),
+            global_limit: RateLimit::new(global),
+            queue_limits: HashMap::new(),
+            download_limits: HashMap::new(),
         };
         tokio::spawn(actor.run());
         Ok(Manager { commands, events })
@@ -267,6 +290,19 @@ impl Manager {
             .await
     }
 
+    /// Set a speed limit in bytes per second, or remove it with `None`. It
+    /// takes effect at once, also for downloads that are running, and is
+    /// saved. A download goes at the slowest of the global, queue and
+    /// download limits that apply to it.
+    pub async fn set_speed_limit(
+        &self,
+        target: SpeedTarget,
+        bytes_per_second: Option<u64>,
+    ) -> Result<(), ManagerError> {
+        self.ask(|r| Command::SetSpeed(target, bytes_per_second, r))
+            .await
+    }
+
     /// Stop everything cleanly, keeping partial data, and end the manager.
     /// Downloads that were running are marked queued again, so they resume
     /// on the next start.
@@ -297,6 +333,10 @@ struct Actor {
     stopping: bool,
     /// Automatic retries: `(attempts in a row, bytes at the last failure)`.
     retries: HashMap<i64, (u32, u64)>,
+    /// The speed limits, created on first use and shared with the downloads.
+    global_limit: Arc<RateLimit>,
+    queue_limits: HashMap<i64, Arc<RateLimit>>,
+    download_limits: HashMap<i64, Arc<RateLimit>>,
 }
 
 impl Actor {
@@ -388,6 +428,9 @@ impl Actor {
                 self.pump();
                 let _ = reply.send(result);
             }
+            Command::SetSpeed(target, limit, reply) => {
+                let _ = reply.send(self.set_speed(target, limit));
+            }
             Command::Shutdown(_) => unreachable!("handled in run"),
             Command::Started {
                 id,
@@ -415,6 +458,60 @@ impl Actor {
                 }
             }
         }
+    }
+
+    fn set_speed(&mut self, target: SpeedTarget, limit: Option<u64>) -> Result<(), ManagerError> {
+        let rate = limit.unwrap_or(0);
+        match target {
+            SpeedTarget::Global => {
+                match limit {
+                    Some(n) => self.store.set_setting(GLOBAL_SPEED_KEY, &n.to_string())?,
+                    None => self.store.remove_setting(GLOBAL_SPEED_KEY)?,
+                }
+                self.global_limit.set(rate);
+            }
+            SpeedTarget::Queue(id) => {
+                if !self.store.queues()?.iter().any(|q| q.id == id) {
+                    return Err(ManagerError::NotFound(id));
+                }
+                self.store.set_queue_speed_limit(id, limit)?;
+                self.queue_limits
+                    .entry(id)
+                    .or_insert_with(|| RateLimit::new(0))
+                    .set(rate);
+            }
+            SpeedTarget::Download(id) => {
+                self.row(id)?;
+                self.store.set_download_speed_limit(id, limit)?;
+                self.download_limits
+                    .entry(id)
+                    .or_insert_with(|| RateLimit::new(0))
+                    .set(rate);
+            }
+        }
+        Ok(())
+    }
+
+    /// The limits that apply to a download, created from what is saved.
+    fn limits_for(&mut self, row: &DownloadRow) -> Vec<Arc<RateLimit>> {
+        let queue_rate = self
+            .store
+            .queues()
+            .ok()
+            .and_then(|queues| queues.into_iter().find(|q| q.id == row.queue_id))
+            .and_then(|q| q.speed_limit)
+            .unwrap_or(0);
+        let queue = self
+            .queue_limits
+            .entry(row.queue_id)
+            .or_insert_with(|| RateLimit::new(queue_rate))
+            .clone();
+        let own = self
+            .download_limits
+            .entry(row.id)
+            .or_insert_with(|| RateLimit::new(row.speed_limit.unwrap_or(0)))
+            .clone();
+        vec![self.global_limit.clone(), queue, own]
     }
 
     fn row(&self, id: i64) -> Result<DownloadRow, ManagerError> {
@@ -473,6 +570,7 @@ impl Actor {
                 let _ = std::fs::remove_file(path);
             }
         }
+        self.download_limits.remove(&id);
         self.store.delete_download(id)?;
         self.emit(ManagerEvent::Removed { id });
         self.pump();
@@ -612,6 +710,7 @@ impl Actor {
             }));
         }
         request.cancel = cancel;
+        request.limits = self.limits_for(&row);
         tokio::spawn(run_download(
             Arc::new(self.client.clone()),
             request,

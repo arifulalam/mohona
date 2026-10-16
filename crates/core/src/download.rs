@@ -10,6 +10,7 @@ use tokio::sync::mpsc::Sender;
 use crate::cancel::CancelToken;
 use crate::filename::{reserve_unique_path, sanitize_filename, unique_path};
 use crate::ledger::{Ledger, ProgressStore, Sink};
+use crate::limiter::{Limits, RateLimit};
 use crate::parallel::{fetch_segmented, Job, MIN_SEGMENT};
 use crate::retry::{probe_with_retry, RetryPolicy};
 use crate::Error;
@@ -41,6 +42,9 @@ pub struct DownloadRequest {
     /// Where to keep the progress of a ranged download. `None` uses a
     /// sidecar file `<name>.part.mohona` next to the `.part` file.
     pub progress: Option<Arc<dyn ProgressStore>>,
+    /// Speed limits that apply to this download. They may be shared with
+    /// other downloads and changed while it runs; it goes at the slowest.
+    pub limits: Vec<Arc<RateLimit>>,
 }
 
 impl DownloadRequest {
@@ -53,6 +57,7 @@ impl DownloadRequest {
             retry: RetryPolicy::default(),
             cancel: CancelToken::new(),
             progress: None,
+            limits: Vec::new(),
         }
     }
 }
@@ -220,6 +225,7 @@ pub async fn download(
     )
     .await;
 
+    let limits = Limits(request.limits.clone());
     let fetched = match ranged_total {
         Some(total) => {
             let template = Ledger {
@@ -247,6 +253,7 @@ pub async fn download(
                     resume: saved,
                     ledger: &template,
                     sink: &sink,
+                    limits: &limits,
                     cancel: &request.cancel,
                 },
                 events,
@@ -255,7 +262,7 @@ pub async fn download(
             .map(|fetched| (fetched.bytes, fetched.connections))
             .map_err(|failed| (failed.error, failed.keep))
         }
-        None => fetch_to_part(client, &probe, &part_path, &request.cancel, events)
+        None => fetch_to_part(client, &probe, &part_path, &request.cancel, &limits, events)
             .await
             .map(|bytes| (bytes, 1))
             .map_err(|error| (error, false)),
@@ -364,6 +371,7 @@ async fn fetch_to_part(
     probe: &Probe,
     part_path: &Path,
     cancel: &CancelToken,
+    limits: &Limits,
     events: Option<&Sender<Event>>,
 ) -> Result<u64, Error> {
     let mut body = client.get(&probe.final_url).await?;
@@ -375,6 +383,10 @@ async fn fetch_to_part(
     let mut last_report = Instant::now();
 
     while let Some(chunk) = body.chunk().await? {
+        tokio::select! {
+            () = limits.acquire(chunk.len()) => {}
+            () = cancel.cancelled() => return Err(Error::Cancelled),
+        }
         if cancel.is_cancelled() {
             return Err(Error::Cancelled);
         }

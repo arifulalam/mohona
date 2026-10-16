@@ -659,3 +659,72 @@ async fn progress_can_be_kept_in_a_store_instead_of_a_sidecar_file() {
     assert_eq!(file_names(dir.path()), ["mohona-test.bin"]);
     assert!(store.load().is_none(), "cleared when finished");
 }
+
+#[tokio::test]
+async fn a_speed_limit_holds_across_many_connections() {
+    let addr = start().await;
+    let dir = tempfile::tempdir().unwrap();
+    let mut req = request(addr, "/file?size=3000000", dir.path());
+    req.connections = 16;
+    req.limits = vec![mohona_core::RateLimit::new(1_000_000)];
+    let started = std::time::Instant::now();
+    let outcome = download(&client(), &req, None).await.unwrap();
+    let seconds = started.elapsed().as_secs_f64();
+    assert_generated_content(&outcome.path, 3_000_000);
+    // 3 MB at 1 MB/s: three seconds, minus the small credit the limiter allows.
+    assert!(
+        (2.7..=3.5).contains(&seconds),
+        "took {seconds:.2} s instead of about 3 s"
+    );
+}
+
+#[tokio::test]
+async fn downloads_share_one_limit() {
+    let addr = start().await;
+    let dir = tempfile::tempdir().unwrap();
+    let shared = mohona_core::RateLimit::new(1_000_000);
+    let started = std::time::Instant::now();
+    let one = {
+        let mut r = request(addr, "/file?size=1500000&a=1", dir.path());
+        r.connections = 4;
+        r.limits = vec![shared.clone()];
+        r
+    };
+    let two = {
+        let mut r = request(addr, "/file?size=1500000&a=2", dir.path());
+        r.connections = 4;
+        r.limits = vec![shared.clone()];
+        r
+    };
+    let c = client();
+    let (a, b) = tokio::join!(download(&c, &one, None), download(&c, &two, None));
+    a.unwrap();
+    b.unwrap();
+    let seconds = started.elapsed().as_secs_f64();
+    assert!(
+        (2.7..=3.5).contains(&seconds),
+        "two 1.5 MB downloads under one 1 MB/s limit took {seconds:.2} s"
+    );
+}
+
+#[tokio::test]
+async fn a_limit_can_be_lifted_while_the_download_runs() {
+    let addr = start().await;
+    let dir = tempfile::tempdir().unwrap();
+    let limit = mohona_core::RateLimit::new(200_000);
+    let mut req = request(addr, "/file?size=5000000", dir.path());
+    req.limits = vec![limit.clone()];
+    let lift = limit.clone();
+    tokio::spawn(async move {
+        tokio::time::sleep(Duration::from_millis(500)).await;
+        lift.set(0);
+    });
+    let started = std::time::Instant::now();
+    download(&client(), &req, None).await.unwrap();
+    // At 200 KB/s the file would take 25 s.
+    assert!(
+        started.elapsed() < Duration::from_secs(8),
+        "{:?}",
+        started.elapsed()
+    );
+}

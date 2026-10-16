@@ -52,7 +52,51 @@ enum Command {
         /// Most connections to use at once (1 to 32)
         #[arg(short = 'c', long, default_value_t = DEFAULT_CONNECTIONS as u16, value_parser = clap::value_parser!(u16).range(1..=32))]
         connections: u16,
+
+        /// Speed limit, like 500K or 1.5M (bytes per second)
+        #[arg(short = 'l', long, value_parser = parse_rate)]
+        max_speed: Option<u64>,
     },
+}
+
+/// Read a speed such as `500K`, `1.5M`, `2G` or a plain number of bytes.
+/// `off` and `0` mean no limit (0).
+pub(crate) fn parse_rate(text: &str) -> Result<u64, String> {
+    let text = text.trim();
+    if text.eq_ignore_ascii_case("off") {
+        return Ok(0);
+    }
+    let (number, multiplier) = match text.chars().last().map(|c| c.to_ascii_uppercase()) {
+        Some('K') => (&text[..text.len() - 1], 1024.0),
+        Some('M') => (&text[..text.len() - 1], 1024.0 * 1024.0),
+        Some('G') => (&text[..text.len() - 1], 1024.0 * 1024.0 * 1024.0),
+        _ => (text, 1.0),
+    };
+    let value: f64 = number
+        .trim()
+        .parse()
+        .map_err(|_| format!("'{text}' is not a speed; try 500K, 1.5M or off"))?;
+    if !value.is_finite() || value < 0.0 {
+        return Err(format!("'{text}' is not a speed; try 500K, 1.5M or off"));
+    }
+    Ok((value * multiplier) as u64)
+}
+
+#[cfg(test)]
+mod rate_tests {
+    use super::parse_rate;
+
+    #[test]
+    fn speeds_are_read_with_suffixes() {
+        assert_eq!(parse_rate("500"), Ok(500));
+        assert_eq!(parse_rate("500K"), Ok(512_000));
+        assert_eq!(parse_rate("1m"), Ok(1_048_576));
+        assert_eq!(parse_rate("1.5M"), Ok(1_572_864));
+        assert_eq!(parse_rate("off"), Ok(0));
+        assert_eq!(parse_rate("0"), Ok(0));
+        assert!(parse_rate("fast").is_err());
+        assert!(parse_rate("-1M").is_err());
+    }
 }
 
 #[tokio::main]
@@ -64,7 +108,8 @@ async fn main() -> ExitCode {
             output,
             connections,
             verbose,
-        }) => match get(url, output, usize::from(connections), verbose).await {
+            max_speed,
+        }) => match get(url, output, usize::from(connections), verbose, max_speed).await {
             Ok(()) => ExitCode::SUCCESS,
             Err(message) => {
                 eprintln!("error: {message}");
@@ -93,10 +138,14 @@ async fn get(
     output: PathBuf,
     connections: usize,
     verbose: bool,
+    max_speed: Option<u64>,
 ) -> Result<(), String> {
     let client = HttpClient::new(&ClientConfig::default()).map_err(|error| describe(&error))?;
     let mut request = DownloadRequest::new(url, output);
     request.connections = connections;
+    if let Some(rate) = max_speed.filter(|rate| *rate > 0) {
+        request.limits = vec![mohona_core::RateLimit::new(rate)];
+    }
     // Ctrl-C stops the download cleanly and keeps what was fetched.
     let cancel = CancelToken::new();
     request.cancel = cancel.clone();

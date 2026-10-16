@@ -5,7 +5,7 @@ use std::path::Path;
 use std::time::{Duration, Instant};
 
 use mohona_core::RetryPolicy;
-use mohona_manager::{DownloadStatus as Status, Manager, ManagerConfig, ManagerEvent};
+use mohona_manager::{DownloadStatus as Status, Manager, ManagerConfig, ManagerEvent, SpeedTarget};
 use mohona_net::{ClientConfig, HttpClient};
 use mohona_store::Store;
 use mohona_testserver::{bind, content_byte, serve, Config};
@@ -522,4 +522,113 @@ async fn a_download_waiting_to_retry_can_be_paused() {
         Status::Paused,
         "the timer must not restart it"
     );
+}
+
+async fn seconds_until_all_complete(manager: &Manager) -> f64 {
+    let start = Instant::now();
+    loop {
+        let rows = manager.list().await.unwrap();
+        if rows.iter().all(|r| r.status == Status::Completed) {
+            return start.elapsed().as_secs_f64();
+        }
+        assert!(start.elapsed() < Duration::from_secs(60), "{rows:?}");
+        tokio::time::sleep(Duration::from_millis(20)).await;
+    }
+}
+
+#[tokio::test]
+async fn the_global_limit_covers_all_downloads_together() {
+    let addr = start_server().await;
+    let dir = tempfile::tempdir().unwrap();
+    let manager = manager_at(&dir.path().join("m.db"));
+    manager
+        .set_speed_limit(SpeedTarget::Global, Some(1_000_000))
+        .await
+        .unwrap();
+    let out = dir.path().join("out");
+    for i in 0..2 {
+        manager
+            .add(format!("http://{addr}/file?size=1500000&n={i}"), &out)
+            .await
+            .unwrap();
+    }
+    let seconds = seconds_until_all_complete(&manager).await;
+    assert!(
+        (2.7..=3.6).contains(&seconds),
+        "3 MB under a 1 MB/s global limit took {seconds:.2} s"
+    );
+}
+
+#[tokio::test]
+async fn queue_and_download_limits_apply_and_the_slowest_wins() {
+    let addr = start_server().await;
+    let dir = tempfile::tempdir().unwrap();
+    let manager = manager_at(&dir.path().join("m.db"));
+    let out = dir.path().join("out");
+    manager
+        .set_speed_limit(SpeedTarget::Queue(1), Some(10_000_000))
+        .await
+        .unwrap();
+    let id = manager
+        .add(format!("http://{addr}/file?size=1000000"), &out)
+        .await
+        .unwrap();
+    manager
+        .set_speed_limit(SpeedTarget::Download(id), Some(500_000))
+        .await
+        .unwrap();
+    let seconds = seconds_until_all_complete(&manager).await;
+    assert!(
+        (1.7..=2.6).contains(&seconds),
+        "1 MB at 500 KB/s took {seconds:.2} s"
+    );
+}
+
+#[tokio::test]
+async fn a_running_download_follows_a_changed_limit_and_limits_are_saved() {
+    let addr = start_server().await;
+    let dir = tempfile::tempdir().unwrap();
+    let db = dir.path().join("m.db");
+    let manager = manager_at(&db);
+    manager
+        .set_speed_limit(SpeedTarget::Global, Some(100_000))
+        .await
+        .unwrap();
+    let id = manager
+        .add(
+            format!("http://{addr}/file?size=3000000"),
+            dir.path().join("out"),
+        )
+        .await
+        .unwrap();
+    wait_for(&manager, id, Status::Downloading).await;
+    tokio::time::sleep(Duration::from_millis(300)).await;
+    manager
+        .set_speed_limit(SpeedTarget::Global, None)
+        .await
+        .unwrap();
+    // At 100 KB/s this would take 30 s.
+    let seconds = seconds_until_all_complete(&manager).await;
+    assert!(seconds < 10.0, "{seconds:.2} s");
+    assert_eq!(
+        Store::open(&db).unwrap().setting("speed_limit").unwrap(),
+        None
+    );
+
+    manager
+        .set_speed_limit(SpeedTarget::Global, Some(42))
+        .await
+        .unwrap();
+    assert_eq!(
+        Store::open(&db)
+            .unwrap()
+            .setting("speed_limit")
+            .unwrap()
+            .as_deref(),
+        Some("42")
+    );
+    assert!(manager
+        .set_speed_limit(SpeedTarget::Download(999), Some(1))
+        .await
+        .is_err());
 }

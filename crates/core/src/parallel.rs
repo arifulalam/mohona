@@ -28,6 +28,7 @@ use tokio::time::{interval, sleep, MissedTickBehavior};
 use crate::cancel::CancelToken;
 use crate::download::{emit, report_progress, Event};
 use crate::ledger::{Ledger, Sink};
+use crate::limiter::Limits;
 use crate::retry::RetryPolicy;
 use crate::segments::{Claim, Scheduler};
 use crate::tuner::{Action, Tuner};
@@ -48,6 +49,7 @@ struct Shared {
     part_path: PathBuf,
     policy: RetryPolicy,
     scheduler: Scheduler,
+    limits: Limits,
     downloaded: AtomicU64,
     /// How many workers have been asked to stop because the tuner found
     /// their connection useless. Each worker that obeys takes one off.
@@ -135,6 +137,7 @@ pub(crate) struct Job<'a> {
     /// checkpoint) and where.
     pub ledger: &'a Ledger,
     pub sink: &'a Sink,
+    pub limits: &'a Limits,
     pub cancel: &'a CancelToken,
 }
 
@@ -155,6 +158,7 @@ pub(crate) async fn fetch_segmented(
         resume,
         ledger,
         sink,
+        limits,
         cancel,
     } = *job;
     if resume.is_none() {
@@ -175,6 +179,7 @@ pub(crate) async fn fetch_segmented(
         etag: etag.map(str::to_string),
         part_path: part_path.to_path_buf(),
         policy: policy.clone(),
+        limits: limits.clone(),
         // An adaptive download starts as one long request, like a browser's;
         // the tuner cuts it up when more connections prove worth it.
         scheduler: match resume {
@@ -579,6 +584,8 @@ async fn attempt(shared: &Shared, id: usize, position: u64, end: u64) -> Result<
                 break;
             }
         };
+        // Slow down to the speed limits before taking the bytes.
+        shared.limits.acquire(chunk.len()).await;
         if shared.should_retire() {
             retired = true;
             break 'receive;

@@ -95,6 +95,8 @@ pub struct DownloadRow {
     pub created_at: i64,
     /// Unix time it completed.
     pub finished_at: Option<i64>,
+    /// Its own speed limit in bytes per second, if any.
+    pub speed_limit: Option<u64>,
 }
 
 /// One row of the queues table.
@@ -106,6 +108,8 @@ pub struct QueueRow {
     pub name: String,
     /// How many downloads may run at once.
     pub max_active: u32,
+    /// The queue's speed limit in bytes per second, if any.
+    pub speed_limit: Option<u64>,
 }
 
 /// What is saved about a download in progress (see `Store::save_progress`).
@@ -126,7 +130,7 @@ pub struct ProgressRecord {
 }
 
 const COLUMNS: &str = "id,url,final_url,filename,dest_dir,size,downloaded,status,error,path,\
-                       queue_id,position,created_at,finished_at";
+                       queue_id,position,created_at,finished_at,speed_limit";
 
 fn row(r: &Row<'_>) -> rusqlite::Result<DownloadRow> {
     let status: String = r.get(7)?;
@@ -145,6 +149,7 @@ fn row(r: &Row<'_>) -> rusqlite::Result<DownloadRow> {
         position: r.get(11)?,
         created_at: r.get(12)?,
         finished_at: r.get(13)?,
+        speed_limit: r.get::<_, Option<i64>>(14)?.map(|n| n as u64),
     })
 }
 
@@ -366,13 +371,14 @@ impl Store {
     pub fn queues(&self) -> Result<Vec<QueueRow>, StoreError> {
         let mut stmt = self
             .conn
-            .prepare("SELECT id,name,max_active FROM queues ORDER BY id")?;
+            .prepare("SELECT id,name,max_active,speed_limit FROM queues ORDER BY id")?;
         let rows = stmt
             .query_map([], |r| {
                 Ok(QueueRow {
                     id: r.get(0)?,
                     name: r.get(1)?,
                     max_active: r.get(2)?,
+                    speed_limit: r.get::<_, Option<i64>>(3)?.map(|n| n as u64),
                 })
             })?
             .collect::<Result<Vec<_>, _>>()?;
@@ -385,6 +391,55 @@ impl Store {
             "UPDATE queues SET max_active=?2 WHERE id=?1",
             params![queue_id, max_active.max(1)],
         )?;
+        Ok(())
+    }
+
+    /// Set (or with `None` remove) a queue's speed limit, in bytes per second.
+    pub fn set_queue_speed_limit(
+        &self,
+        queue_id: i64,
+        limit: Option<u64>,
+    ) -> Result<(), StoreError> {
+        self.conn.execute(
+            "UPDATE queues SET speed_limit=?2 WHERE id=?1",
+            params![queue_id, limit.map(|n| n as i64)],
+        )?;
+        Ok(())
+    }
+
+    /// Set (or with `None` remove) one download's speed limit.
+    pub fn set_download_speed_limit(&self, id: i64, limit: Option<u64>) -> Result<(), StoreError> {
+        self.conn.execute(
+            "UPDATE downloads SET speed_limit=?2 WHERE id=?1",
+            params![id, limit.map(|n| n as i64)],
+        )?;
+        Ok(())
+    }
+
+    /// A value from the settings table.
+    pub fn setting(&self, key: &str) -> Result<Option<String>, StoreError> {
+        Ok(self
+            .conn
+            .query_row("SELECT value FROM settings WHERE key=?1", [key], |r| {
+                r.get(0)
+            })
+            .optional()?)
+    }
+
+    /// Save a value in the settings table.
+    pub fn set_setting(&self, key: &str, value: &str) -> Result<(), StoreError> {
+        self.conn.execute(
+            "INSERT INTO settings (key,value) VALUES (?1,?2) \
+             ON CONFLICT(key) DO UPDATE SET value=excluded.value",
+            params![key, value],
+        )?;
+        Ok(())
+    }
+
+    /// Remove a value from the settings table.
+    pub fn remove_setting(&self, key: &str) -> Result<(), StoreError> {
+        self.conn
+            .execute("DELETE FROM settings WHERE key=?1", [key])?;
         Ok(())
     }
 
@@ -456,6 +511,25 @@ mod tests {
         assert_eq!(s.load_progress(id).unwrap(), Some(record));
         s.clear_progress(id).unwrap();
         assert_eq!(s.load_progress(id).unwrap(), None);
+    }
+
+    #[test]
+    fn speed_limits_and_settings_are_saved() {
+        let s = store();
+        let id = s.add_download("u", "d", None).unwrap();
+        assert_eq!(s.download(id).unwrap().unwrap().speed_limit, None);
+        s.set_download_speed_limit(id, Some(500)).unwrap();
+        assert_eq!(s.download(id).unwrap().unwrap().speed_limit, Some(500));
+        s.set_queue_speed_limit(1, Some(9000)).unwrap();
+        assert_eq!(s.queues().unwrap()[0].speed_limit, Some(9000));
+        s.set_queue_speed_limit(1, None).unwrap();
+        assert_eq!(s.queues().unwrap()[0].speed_limit, None);
+        assert_eq!(s.setting("speed_limit").unwrap(), None);
+        s.set_setting("speed_limit", "1").unwrap();
+        s.set_setting("speed_limit", "2").unwrap();
+        assert_eq!(s.setting("speed_limit").unwrap().as_deref(), Some("2"));
+        s.remove_setting("speed_limit").unwrap();
+        assert_eq!(s.setting("speed_limit").unwrap(), None);
     }
 
     #[test]

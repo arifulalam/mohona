@@ -10,6 +10,7 @@ mod download;
 mod error;
 mod filename;
 mod ledger;
+mod limiter;
 mod parallel;
 mod retry;
 mod segments;
@@ -23,6 +24,7 @@ pub use download::{
 pub use error::Error;
 pub use filename::{sanitize_filename, unique_path};
 pub use ledger::{Ledger as Progress, ProgressStore};
+pub use limiter::RateLimit;
 pub use retry::RetryPolicy;
 pub use segments::{split_evenly, Claim, Scheduler};
 

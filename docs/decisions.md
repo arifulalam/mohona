@@ -122,3 +122,15 @@ Status: accepted (16 October 2026)
 A download that has a sidecar file from an older version still resumes: the engine falls back to the sidecar when the database has nothing, and removes the sidecar when the download ends.
 
 **Automatic retries.** A download that fails with a network error that may pass (anything but a fatal one, such as a 404) goes to `retrying` and is started again after 5 s, 10 s, 20 s, ... up to 5 minutes, at most 5 times in a row. The count starts over when an attempt downloaded new bytes. While waiting it keeps its slot in the queue and can be paused or canceled. After the last retry it is marked failed; resuming by hand starts the count over. A failure that is not temporary (a missing file, a full disk) fails at once.
+
+## ADR-0013: Speed limits
+
+Status: accepted (16 October 2026)
+
+A `RateLimit` (in `mohona-core`) is a shared pacing object: bytes per second, `0` meaning unlimited, changeable while downloads run. Every connection asks it how long to wait before it takes the bytes it just received; waiting delays the next read, so TCP's own flow control slows the server down. No data is dropped or buffered.
+
+- **Pacing.** The limit books bytes on one imaginary pipe (`next` = when the pipe is free) and the caller waits until its bytes have "passed through". This gives an even rate with no bursts, whatever the number of connections, and it keeps the total right when many connections share one limit. Up to 50 ms of unused time is remembered so a connection that was idle for a moment can catch up a little.
+- **Three levels.** A download carries a list of limits and goes at the slowest of them. The manager gives every download the global limit (saved in the `settings` table), its queue's limit (`queues.speed_limit`) and its own (`downloads.speed_limit`). Changing one takes effect at once, also for running downloads, and is saved.
+- **Measured.** 10 MiB with 16 connections under 1 MiB/s took 10.4 s in a real run through the CLI (ideal 10.0 s); two 3 MiB downloads under one shared 1 MiB/s limit took 6.5 s (ideal 6.0 s). The limit is met from below, never exceeded.
+- **The tuner** sees that more connections do not raise the speed under a limit and keeps few of them, which is the right outcome.
+- **Not done:** speed profiles by time of day (part of the scheduler step).
