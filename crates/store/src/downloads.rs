@@ -110,6 +110,8 @@ pub struct QueueRow {
     pub max_active: u32,
     /// The queue's speed limit in bytes per second, if any.
     pub speed_limit: Option<u64>,
+    /// The queue's schedule as JSON, if it has one (see `mohona-manager`).
+    pub schedule_json: Option<String>,
 }
 
 /// What is saved about a download in progress (see `Store::save_progress`).
@@ -369,9 +371,9 @@ impl Store {
 
     /// All queues.
     pub fn queues(&self) -> Result<Vec<QueueRow>, StoreError> {
-        let mut stmt = self
-            .conn
-            .prepare("SELECT id,name,max_active,speed_limit FROM queues ORDER BY id")?;
+        let mut stmt = self.conn.prepare(
+            "SELECT id,name,max_active,speed_limit,schedule_json FROM queues ORDER BY id",
+        )?;
         let rows = stmt
             .query_map([], |r| {
                 Ok(QueueRow {
@@ -379,6 +381,7 @@ impl Store {
                     name: r.get(1)?,
                     max_active: r.get(2)?,
                     speed_limit: r.get::<_, Option<i64>>(3)?.map(|n| n as u64),
+                    schedule_json: r.get(4)?,
                 })
             })?
             .collect::<Result<Vec<_>, _>>()?;
@@ -403,6 +406,19 @@ impl Store {
         self.conn.execute(
             "UPDATE queues SET speed_limit=?2 WHERE id=?1",
             params![queue_id, limit.map(|n| n as i64)],
+        )?;
+        Ok(())
+    }
+
+    /// Set (or with `None` remove) a queue's schedule, stored as JSON.
+    pub fn set_queue_schedule(
+        &self,
+        queue_id: i64,
+        schedule_json: Option<&str>,
+    ) -> Result<(), StoreError> {
+        self.conn.execute(
+            "UPDATE queues SET schedule_json=?2 WHERE id=?1",
+            params![queue_id, schedule_json],
         )?;
         Ok(())
     }
@@ -524,6 +540,11 @@ mod tests {
         assert_eq!(s.queues().unwrap()[0].speed_limit, Some(9000));
         s.set_queue_speed_limit(1, None).unwrap();
         assert_eq!(s.queues().unwrap()[0].speed_limit, None);
+        assert_eq!(s.queues().unwrap()[0].schedule_json, None);
+        s.set_queue_schedule(1, Some("{}")).unwrap();
+        assert_eq!(s.queues().unwrap()[0].schedule_json.as_deref(), Some("{}"));
+        s.set_queue_schedule(1, None).unwrap();
+        assert_eq!(s.queues().unwrap()[0].schedule_json, None);
         assert_eq!(s.setting("speed_limit").unwrap(), None);
         s.set_setting("speed_limit", "1").unwrap();
         s.set_setting("speed_limit", "2").unwrap();

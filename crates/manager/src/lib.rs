@@ -10,15 +10,19 @@ use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
+mod schedule;
+
+pub use schedule::{parse_days, Moment, Schedule, Window};
+
 use mohona_core::{
     CancelToken, DownloadRequest, Error as CoreError, Event, Outcome, Progress, ProgressStore,
     RateLimit, RetryPolicy,
 };
 use mohona_net::HttpClient;
-use mohona_store::{DownloadRow, ProgressRecord, Status, Store, StoreError};
+use mohona_store::{DownloadRow, ProgressRecord, QueueRow, Status, Store, StoreError};
 use tokio::sync::{broadcast, mpsc, oneshot};
 
-pub use mohona_store::{DownloadRow as Download, Status as DownloadStatus};
+pub use mohona_store::{DownloadRow as Download, QueueRow as Queue, Status as DownloadStatus};
 
 /// How often the downloaded byte count is written to the database.
 const SAVE_INTERVAL: Duration = Duration::from_secs(1);
@@ -35,6 +39,9 @@ pub enum ManagerError {
     /// The command makes no sense in the download's current state.
     #[error("cannot do that to a download that is {0}")]
     WrongState(&'static str),
+    /// The schedule is not valid.
+    #[error("{0}")]
+    BadSchedule(String),
     /// The manager has shut down.
     #[error("the download manager has stopped")]
     Stopped,
@@ -82,6 +89,13 @@ pub enum ManagerEvent {
         /// What went wrong this time.
         message: String,
     },
+    /// A queue's schedule opened or closed.
+    QueueWindow {
+        /// The queue.
+        queue_id: i64,
+        /// Whether downloads may run now.
+        open: bool,
+    },
     /// A download was removed.
     Removed {
         /// Its id.
@@ -109,6 +123,8 @@ enum Intent {
     Pause,
     Cancel,
     Shutdown,
+    /// The queue's schedule closed.
+    Schedule,
 }
 
 enum Command {
@@ -128,6 +144,8 @@ enum Command {
     },
     List(oneshot::Sender<Result<Vec<DownloadRow>, ManagerError>>),
     SetQueueLimit(i64, u32, Reply),
+    SetSchedule(i64, Option<Schedule>, Reply),
+    Queues(oneshot::Sender<Result<Vec<QueueRow>, ManagerError>>),
     /// Which speed limit to change, and to what (`None` removes it).
     SetSpeed(SpeedTarget, Option<u64>, Reply),
     Shutdown(oneshot::Sender<()>),
@@ -161,6 +179,22 @@ pub struct Manager {
     events: broadcast::Sender<ManagerEvent>,
 }
 
+/// Tells the manager what time it is, for schedules. Tests replace it.
+#[derive(Clone)]
+pub struct Clock(pub Arc<dyn Fn() -> Moment + Send + Sync>);
+
+impl Default for Clock {
+    fn default() -> Self {
+        Clock(Arc::new(Moment::now))
+    }
+}
+
+impl std::fmt::Debug for Clock {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("Clock")
+    }
+}
+
 /// Settings for [`Manager::start`].
 #[derive(Clone, Debug)]
 pub struct ManagerConfig {
@@ -178,6 +212,10 @@ pub struct ManagerConfig {
     /// The wait before the first automatic retry; each further one doubles
     /// it (up to 5 minutes).
     pub retry_delay: Duration,
+    /// The local time, for queue schedules.
+    pub clock: Clock,
+    /// How often schedules are checked.
+    pub schedule_check: Duration,
 }
 
 impl Default for ManagerConfig {
@@ -188,6 +226,8 @@ impl Default for ManagerConfig {
             retry: RetryPolicy::default(),
             max_retries: 5,
             retry_delay: Duration::from_secs(5),
+            clock: Clock::default(),
+            schedule_check: Duration::from_secs(10),
         }
     }
 }
@@ -221,6 +261,7 @@ impl Manager {
             global_limit: RateLimit::new(global),
             queue_limits: HashMap::new(),
             download_limits: HashMap::new(),
+            queue_open: HashMap::new(),
         };
         tokio::spawn(actor.run());
         Ok(Manager { commands, events })
@@ -301,6 +342,23 @@ impl Manager {
             .await
     }
 
+    /// Give a queue a schedule, or with `None` let it run at any time. Takes
+    /// effect at once: a queue whose window is closed stops its downloads
+    /// (keeping their progress) and starts them again when it opens.
+    pub async fn set_schedule(
+        &self,
+        queue_id: i64,
+        schedule: Option<Schedule>,
+    ) -> Result<(), ManagerError> {
+        self.ask(|r| Command::SetSchedule(queue_id, schedule, r))
+            .await
+    }
+
+    /// All queues, with their limits and schedules.
+    pub async fn queues(&self) -> Result<Vec<QueueRow>, ManagerError> {
+        self.ask(Command::Queues).await
+    }
+
     /// Set a speed limit in bytes per second, or remove it with `None`. It
     /// takes effect at once, also for downloads that are running, and is
     /// saved. A download goes at the slowest of the global, queue and
@@ -348,22 +406,36 @@ struct Actor {
     global_limit: Arc<RateLimit>,
     queue_limits: HashMap<i64, Arc<RateLimit>>,
     download_limits: HashMap<i64, Arc<RateLimit>>,
+    /// Whether each queue's schedule is open (queues not listed are open).
+    queue_open: HashMap<i64, bool>,
 }
 
 impl Actor {
     async fn run(mut self) {
+        self.apply_schedules();
         self.pump();
         let mut shutdown: Option<oneshot::Sender<()>> = None;
-        while let Some(command) = self.inbox.recv().await {
-            if let Command::Shutdown(done) = command {
-                self.stopping = true;
-                for running in self.running.values_mut() {
-                    running.intent = Some(Intent::Shutdown);
-                    running.cancel.cancel();
+        let mut check = tokio::time::interval(self.config.schedule_check);
+        loop {
+            tokio::select! {
+                command = self.inbox.recv() => {
+                    let Some(command) = command else { break };
+                    if let Command::Shutdown(done) = command {
+                        self.stopping = true;
+                        for running in self.running.values_mut() {
+                            running.intent = Some(Intent::Shutdown);
+                            running.cancel.cancel();
+                        }
+                        shutdown = Some(done);
+                    } else {
+                        self.handle(command);
+                    }
                 }
-                shutdown = Some(done);
-            } else {
-                self.handle(command);
+                _ = check.tick() => {
+                    if !self.stopping {
+                        self.apply_schedules();
+                    }
+                }
             }
             if shutdown.is_some() && self.running.is_empty() {
                 break;
@@ -372,6 +444,68 @@ impl Actor {
         if let Some(done) = shutdown {
             let _ = done.send(());
         }
+    }
+
+    /// Open or close queues according to their schedules, and apply the speed
+    /// limit of the window that is open.
+    fn apply_schedules(&mut self) {
+        let Ok(queues) = self.store.queues() else {
+            return;
+        };
+        let now = (self.config.clock.0)();
+        let mut opened = false;
+        for queue in queues {
+            let schedule = queue
+                .schedule_json
+                .as_deref()
+                .and_then(|json| Schedule::from_json(json).ok());
+            let window = schedule.as_ref().and_then(|s| s.open_window(now));
+            let open = schedule.is_none() || window.is_some();
+            let rate = window
+                .and_then(|w| w.speed_limit)
+                .or(queue.speed_limit)
+                .unwrap_or(0);
+            self.queue_limits
+                .entry(queue.id)
+                .or_insert_with(|| RateLimit::new(rate))
+                .set(rate);
+            let was_open = self.queue_open.insert(queue.id, open).unwrap_or(true);
+            if open != was_open {
+                self.emit(ManagerEvent::QueueWindow {
+                    queue_id: queue.id,
+                    open,
+                });
+            }
+            if open {
+                opened |= !was_open;
+            } else {
+                self.close_queue(queue.id);
+            }
+        }
+        if opened {
+            self.pump();
+        }
+    }
+
+    /// Stop what a queue is running and put what waits to retry back in line.
+    fn close_queue(&mut self, queue_id: i64) {
+        let Ok(rows) = self.store.list_downloads() else {
+            return;
+        };
+        for row in rows.into_iter().filter(|r| r.queue_id == queue_id) {
+            if let Some(running) = self.running.get_mut(&row.id) {
+                if running.intent.is_none() {
+                    running.intent = Some(Intent::Schedule);
+                    running.cancel.cancel();
+                }
+            } else if row.status == Status::Retrying {
+                self.set_status(row.id, Status::Queued, None);
+            }
+        }
+    }
+
+    fn queue_is_open(&self, queue_id: i64) -> bool {
+        self.queue_open.get(&queue_id).copied().unwrap_or(true)
     }
 
     fn emit(&self, event: ManagerEvent) {
@@ -439,6 +573,12 @@ impl Actor {
                 self.pump();
                 let _ = reply.send(result);
             }
+            Command::SetSchedule(queue_id, schedule, reply) => {
+                let _ = reply.send(self.set_schedule(queue_id, schedule));
+            }
+            Command::Queues(reply) => {
+                let _ = reply.send(self.store.queues().map_err(Into::into));
+            }
             Command::SetSpeed(target, limit, reply) => {
                 let _ = reply.send(self.set_speed(target, limit));
             }
@@ -463,12 +603,36 @@ impl Actor {
                 if !self.stopping && !self.running.contains_key(&id) {
                     if let Ok(row) = self.row(id) {
                         if row.status == Status::Retrying {
-                            self.start(row);
+                            if self.queue_is_open(row.queue_id) {
+                                self.start(row);
+                            } else {
+                                self.set_status(row.id, Status::Queued, None);
+                            }
                         }
                     }
                 }
             }
         }
+    }
+
+    fn set_schedule(
+        &mut self,
+        queue_id: i64,
+        schedule: Option<Schedule>,
+    ) -> Result<(), ManagerError> {
+        if !self.store.queues()?.iter().any(|q| q.id == queue_id) {
+            return Err(ManagerError::NotFound(queue_id));
+        }
+        if let Some(schedule) = &schedule {
+            schedule.check().map_err(ManagerError::BadSchedule)?;
+        }
+        self.store.set_queue_schedule(
+            queue_id,
+            schedule.as_ref().map(Schedule::to_json).as_deref(),
+        )?;
+        self.apply_schedules();
+        self.pump();
+        Ok(())
     }
 
     fn set_speed(&mut self, target: SpeedTarget, limit: Option<u64>) -> Result<(), ManagerError> {
@@ -486,10 +650,8 @@ impl Actor {
                     return Err(ManagerError::NotFound(id));
                 }
                 self.store.set_queue_speed_limit(id, limit)?;
-                self.queue_limits
-                    .entry(id)
-                    .or_insert_with(|| RateLimit::new(0))
-                    .set(rate);
+                // The queue's open window may have a limit of its own.
+                self.apply_schedules();
             }
             SpeedTarget::Download(id) => {
                 self.row(id)?;
@@ -628,6 +790,10 @@ impl Actor {
                 });
             }
             (Err(_), Some(Intent::Pause)) => self.set_status(id, Status::Paused, None),
+            (Err(_), Some(Intent::Schedule)) => {
+                // The queue's window closed: wait for it to open again.
+                self.set_status(id, Status::Queued, None);
+            }
             (Err(_), Some(Intent::Shutdown)) => {
                 // Not a state the user chose: run again at the next start.
                 let _ = self.store.set_status(id, Status::Queued, None);
@@ -699,7 +865,9 @@ impl Actor {
                 continue;
             }
             let Ok(row) = self.row(id) else { continue };
-            self.start(row);
+            if self.queue_is_open(row.queue_id) {
+                self.start(row);
+            }
         }
     }
 

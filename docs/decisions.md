@@ -134,3 +134,14 @@ A `RateLimit` (in `mohona-core`) is a shared pacing object: bytes per second, `0
 - **Measured.** 10 MiB with 16 connections under 1 MiB/s took 10.4 s in a real run through the CLI (ideal 10.0 s); two 3 MiB downloads under one shared 1 MiB/s limit took 6.5 s (ideal 6.0 s). The limit is met from below, never exceeded.
 - **The tuner** sees that more connections do not raise the speed under a limit and keeps few of them, which is the right outcome.
 - **Not done:** speed profiles by time of day (part of the scheduler step).
+
+## ADR-0014: Queue schedules
+
+Status: accepted (17 October 2026)
+
+A queue may have a schedule: a list of windows, each with days (`mon`..`sun`, empty for every day), an opening and a closing time, and an optional speed limit. The queue runs while any window is open and is stopped while none is. A window may cross midnight (`22:00` to `06:00`); such a window belongs to the day it opens, so "sat 22:00-06:00" is still open on Sunday morning. A queue without a schedule always runs. The schedule is stored as JSON in `queues.schedule_json`.
+
+- **Checking.** The manager checks the schedules when it starts, whenever one is changed, and every 10 seconds. Time comes from a replaceable clock (`ManagerConfig::clock`), so tests move it by hand. Local time comes from `chrono`.
+- **Closing.** Downloads running in a queue whose window closes are stopped the same way as on shutdown: progress is kept and they go back to `queued`, so they continue from where they were when the window opens again. Downloads waiting to retry go back to `queued` too, and nothing new starts in a closed queue.
+- **Speed in a window.** While a window with a speed limit is open, its limit replaces the queue's own limit (the global and per-download limits still apply, and the slowest wins). Outside such windows the queue's own limit applies again.
+- **Not done:** one-off "start at 02:00 tonight" jobs (a window does the same job every night), time zone or daylight saving changes while running (the clock is read each check, so the schedule follows local time), and per-queue schedules in the command line beyond the default queue.

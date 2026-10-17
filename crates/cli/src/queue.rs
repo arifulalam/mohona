@@ -4,7 +4,9 @@ use std::path::PathBuf;
 use std::time::Duration;
 
 use clap::Subcommand;
-use mohona_manager::{DownloadStatus, Manager, ManagerConfig, ManagerEvent};
+use mohona_manager::{
+    parse_days, DownloadStatus, Manager, ManagerConfig, ManagerEvent, Moment, Schedule, Window,
+};
 use mohona_net::{ClientConfig, HttpClient};
 use mohona_store::Store;
 
@@ -31,6 +33,29 @@ pub enum QueueCommand {
         /// Speed limit for everything together, like 1M, or `off`. It is saved.
         #[arg(short = 'l', long, value_parser = parse_rate)]
         max_speed: Option<u64>,
+    },
+    /// Choose when the queue may run, like
+    /// `queue schedule --days mon-fri --from 01:00 --to 07:00 --speed 2M`.
+    /// With no options it shows the schedule.
+    Schedule {
+        /// Days the window opens on: all, mon-fri, sat,sun, mon,wed-fri ...
+        #[arg(long, default_value = "all")]
+        days: String,
+        /// Opening time, like 01:00
+        #[arg(long, requires = "to")]
+        from: Option<String>,
+        /// Closing time, like 07:00 (earlier than --from means after midnight)
+        #[arg(long, requires = "from")]
+        to: Option<String>,
+        /// Speed limit while the window is open, like 2M
+        #[arg(long, value_parser = parse_rate)]
+        speed: Option<u64>,
+        /// Add the window to the schedule instead of replacing it
+        #[arg(long)]
+        add: bool,
+        /// Remove the schedule: the queue may run at any time
+        #[arg(long, conflicts_with_all = ["from", "to"])]
+        clear: bool,
     },
     /// Limit the speed of one download, like `queue speed 3 500K` (or `off`)
     Speed {
@@ -91,6 +116,14 @@ pub async fn run(command: QueueCommand, db: PathBuf) -> Result<(), String> {
                 .ok_or(format!("no download #{id}"))?;
             store.delete_download(id).map_err(|e| e.to_string())
         }
+        QueueCommand::Schedule {
+            days,
+            from,
+            to,
+            speed,
+            add,
+            clear,
+        } => schedule(&store, days, from, to, speed, add, clear),
         QueueCommand::Speed { id, limit } => {
             store
                 .download(id)
@@ -122,6 +155,102 @@ pub async fn run(command: QueueCommand, db: PathBuf) -> Result<(), String> {
             }
             run_queue(store).await
         }
+    }
+}
+
+fn describe_schedule(schedule: &Schedule) -> String {
+    schedule
+        .windows
+        .iter()
+        .map(|w| {
+            let days = if w.days.is_empty() {
+                "every day".to_string()
+            } else {
+                w.days.join(",")
+            };
+            let speed = w.speed_limit.map_or(String::new(), |n| {
+                format!(", at most {}/s", format_bytes(n))
+            });
+            format!("{days} {}-{}{speed}", w.start, w.end)
+        })
+        .collect::<Vec<_>>()
+        .join("; ")
+}
+
+fn schedule(
+    store: &Store,
+    days: String,
+    from: Option<String>,
+    to: Option<String>,
+    speed: Option<u64>,
+    add: bool,
+    clear: bool,
+) -> Result<(), String> {
+    const QUEUE: i64 = 1;
+    let queue = store
+        .queues()
+        .map_err(|e| e.to_string())?
+        .into_iter()
+        .find(|q| q.id == QUEUE)
+        .ok_or("no queue")?;
+    let current = queue
+        .schedule_json
+        .as_deref()
+        .and_then(|json| Schedule::from_json(json).ok());
+    if clear {
+        store
+            .set_queue_schedule(QUEUE, None)
+            .map_err(|e| e.to_string())?;
+        println!("The queue may run at any time.");
+        return Ok(());
+    }
+    if let (Some(start), Some(end)) = (from, to) {
+        let window = Window {
+            days: parse_days(&days)?,
+            start,
+            end,
+            speed_limit: speed.filter(|n| *n > 0),
+        };
+        let mut windows = if add {
+            current.map(|s| s.windows).unwrap_or_default()
+        } else {
+            Vec::new()
+        };
+        windows.push(window);
+        let schedule = Schedule { windows };
+        schedule.check()?;
+        store
+            .set_queue_schedule(QUEUE, Some(&schedule.to_json()))
+            .map_err(|e| e.to_string())?;
+        println!("Schedule: {}", describe_schedule(&schedule));
+        return Ok(());
+    }
+    match current {
+        Some(schedule) => {
+            println!("Schedule: {}", describe_schedule(&schedule));
+            report_window(&schedule);
+        }
+        None => println!("The queue may run at any time."),
+    }
+    Ok(())
+}
+
+/// Say whether the schedule is open now and when that changes.
+fn report_window(schedule: &Schedule) {
+    let now = Moment::now();
+    let open = schedule.open_window(now).is_some();
+    let change = schedule.minutes_to_change(now).map(|minutes| {
+        if minutes >= 120 {
+            format!("{} h {} min", minutes / 60, minutes % 60)
+        } else {
+            format!("{minutes} min")
+        }
+    });
+    match (open, change) {
+        (true, Some(c)) => println!("Open now; closes in {c}."),
+        (true, None) => println!("Open now."),
+        (false, Some(c)) => println!("Closed now; opens in {c}."),
+        (false, None) => println!("Closed."),
     }
 }
 
@@ -160,6 +289,16 @@ async fn run_queue(store: Store) -> Result<(), String> {
     let manager =
         Manager::start(store, client, ManagerConfig::default()).map_err(|e| e.to_string())?;
     let mut events = manager.subscribe();
+    if let Some(schedule) = manager
+        .queues()
+        .await
+        .ok()
+        .and_then(|queues| queues.into_iter().next())
+        .and_then(|q| q.schedule_json)
+        .and_then(|json| Schedule::from_json(&json).ok())
+    {
+        report_window(&schedule);
+    }
 
     let stopper = manager.clone();
     tokio::spawn(async move {
@@ -175,6 +314,9 @@ async fn run_queue(store: Store) -> Result<(), String> {
             event = events.recv() => {
                 match event {
                     Ok(ManagerEvent::State { id, status }) => announce(&manager, id, status).await,
+                    Ok(ManagerEvent::QueueWindow { open, .. }) => {
+                        println!("{}", if open { "The schedule opened." } else { "The schedule closed; downloads are stopped until it opens." });
+                    }
                     Ok(ManagerEvent::RetryScheduled { id, attempt, wait, message }) => {
                         println!(
                             "#{id} network problem ({message}); trying again in {} s (retry {attempt})",

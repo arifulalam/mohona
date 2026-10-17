@@ -5,7 +5,10 @@ use std::path::Path;
 use std::time::{Duration, Instant};
 
 use mohona_core::RetryPolicy;
-use mohona_manager::{DownloadStatus as Status, Manager, ManagerConfig, ManagerEvent, SpeedTarget};
+use mohona_manager::{
+    Clock, DownloadStatus as Status, Manager, ManagerConfig, ManagerEvent, Moment, Schedule,
+    SpeedTarget, Window,
+};
 use mohona_net::{ClientConfig, HttpClient};
 use mohona_store::Store;
 use mohona_testserver::{bind, content_byte, serve, Config};
@@ -48,6 +51,7 @@ fn config() -> ManagerConfig {
         },
         max_retries: 3,
         retry_delay: Duration::from_millis(100),
+        ..ManagerConfig::default()
     }
 }
 
@@ -631,4 +635,162 @@ async fn a_running_download_follows_a_changed_limit_and_limits_are_saved() {
         .set_speed_limit(SpeedTarget::Download(999), Some(1))
         .await
         .is_err());
+}
+
+/// A clock the test moves by hand.
+#[derive(Clone)]
+struct TestClock(std::sync::Arc<std::sync::Mutex<Moment>>);
+
+impl TestClock {
+    fn at(weekday: u8, hour: u16, minute: u16) -> Self {
+        TestClock(std::sync::Arc::new(std::sync::Mutex::new(Moment::new(
+            weekday, hour, minute,
+        ))))
+    }
+    fn set(&self, weekday: u8, hour: u16, minute: u16) {
+        *self.0.lock().unwrap() = Moment::new(weekday, hour, minute);
+    }
+    fn clock(&self) -> Clock {
+        let inner = self.0.clone();
+        Clock(std::sync::Arc::new(move || *inner.lock().unwrap()))
+    }
+}
+
+fn scheduled_manager_at(db: &Path, clock: &TestClock) -> Manager {
+    let config = ManagerConfig {
+        clock: clock.clock(),
+        schedule_check: Duration::from_millis(50),
+        ..config()
+    };
+    Manager::start(Store::open(db).unwrap(), client(), config).unwrap()
+}
+
+fn night(limit: Option<u64>) -> Schedule {
+    Schedule {
+        windows: vec![Window {
+            days: vec![],
+            start: "01:00".into(),
+            end: "07:00".into(),
+            speed_limit: limit,
+        }],
+    }
+}
+
+#[tokio::test]
+async fn a_queue_outside_its_window_does_not_start_and_starts_when_it_opens() {
+    let addr = start_server().await;
+    let dir = tempfile::tempdir().unwrap();
+    let clock = TestClock::at(0, 12, 0);
+    let manager = scheduled_manager_at(&dir.path().join("m.db"), &clock);
+    manager.set_schedule(1, Some(night(None))).await.unwrap();
+    let id = manager
+        .add(
+            format!("http://{addr}/file?size=100000"),
+            dir.path().join("out"),
+        )
+        .await
+        .unwrap();
+    tokio::time::sleep(Duration::from_millis(400)).await;
+    assert_eq!(manager.list().await.unwrap()[0].status, Status::Queued);
+
+    clock.set(0, 1, 30);
+    wait_for(&manager, id, Status::Completed).await;
+}
+
+#[tokio::test]
+async fn closing_the_window_stops_downloads_and_keeps_their_progress() {
+    let addr = start_server().await;
+    let dir = tempfile::tempdir().unwrap();
+    let out = dir.path().join("out");
+    let clock = TestClock::at(0, 2, 0);
+    let manager = scheduled_manager_at(&dir.path().join("m.db"), &clock);
+    manager.set_schedule(1, Some(night(None))).await.unwrap();
+    let mut events = manager.subscribe();
+    let id = manager
+        .add(
+            format!("http://{addr}/file?size=2000000&limit=1000000"),
+            &out,
+        )
+        .await
+        .unwrap();
+    wait_for_bytes(&manager, id, 300_000).await;
+
+    clock.set(0, 7, 0);
+    wait_for(&manager, id, Status::Queued).await;
+    tokio::time::sleep(Duration::from_millis(300)).await;
+    let rows = manager.list().await.unwrap();
+    assert_eq!(rows[0].status, Status::Queued, "stays stopped while closed");
+    assert!(rows[0].downloaded > 0 && rows[0].downloaded < 2_000_000);
+    assert!(names(&out).iter().any(|n| n.ends_with(".part")));
+
+    clock.set(1, 1, 5);
+    wait_for(&manager, id, Status::Completed).await;
+    check_content(
+        Path::new(manager.list().await.unwrap()[0].path.as_deref().unwrap()),
+        2_000_000,
+    );
+
+    let mut changes = Vec::new();
+    while let Ok(e) = events.try_recv() {
+        if let ManagerEvent::QueueWindow { open, .. } = e {
+            changes.push(open);
+        }
+    }
+    assert_eq!(changes, [false, true]);
+}
+
+#[tokio::test]
+async fn the_window_can_carry_a_speed_limit() {
+    let addr = start_server().await;
+    let dir = tempfile::tempdir().unwrap();
+    let clock = TestClock::at(2, 3, 0);
+    let manager = scheduled_manager_at(&dir.path().join("m.db"), &clock);
+    manager
+        .set_schedule(1, Some(night(Some(500_000))))
+        .await
+        .unwrap();
+    manager
+        .add(
+            format!("http://{addr}/file?size=1000000"),
+            dir.path().join("out"),
+        )
+        .await
+        .unwrap();
+    let seconds = seconds_until_all_complete(&manager).await;
+    assert!(
+        (1.7..=2.6).contains(&seconds),
+        "1 MB under the window's 500 KB/s took {seconds:.2} s"
+    );
+}
+
+#[tokio::test]
+async fn schedules_are_saved_checked_and_can_be_removed() {
+    let addr = start_server().await;
+    let dir = tempfile::tempdir().unwrap();
+    let db = dir.path().join("m.db");
+    let clock = TestClock::at(0, 12, 0);
+    let manager = scheduled_manager_at(&db, &clock);
+    manager.set_schedule(1, Some(night(None))).await.unwrap();
+    assert!(manager
+        .set_schedule(1, Some(Schedule { windows: vec![] }))
+        .await
+        .is_err());
+    assert!(manager.set_schedule(99, Some(night(None))).await.is_err());
+    assert!(manager.queues().await.unwrap()[0].schedule_json.is_some());
+    manager.shutdown().await;
+
+    // After a restart the queue is still closed at noon.
+    let manager = scheduled_manager_at(&db, &clock);
+    let id = manager
+        .add(
+            format!("http://{addr}/file?size=50000"),
+            dir.path().join("out"),
+        )
+        .await
+        .unwrap();
+    tokio::time::sleep(Duration::from_millis(300)).await;
+    assert_eq!(manager.list().await.unwrap()[0].status, Status::Queued);
+
+    manager.set_schedule(1, None).await.unwrap();
+    wait_for(&manager, id, Status::Completed).await;
 }

@@ -7,9 +7,12 @@ license.workspace = true
 rust-version.workspace = true
 
 [dependencies]
+chrono = { version = "0.4", default-features = false, features = ["clock", "std"] }
 mohona-core = { path = "../core" }
 mohona-net = { version = "0.0.1", path = "../net" }
 mohona-store = { path = "../store" }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
 thiserror = "2"
 tokio.workspace = true
 
