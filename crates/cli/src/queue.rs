@@ -169,6 +169,7 @@ pub async fn run(command: QueueCommand, db: PathBuf) -> Result<(), String> {
                 let id = store
                     .add_download_with(url.trim(), &dir, None, sort)
                     .map_err(|e| e.to_string())?;
+                let _ = store.add_log(id, "info", "added");
                 println!("#{id} added: {url}");
             }
             if refused > 0 {

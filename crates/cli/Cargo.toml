@@ -12,6 +12,7 @@ name = "mohona"
 path = "src/main.rs"
 
 [dependencies]
+chrono = { version = "0.4", default-features = false, features = ["clock", "std"] }
 clap.workspace = true
 mohona-core = { path = "../core" }
 mohona-manager = { path = "../manager" }

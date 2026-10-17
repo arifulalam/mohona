@@ -12,6 +12,7 @@ use mohona_core::{
 use mohona_net::{ClientConfig, HttpClient};
 use tokio::sync::mpsc;
 
+mod history;
 mod queue;
 
 #[derive(Parser)]
@@ -35,6 +36,31 @@ enum Command {
     Queue {
         #[command(subcommand)]
         command: queue::QueueCommand,
+    },
+    /// Search the list by name, address or category, newest first
+    History {
+        /// Words to find (each must match the start of a word)
+        text: Vec<String>,
+        /// Only this state, like completed or failed
+        #[arg(long)]
+        status: Option<String>,
+        /// Only downloads added on or after this day, like 2026-10-01
+        #[arg(long, value_parser = history::parse_date)]
+        since: Option<i64>,
+        /// Only downloads added on or before this day
+        #[arg(long, value_parser = history::parse_date)]
+        until: Option<i64>,
+        /// Only this category
+        #[arg(long)]
+        category: Option<String>,
+        /// How many to show
+        #[arg(short, long, default_value_t = 50)]
+        limit: u32,
+    },
+    /// Show what happened to a download
+    Log {
+        /// The number shown by `queue list`
+        id: i64,
     },
     /// Download a URL
     Get {
@@ -116,6 +142,29 @@ async fn main() -> ExitCode {
                 ExitCode::FAILURE
             }
         },
+        Some(Command::History {
+            text,
+            status,
+            since,
+            until,
+            category,
+            limit,
+        }) => finish(open(&cli.db).and_then(|store| {
+            history::history(
+                &store,
+                history::Filters {
+                    text,
+                    status,
+                    since,
+                    until,
+                    category,
+                    limit,
+                },
+            )
+        })),
+        Some(Command::Log { id }) => {
+            finish(open(&cli.db).and_then(|store| history::log(&store, id)))
+        }
         Some(Command::Queue { command }) => match queue::run(command, cli.db).await {
             Ok(()) => ExitCode::SUCCESS,
             Err(message) => {
@@ -193,6 +242,20 @@ async fn get(
 }
 
 /// An error and everything that caused it, joined with colons.
+fn open(db: &std::path::Path) -> Result<mohona_store::Store, String> {
+    mohona_store::Store::open(db).map_err(|e| format!("cannot open {}: {e}", db.display()))
+}
+
+fn finish(result: Result<(), String>) -> ExitCode {
+    match result {
+        Ok(()) => ExitCode::SUCCESS,
+        Err(message) => {
+            eprintln!("error: {message}");
+            ExitCode::FAILURE
+        }
+    }
+}
+
 fn describe(error: &dyn Error) -> String {
     let mut text = error.to_string();
     let mut source = error.source();

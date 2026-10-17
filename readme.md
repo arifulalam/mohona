@@ -77,3 +77,12 @@ mohona queue categories
 mohona queue add <url> -o downloads --sort            # finished files go to their category folder
 mohona queue add <url> --duplicates rename|skip|overwrite   # default: ask
 ```
+
+### History and search
+
+```
+mohona history ubuntu                       # name, address or category; prefixes work
+mohona history --status failed --since 2026-10-01 --until 2026-10-17
+mohona history --category Video -l 20
+mohona log 3                                # what happened to download #3
+```

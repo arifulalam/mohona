@@ -2,9 +2,11 @@
 
 mod categories;
 mod downloads;
+mod history;
 
 pub use categories::{extension_of, CategoryRow};
 pub use downloads::{DownloadRow, ProgressRecord, QueueRow, Status};
+pub use history::{HistoryQuery, LogLine};
 
 use rusqlite::Connection;
 use std::path::Path;
@@ -28,10 +30,14 @@ const MIGRATIONS: &[Migration] = &[
         version: 3,
         sql: include_str!("migrations/003_categories.sql"),
     },
+    Migration {
+        version: 4,
+        sql: include_str!("migrations/004_history.sql"),
+    },
 ];
 
 /// Version of the database schema after all migrations have run.
-pub const SCHEMA_VERSION: u32 = 3;
+pub const SCHEMA_VERSION: u32 = 4;
 
 /// Errors from the store.
 #[derive(Debug, thiserror::Error)]

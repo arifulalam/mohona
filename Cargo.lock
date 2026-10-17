@@ -809,6 +809,7 @@ dependencies = [
 name = "mohona-cli"
 version = "0.0.1"
 dependencies = [
+ "chrono",
  "clap",
  "mohona-core",
  "mohona-manager",

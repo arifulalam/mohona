@@ -135,10 +135,10 @@ pub struct ProgressRecord {
     pub segments: Vec<(u64, u64, u64)>,
 }
 
-const COLUMNS: &str = "id,url,final_url,filename,dest_dir,size,downloaded,status,error,path,\
+pub(crate) const COLUMNS: &str = "id,url,final_url,filename,dest_dir,size,downloaded,status,error,path,\
                        queue_id,position,created_at,finished_at,speed_limit,category_id,auto_category";
 
-fn row(r: &Row<'_>) -> rusqlite::Result<DownloadRow> {
+pub(crate) fn row(r: &Row<'_>) -> rusqlite::Result<DownloadRow> {
     let status: String = r.get(7)?;
     Ok(DownloadRow {
         id: r.get(0)?,
@@ -168,7 +168,7 @@ fn same_address(url: &str) -> &str {
     url.split_once('#').map_or(url, |(address, _)| address)
 }
 
-fn now() -> i64 {
+pub(crate) fn now() -> i64 {
     std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .map_or(0, |d| d.as_secs() as i64)

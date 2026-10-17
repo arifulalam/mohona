@@ -164,3 +164,9 @@ The manager can carry out one action when all downloads are done: `exit` (it onl
 Categories (name, extensions, folder) live in the database. A download added with sorting on has `auto_category` set; when it finishes, the task moves the file into its category's folder (absolute, or inside the download folder; never overwriting, numbering instead) and records the category. If the move fails the file stays put and the download still counts as complete. The newest category that lists an extension wins.
 
 Duplicates are checked when adding: the same address already in the list (not counting failed or canceled ones), or a file with the name the address suggests already in the folder. The policy is ask (refuse, the default), rename, skip or overwrite. The name guessed from the address is only a guess; the server's own name is only known later, and the unique-name rule protects files in that case.
+
+## 0017 – History and search
+
+An FTS5 table (`downloads_fts`: name, address, category; one row per download, rowid = download id) is kept in step by triggers on `downloads`, so no code path can forget to index. Migration 004 backfills existing rows. What a person types is reduced to words of letters and digits, each matched as a prefix and all required, so `ubu 24` finds `ubuntu-24.04.iso` and no input can be an FTS syntax error. Filters (status, added-since, added-before, category name) combine with the text; results are newest first. Dates in the CLI are days in the local time zone, and `--until` includes the whole day.
+
+The `log` table now gets a line when a download is added, completes, fails or is scheduled for a retry; `mohona log <id>` shows it. Renaming a category does not re-index old rows (it is a rare action and the name is only a search aid).

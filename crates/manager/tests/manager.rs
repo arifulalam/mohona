@@ -1136,3 +1136,38 @@ async fn it_notices_an_existing_file_with_the_same_name() {
         mohona_manager::ManagerError::Duplicate(Duplicate::FileExists { .. })
     ));
 }
+
+#[tokio::test]
+async fn it_keeps_a_log_and_can_be_searched() {
+    let addr = start_server().await;
+    let dir = tempfile::tempdir().unwrap();
+    let db = dir.path().join("m.db");
+    let manager = manager_at(&db);
+    let id = manager
+        .add(format!("http://{addr}/file?size=5000"), dir.path())
+        .await
+        .unwrap();
+    wait_for(&manager, id, Status::Completed).await;
+    let missing = manager
+        .add(format!("http://{addr}/missing"), dir.path())
+        .await
+        .unwrap();
+    wait_for(&manager, missing, Status::Failed).await;
+
+    let store = Store::open(&db).unwrap();
+    let log = store.log_of(id).unwrap();
+    assert_eq!(log.first().unwrap().message, "added");
+    assert!(log.last().unwrap().message.starts_with("completed"));
+    let failed = store.log_of(missing).unwrap();
+    assert!(failed.iter().any(|l| l.level == "error"));
+
+    let found = store
+        .search(&mohona_store::HistoryQuery {
+            text: Some("mohona-test".into()),
+            status: Some(Status::Completed),
+            ..Default::default()
+        })
+        .unwrap();
+    assert_eq!(found.len(), 1);
+    assert_eq!(found[0].id, id);
+}

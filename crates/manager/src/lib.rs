@@ -714,6 +714,7 @@ impl Actor {
             None,
             request.sort_into_categories,
         )?;
+        let _ = self.store.add_log(id, "info", "added");
         self.emit(ManagerEvent::Added { id });
         self.pump();
         Ok(AddResult::Added(id))
@@ -920,6 +921,7 @@ impl Actor {
                     .add_download(url.trim(), &dest_dir.to_string_lossy(), queue_id)
                     .map_err(ManagerError::from);
                 if let Ok(id) = result {
+                    let _ = self.store.add_log(id, "info", "added");
                     self.emit(ManagerEvent::Added { id });
                     self.pump();
                 }
@@ -1202,6 +1204,15 @@ impl Actor {
                 if category.is_some() {
                     let _ = self.store.set_category(id, category);
                 }
+                let _ = self.store.add_log(
+                    id,
+                    "info",
+                    &format!(
+                        "completed: {} ({} bytes)",
+                        outcome.path.display(),
+                        outcome.bytes
+                    ),
+                );
                 self.emit(ManagerEvent::State {
                     id,
                     status: Status::Completed,
@@ -1226,6 +1237,9 @@ impl Actor {
                 } else {
                     self.retries.remove(&id);
                     let message = describe(&error);
+                    let _ = self
+                        .store
+                        .add_log(id, "error", &format!("failed: {message}"));
                     self.set_status(id, Status::Failed, Some(&message));
                 }
             }
@@ -1254,6 +1268,11 @@ impl Actor {
             .saturating_mul(1u32 << (entry.0 - 1).min(16))
             .min(Duration::from_secs(300));
         let attempt = entry.0;
+        let _ = self.store.add_log(
+            row.id,
+            "warn",
+            &format!("retry {attempt} in {} s: {message}", wait.as_secs()),
+        );
         self.set_status(row.id, Status::Retrying, None);
         self.emit(ManagerEvent::RetryScheduled {
             id: row.id,
