@@ -68,3 +68,12 @@ Licensed under either of
 at your option.
 
 Unless you explicitly state otherwise, any contribution you intentionally submit for inclusion in Mohona, as defined in the Apache-2.0 license, shall be dual licensed as above, without any additional terms or conditions.
+
+### Categories and duplicates
+
+```
+mohona queue categories add Video mp4,mkv,webm --folder Videos
+mohona queue categories
+mohona queue add <url> -o downloads --sort            # finished files go to their category folder
+mohona queue add <url> --duplicates rename|skip|overwrite   # default: ask
+```

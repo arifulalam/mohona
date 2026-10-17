@@ -158,3 +158,9 @@ The manager can carry out one action when all downloads are done: `exit` (it onl
 - **Once, and not remembered.** After it ran, the action is disarmed. It is kept in memory only: a restart never inherits a pending shutdown.
 - **Per operating system.** Windows: `shutdown /s /t 0`, `rundll32 powrprof.dll,SetSuspendState`, `shutdown /h`. macOS: System Events, `pmset sleepnow`. Linux: `systemctl poweroff | suspend | hibernate`. The system part sits behind the `ActionRunner` trait, so tests use a fake. Failures are reported as `ActionFailed`, never retried.
 - **Not verified on every system:** the real shutdown, sleep and hibernate commands are only exercised by hand; automated tests use the fake runner. Sleep on Windows can instead hibernate if hibernation is on and sleep is off (a known quirk of `SetSuspendState`).
+
+## 0016 – Categories and duplicate handling
+
+Categories (name, extensions, folder) live in the database. A download added with sorting on has `auto_category` set; when it finishes, the task moves the file into its category's folder (absolute, or inside the download folder; never overwriting, numbering instead) and records the category. If the move fails the file stays put and the download still counts as complete. The newest category that lists an extension wins.
+
+Duplicates are checked when adding: the same address already in the list (not counting failed or canceled ones), or a file with the name the address suggests already in the folder. The policy is ask (refuse, the default), rename, skip or overwrite. The name guessed from the address is only a guess; the server's own name is only known later, and the unique-name rule protects files in that case.

@@ -6,8 +6,8 @@ use std::time::{Duration, Instant};
 
 use mohona_core::RetryPolicy;
 use mohona_manager::{
-    ActionRunner, AfterAction, Clock, DownloadStatus as Status, Manager, ManagerConfig,
-    ManagerEvent, Moment, Schedule, SpeedTarget, Window,
+    ActionRunner, AddRequest, AddResult, AfterAction, Clock, DownloadStatus as Status, Duplicate,
+    DuplicatePolicy, Manager, ManagerConfig, ManagerEvent, Moment, Schedule, SpeedTarget, Window,
 };
 use mohona_net::{ClientConfig, HttpClient};
 use mohona_store::Store;
@@ -1023,4 +1023,116 @@ async fn a_failing_action_is_reported() {
             message: "no permission".into()
         }
     );
+}
+
+#[tokio::test]
+async fn it_sorts_finished_files_into_category_folders() {
+    let addr = start_server().await;
+    let dir = tempfile::tempdir().unwrap();
+    let manager = manager_at(&dir.path().join("m.db"));
+    manager
+        .add_category("Data", vec!["bin".into()], Some("Data".into()))
+        .await
+        .unwrap();
+    let mut request = AddRequest::new(format!("http://{addr}/file?size=5000"), dir.path());
+    request.sort_into_categories = true;
+    let AddResult::Added(id) = manager.add_checked(request).await.unwrap() else {
+        panic!("not added");
+    };
+    wait_for(&manager, id, Status::Completed).await;
+    let row = manager.list().await.unwrap().remove(0);
+    let path = std::path::PathBuf::from(row.path.unwrap());
+    assert_eq!(path, dir.path().join("Data").join("mohona-test.bin"));
+    assert!(path.exists());
+    assert!(!dir.path().join("mohona-test.bin").exists());
+    assert!(row.category_id.is_some());
+}
+
+#[tokio::test]
+async fn it_leaves_files_alone_without_sorting() {
+    let addr = start_server().await;
+    let dir = tempfile::tempdir().unwrap();
+    let manager = manager_at(&dir.path().join("m.db"));
+    manager
+        .add_category("Data", vec!["bin".into()], None)
+        .await
+        .unwrap();
+    let request = AddRequest::new(format!("http://{addr}/file?size=5000"), dir.path());
+    let AddResult::Added(id) = manager.add_checked(request).await.unwrap() else {
+        panic!("not added");
+    };
+    wait_for(&manager, id, Status::Completed).await;
+    assert!(dir.path().join("mohona-test.bin").exists());
+}
+
+#[tokio::test]
+async fn it_handles_duplicates_by_policy() {
+    let addr = start_server().await;
+    let dir = tempfile::tempdir().unwrap();
+    let manager = manager_at(&dir.path().join("m.db"));
+    let url = format!("http://{addr}/file?size=5000");
+    let AddResult::Added(first) = manager
+        .add_checked(AddRequest::new(&url, dir.path()))
+        .await
+        .unwrap()
+    else {
+        panic!("not added");
+    };
+    wait_for(&manager, first, Status::Completed).await;
+
+    // Ask: refused.
+    let err = manager
+        .add_checked(AddRequest::new(&url, dir.path()))
+        .await
+        .unwrap_err();
+    assert!(matches!(
+        err,
+        mohona_manager::ManagerError::Duplicate(Duplicate::SameAddress { .. })
+    ));
+
+    // Skip: nothing added.
+    let mut request = AddRequest::new(&url, dir.path());
+    request.duplicates = DuplicatePolicy::Skip;
+    assert!(matches!(
+        manager.add_checked(request).await.unwrap(),
+        AddResult::Skipped(_)
+    ));
+    assert_eq!(manager.list().await.unwrap().len(), 1);
+
+    // Rename: second copy gets a number.
+    let mut request = AddRequest::new(&url, dir.path());
+    request.duplicates = DuplicatePolicy::Rename;
+    let AddResult::Added(second) = manager.add_checked(request).await.unwrap() else {
+        panic!("not added");
+    };
+    wait_for(&manager, second, Status::Completed).await;
+    assert!(dir.path().join("mohona-test (1).bin").exists());
+
+    // Overwrite: earlier downloads and their files are replaced.
+    let mut request = AddRequest::new(&url, dir.path());
+    request.duplicates = DuplicatePolicy::Overwrite;
+    let AddResult::Added(third) = manager.add_checked(request).await.unwrap() else {
+        panic!("not added");
+    };
+    wait_for(&manager, third, Status::Completed).await;
+    assert!(dir.path().join("mohona-test.bin").exists());
+}
+
+#[tokio::test]
+async fn it_notices_an_existing_file_with_the_same_name() {
+    let addr = start_server().await;
+    let dir = tempfile::tempdir().unwrap();
+    std::fs::write(dir.path().join("file"), b"mine").unwrap();
+    let manager = manager_at(&dir.path().join("m.db"));
+    let err = manager
+        .add_checked(AddRequest::new(
+            format!("http://{addr}/file?size=5000"),
+            dir.path(),
+        ))
+        .await
+        .unwrap_err();
+    assert!(matches!(
+        err,
+        mohona_manager::ManagerError::Duplicate(Duplicate::FileExists { .. })
+    ));
 }

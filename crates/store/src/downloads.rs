@@ -97,6 +97,10 @@ pub struct DownloadRow {
     pub finished_at: Option<i64>,
     /// Its own speed limit in bytes per second, if any.
     pub speed_limit: Option<u64>,
+    /// The category it was sorted into when it finished, if any.
+    pub category_id: Option<i64>,
+    /// Whether the finished file is sorted into its category's folder.
+    pub auto_category: bool,
 }
 
 /// One row of the queues table.
@@ -132,7 +136,7 @@ pub struct ProgressRecord {
 }
 
 const COLUMNS: &str = "id,url,final_url,filename,dest_dir,size,downloaded,status,error,path,\
-                       queue_id,position,created_at,finished_at,speed_limit";
+                       queue_id,position,created_at,finished_at,speed_limit,category_id,auto_category";
 
 fn row(r: &Row<'_>) -> rusqlite::Result<DownloadRow> {
     let status: String = r.get(7)?;
@@ -152,7 +156,16 @@ fn row(r: &Row<'_>) -> rusqlite::Result<DownloadRow> {
         created_at: r.get(12)?,
         finished_at: r.get(13)?,
         speed_limit: r.get::<_, Option<i64>>(14)?.map(|n| n as u64),
+        category_id: r.get(15)?,
+        auto_category: r.get::<_, i64>(16)? != 0,
     })
+}
+
+/// An address without surrounding spaces and without a `#fragment`, which
+/// the server never sees.
+fn same_address(url: &str) -> &str {
+    let url = url.trim();
+    url.split_once('#').map_or(url, |(address, _)| address)
 }
 
 fn now() -> i64 {
@@ -170,6 +183,18 @@ impl Store {
         dest_dir: &str,
         queue_id: Option<i64>,
     ) -> Result<i64, StoreError> {
+        self.add_download_with(url, dest_dir, queue_id, false)
+    }
+
+    /// Like [`Store::add_download`]. With `auto_category`, the finished file
+    /// is sorted into its category's folder.
+    pub fn add_download_with(
+        &self,
+        url: &str,
+        dest_dir: &str,
+        queue_id: Option<i64>,
+        auto_category: bool,
+    ) -> Result<i64, StoreError> {
         let queue_id = match queue_id {
             Some(id) => id,
             None => self
@@ -182,9 +207,16 @@ impl Store {
             |r| r.get(0),
         )?;
         self.conn.execute(
-            "INSERT INTO downloads (url,dest_dir,queue_id,position,created_at) \
-             VALUES (?1,?2,?3,?4,?5)",
-            params![url, dest_dir, queue_id, position, now()],
+            "INSERT INTO downloads (url,dest_dir,queue_id,position,created_at,auto_category) \
+             VALUES (?1,?2,?3,?4,?5,?6)",
+            params![
+                url,
+                dest_dir,
+                queue_id,
+                position,
+                now(),
+                auto_category as i64
+            ],
         )?;
         Ok(self.conn.last_insert_rowid())
     }
@@ -256,6 +288,26 @@ impl Store {
             params![id, downloaded as i64],
         )?;
         Ok(())
+    }
+
+    /// Record the category a finished download was sorted into.
+    pub fn set_category(&self, id: i64, category_id: Option<i64>) -> Result<(), StoreError> {
+        self.conn.execute(
+            "UPDATE downloads SET category_id=?2 WHERE id=?1",
+            params![id, category_id],
+        )?;
+        Ok(())
+    }
+
+    /// Downloads of the same address (ignoring a `#fragment` and spaces
+    /// around it), oldest first.
+    pub fn downloads_with_url(&self, url: &str) -> Result<Vec<DownloadRow>, StoreError> {
+        let wanted = same_address(url);
+        Ok(self
+            .list_downloads()?
+            .into_iter()
+            .filter(|row| same_address(&row.url) == wanted)
+            .collect())
     }
 
     /// Mark a download complete.
@@ -551,6 +603,26 @@ mod tests {
         assert_eq!(s.setting("speed_limit").unwrap().as_deref(), Some("2"));
         s.remove_setting("speed_limit").unwrap();
         assert_eq!(s.setting("speed_limit").unwrap(), None);
+    }
+
+    #[test]
+    fn the_same_address_is_found_again() {
+        let s = store();
+        s.add_download("http://a/f.zip#top", "d", None).unwrap();
+        s.add_download("http://a/g.zip", "d", None).unwrap();
+        assert_eq!(s.downloads_with_url(" http://a/f.zip ").unwrap().len(), 1);
+        assert_eq!(s.downloads_with_url("http://a/h.zip").unwrap().len(), 0);
+    }
+
+    #[test]
+    fn auto_category_is_remembered() {
+        let s = store();
+        let a = s.add_download_with("u", "d", None, true).unwrap();
+        let b = s.add_download("v", "d", None).unwrap();
+        assert!(s.download(a).unwrap().unwrap().auto_category);
+        assert!(!s.download(b).unwrap().unwrap().auto_category);
+        s.set_category(a, Some(2)).unwrap();
+        assert_eq!(s.download(a).unwrap().unwrap().category_id, Some(2));
     }
 
     #[test]

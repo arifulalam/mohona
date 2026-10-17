@@ -1,7 +1,9 @@
 //! Mohona storage: the SQLite database (WAL mode) with versioned migrations.
 
+mod categories;
 mod downloads;
 
+pub use categories::{extension_of, CategoryRow};
 pub use downloads::{DownloadRow, ProgressRecord, QueueRow, Status};
 
 use rusqlite::Connection;
@@ -22,10 +24,14 @@ const MIGRATIONS: &[Migration] = &[
         version: 2,
         sql: include_str!("migrations/002_progress.sql"),
     },
+    Migration {
+        version: 3,
+        sql: include_str!("migrations/003_categories.sql"),
+    },
 ];
 
 /// Version of the database schema after all migrations have run.
-pub const SCHEMA_VERSION: u32 = 2;
+pub const SCHEMA_VERSION: u32 = 3;
 
 /// Errors from the store.
 #[derive(Debug, thiserror::Error)]

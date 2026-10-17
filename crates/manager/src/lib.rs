@@ -11,6 +11,7 @@ use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
 mod actions;
+mod routing;
 mod schedule;
 
 pub use actions::{ActionRunner, AfterAction, SystemRunner};
@@ -21,10 +22,12 @@ use mohona_core::{
     RateLimit, RetryPolicy,
 };
 use mohona_net::HttpClient;
-use mohona_store::{DownloadRow, ProgressRecord, QueueRow, Status, Store, StoreError};
+use mohona_store::{CategoryRow, DownloadRow, ProgressRecord, QueueRow, Status, Store, StoreError};
 use tokio::sync::{broadcast, mpsc, oneshot};
 
-pub use mohona_store::{DownloadRow as Download, QueueRow as Queue, Status as DownloadStatus};
+pub use mohona_store::{
+    CategoryRow as Category, DownloadRow as Download, QueueRow as Queue, Status as DownloadStatus,
+};
 
 /// How often the downloaded byte count is written to the database.
 const SAVE_INTERVAL: Duration = Duration::from_secs(1);
@@ -41,6 +44,9 @@ pub enum ManagerError {
     /// The command makes no sense in the download's current state.
     #[error("cannot do that to a download that is {0}")]
     WrongState(&'static str),
+    /// It duplicates something and the policy is to ask.
+    #[error("{0}")]
+    Duplicate(Duplicate),
     /// The schedule is not valid.
     #[error("{0}")]
     BadSchedule(String),
@@ -142,6 +148,118 @@ pub enum SpeedTarget {
 /// The settings key of the global speed limit.
 const GLOBAL_SPEED_KEY: &str = "speed_limit";
 
+/// What to do when a download is added that looks like one already there.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum DuplicatePolicy {
+    /// Refuse with [`ManagerError::Duplicate`] and let the person choose.
+    #[default]
+    Ask,
+    /// Add it anyway; the new file gets a number (`name (1).ext`).
+    Rename,
+    /// Do not add it.
+    Skip,
+    /// Delete what is there (the earlier download and its file, or the file
+    /// with that name) and add the new one.
+    Overwrite,
+}
+
+/// What an added download duplicates.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum Duplicate {
+    /// The same address is already in the list.
+    SameAddress {
+        /// The earlier download.
+        id: i64,
+        /// Its state.
+        status: Status,
+        /// Where its file is, if it finished.
+        path: Option<String>,
+    },
+    /// A file with the name the address suggests is already in the folder.
+    /// The name is only a guess from the address; the server may choose
+    /// another.
+    FileExists {
+        /// The file.
+        path: PathBuf,
+    },
+}
+
+impl std::fmt::Display for Duplicate {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Duplicate::SameAddress { id, status, .. } => {
+                write!(f, "already in the list as #{id} ({})", status.as_str())
+            }
+            Duplicate::FileExists { path } => write!(f, "{} already exists", path.display()),
+        }
+    }
+}
+
+/// A download to add, with the choices around it.
+#[derive(Clone, Debug)]
+pub struct AddRequest {
+    /// The address.
+    pub url: String,
+    /// The folder to download to. With `sort_into_categories`, the base
+    /// folder the category folders are in.
+    pub dest_dir: PathBuf,
+    /// Move the finished file into the folder of its category.
+    pub sort_into_categories: bool,
+    /// What to do about duplicates.
+    pub duplicates: DuplicatePolicy,
+}
+
+impl AddRequest {
+    /// A plain request: no sorting, and duplicates are refused.
+    pub fn new(url: impl Into<String>, dest_dir: impl Into<PathBuf>) -> Self {
+        Self {
+            url: url.into(),
+            dest_dir: dest_dir.into(),
+            sort_into_categories: false,
+            duplicates: DuplicatePolicy::Ask,
+        }
+    }
+}
+
+/// What came of [`Manager::add_checked`].
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum AddResult {
+    /// It was added with this id.
+    Added(i64),
+    /// It was not added, because of this duplicate (policy `Skip`).
+    Skipped(Duplicate),
+}
+
+/// Whether the same address is in the list, or the file the address
+/// suggests is already in the folder it would go to.
+pub fn find_duplicate(store: &Store, request: &AddRequest) -> Option<Duplicate> {
+    let earlier = store.downloads_with_url(&request.url).ok()?;
+    if let Some(row) = earlier
+        .into_iter()
+        .find(|r| !matches!(r.status, Status::Canceled | Status::Failed))
+    {
+        return Some(Duplicate::SameAddress {
+            id: row.id,
+            status: row.status,
+            path: row.path,
+        });
+    }
+    let name = routing::guess_filename(&request.url)?;
+    let mut folders = vec![request.dest_dir.clone()];
+    if request.sort_into_categories {
+        if let Ok(categories) = store.categories() {
+            if let Some(category) = routing::category_of(&name, &categories) {
+                folders.push(routing::folder_of(category, &request.dest_dir));
+            }
+        }
+    }
+    folders
+        .into_iter()
+        .map(|folder| folder.join(&name))
+        .find(|path| path.exists())
+        .map(|path| Duplicate::FileExists { path })
+}
+
 /// What a running download's task has been asked to do when it stops.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum Intent {
@@ -170,6 +288,15 @@ enum Command {
     List(oneshot::Sender<Result<Vec<DownloadRow>, ManagerError>>),
     SetQueueLimit(i64, u32, Reply),
     SetSchedule(i64, Option<Schedule>, Reply),
+    AddChecked(AddRequest, oneshot::Sender<Result<AddResult, ManagerError>>),
+    Categories(oneshot::Sender<Result<Vec<CategoryRow>, ManagerError>>),
+    AddCategory {
+        name: String,
+        extensions: Vec<String>,
+        folder: Option<String>,
+        reply: oneshot::Sender<Result<i64, ManagerError>>,
+    },
+    RemoveCategory(i64, Reply),
     SetAction(Option<(AfterAction, u32)>, Reply),
     /// A tick of the countdown with this generation number.
     CountdownTick(u64),
@@ -181,6 +308,8 @@ enum Command {
     Ended {
         id: i64,
         result: Result<Outcome, CoreError>,
+        /// The category the finished file was sorted into.
+        category: Option<i64>,
     },
     /// Sent by a download's own task when it learned about the file.
     Started {
@@ -353,6 +482,41 @@ impl Manager {
             reply,
         })
         .await
+    }
+
+    /// Add a download, with sorting into categories and a policy for
+    /// duplicates. [`Manager::add`] is the plain form.
+    pub async fn add_checked(&self, request: AddRequest) -> Result<AddResult, ManagerError> {
+        self.ask(|reply| Command::AddChecked(request, reply)).await
+    }
+
+    /// All categories.
+    pub async fn categories(&self) -> Result<Vec<CategoryRow>, ManagerError> {
+        self.ask(Command::Categories).await
+    }
+
+    /// Add a category (extensions without dots). The folder is absolute or
+    /// relative to the folder a download was asked to go to; without one the
+    /// category's name is used.
+    pub async fn add_category(
+        &self,
+        name: impl Into<String>,
+        extensions: Vec<String>,
+        folder: Option<String>,
+    ) -> Result<i64, ManagerError> {
+        let name = name.into();
+        self.ask(|reply| Command::AddCategory {
+            name,
+            extensions,
+            folder,
+            reply,
+        })
+        .await
+    }
+
+    /// Remove a category. Files already sorted stay where they are.
+    pub async fn remove_category(&self, id: i64) -> Result<(), ManagerError> {
+        self.ask(|r| Command::RemoveCategory(id, r)).await
     }
 
     /// Stop a download but keep what was downloaded.
@@ -533,6 +697,38 @@ impl Actor {
         }
         if let Some(done) = shutdown {
             let _ = done.send(());
+        }
+    }
+
+    fn add_checked(&mut self, request: AddRequest) -> Result<AddResult, ManagerError> {
+        let duplicate = find_duplicate(&self.store, &request);
+        match (duplicate, request.duplicates) {
+            (Some(found), DuplicatePolicy::Ask) => return Err(ManagerError::Duplicate(found)),
+            (Some(found), DuplicatePolicy::Skip) => return Ok(AddResult::Skipped(found)),
+            (Some(found), DuplicatePolicy::Overwrite) => self.clear_duplicate(&found),
+            _ => {}
+        }
+        let id = self.store.add_download_with(
+            request.url.trim(),
+            &request.dest_dir.to_string_lossy(),
+            None,
+            request.sort_into_categories,
+        )?;
+        self.emit(ManagerEvent::Added { id });
+        self.pump();
+        Ok(AddResult::Added(id))
+    }
+
+    /// Remove what a duplicate stands for: the earlier download and its file,
+    /// or the file itself.
+    fn clear_duplicate(&mut self, duplicate: &Duplicate) {
+        match duplicate {
+            Duplicate::SameAddress { id, .. } => {
+                let _ = self.remove(*id, true);
+            }
+            Duplicate::FileExists { path } => {
+                let _ = std::fs::remove_file(path);
+            }
         }
     }
 
@@ -760,6 +956,27 @@ impl Actor {
                 self.pump();
                 let _ = reply.send(result);
             }
+            Command::AddChecked(request, reply) => {
+                let _ = reply.send(self.add_checked(request));
+            }
+            Command::Categories(reply) => {
+                let _ = reply.send(self.store.categories().map_err(Into::into));
+            }
+            Command::AddCategory {
+                name,
+                extensions,
+                folder,
+                reply,
+            } => {
+                let _ = reply.send(
+                    self.store
+                        .add_category(&name, &extensions, folder.as_deref())
+                        .map_err(Into::into),
+                );
+            }
+            Command::RemoveCategory(id, reply) => {
+                let _ = reply.send(self.store.remove_category(id).map_err(Into::into));
+            }
             Command::SetAction(action, reply) => {
                 self.arm(action);
                 let _ = reply.send(Ok(()));
@@ -790,7 +1007,11 @@ impl Actor {
             Command::Saved { id, downloaded } => {
                 let _ = self.store.set_downloaded(id, downloaded);
             }
-            Command::Ended { id, result } => self.ended(id, result),
+            Command::Ended {
+                id,
+                result,
+                category,
+            } => self.ended(id, result, category),
             Command::RetryNow(id) => {
                 if !self.stopping && !self.running.contains_key(&id) {
                     if let Ok(row) = self.row(id) {
@@ -959,7 +1180,7 @@ impl Actor {
         mohona_core::discard_partial(dir, &row.url);
     }
 
-    fn ended(&mut self, id: i64, result: Result<Outcome, CoreError>) {
+    fn ended(&mut self, id: i64, result: Result<Outcome, CoreError>, category: Option<i64>) {
         let running = self.running.remove(&id);
         let intent = running.as_ref().and_then(|r| r.intent);
         // The row is gone when the download was removed while it ran: only
@@ -978,6 +1199,9 @@ impl Actor {
                 let _ =
                     self.store
                         .set_completed(id, &outcome.path.to_string_lossy(), outcome.bytes);
+                if category.is_some() {
+                    let _ = self.store.set_category(id, category);
+                }
                 self.emit(ManagerEvent::State {
                     id,
                     status: Status::Completed,
@@ -1091,12 +1315,18 @@ impl Actor {
         }
         request.cancel = cancel;
         request.limits = self.limits_for(&row);
+        let route = row
+            .auto_category
+            .then(|| self.store.categories().ok())
+            .flatten()
+            .map(|categories| (PathBuf::from(&row.dest_dir), categories));
         tokio::spawn(run_download(
             Arc::new(self.client.clone()),
             request,
             row.id,
             self.commands.clone(),
             self.events.clone(),
+            route,
         ));
     }
 }
@@ -1107,6 +1337,7 @@ async fn run_download(
     id: i64,
     commands: mpsc::Sender<Command>,
     events: broadcast::Sender<ManagerEvent>,
+    route: Option<(PathBuf, Vec<CategoryRow>)>,
 ) {
     let (tx, mut rx) = mpsc::channel::<Event>(64);
     let engine = {
@@ -1147,7 +1378,30 @@ async fn run_download(
             })
             .await;
     }
-    let _ = commands.send(Command::Ended { id, result }).await;
+    // A finished file goes to its category's folder. If that fails the file
+    // stays where it is, which is still a finished download.
+    let mut category = None;
+    let result = match (result, route) {
+        (Ok(mut outcome), Some((base, categories))) => {
+            let path = outcome.path.clone();
+            let sorted =
+                tokio::task::spawn_blocking(move || routing::sort_file(&path, &base, &categories))
+                    .await;
+            if let Ok(Ok((new_path, found))) = sorted {
+                outcome.path = new_path;
+                category = found;
+            }
+            Ok(outcome)
+        }
+        (other, _) => other,
+    };
+    let _ = commands
+        .send(Command::Ended {
+            id,
+            result,
+            category,
+        })
+        .await;
 }
 
 /// An error with its causes, as one line.

@@ -7,13 +7,40 @@ use std::time::Duration;
 
 use clap::Subcommand;
 use mohona_manager::{
-    parse_days, AfterAction, DownloadStatus, Manager, ManagerConfig, ManagerEvent, Moment,
-    Schedule, Window,
+    find_duplicate, parse_days, AddRequest, AfterAction, DownloadStatus, DuplicatePolicy, Manager,
+    ManagerConfig, ManagerEvent, Moment, Schedule, Window,
 };
 use mohona_net::{ClientConfig, HttpClient};
 use mohona_store::Store;
 
 use crate::{describe, format_bytes, parse_rate};
+
+#[derive(Subcommand)]
+pub enum CategoryCommand {
+    /// Add a category, like `queue categories add Video mp4,mkv,webm --folder Videos`
+    Add {
+        name: String,
+        /// File extensions, comma separated, without dots
+        extensions: String,
+        /// Folder: absolute, or inside the download folder (default: the name)
+        #[arg(long)]
+        folder: Option<String>,
+    },
+    /// Remove a category by its number
+    Remove { id: i64 },
+}
+
+fn parse_policy(text: &str) -> Result<DuplicatePolicy, String> {
+    match text {
+        "ask" => Ok(DuplicatePolicy::Ask),
+        "rename" => Ok(DuplicatePolicy::Rename),
+        "skip" => Ok(DuplicatePolicy::Skip),
+        "overwrite" => Ok(DuplicatePolicy::Overwrite),
+        other => Err(format!(
+            "unknown policy {other:?}: use ask, rename, skip or overwrite"
+        )),
+    }
+}
 
 #[derive(Subcommand)]
 pub enum QueueCommand {
@@ -25,6 +52,17 @@ pub enum QueueCommand {
         /// Folder to save the files in
         #[arg(short, long, default_value = ".")]
         output: PathBuf,
+        /// Move finished files into the folder of their category
+        #[arg(long)]
+        sort: bool,
+        /// What to do about duplicates: ask, rename, skip or overwrite
+        #[arg(long, default_value = "ask", value_parser = parse_policy)]
+        duplicates: DuplicatePolicy,
+    },
+    /// Show or change the categories files are sorted into
+    Categories {
+        #[command(subcommand)]
+        action: Option<CategoryCommand>,
     },
     /// Show the list
     List,
@@ -91,16 +129,55 @@ pub enum QueueCommand {
 pub async fn run(command: QueueCommand, db: PathBuf) -> Result<(), String> {
     let store = Store::open(&db).map_err(|e| format!("cannot open {}: {e}", db.display()))?;
     match command {
-        QueueCommand::Add { urls, output } => {
+        QueueCommand::Add {
+            urls,
+            output,
+            sort,
+            duplicates,
+        } => {
             let dir = output.to_string_lossy().into_owned();
+            let mut refused = 0;
             for url in urls {
+                let mut request = AddRequest::new(url.trim(), output.clone());
+                request.sort_into_categories = sort;
+                request.duplicates = duplicates;
+                if let Some(found) = find_duplicate(&store, &request) {
+                    match duplicates {
+                        DuplicatePolicy::Ask => {
+                            println!("{url}: {found}. Use --duplicates rename, skip or overwrite.");
+                            refused += 1;
+                            continue;
+                        }
+                        DuplicatePolicy::Skip => {
+                            println!("{url}: skipped, {found}");
+                            continue;
+                        }
+                        DuplicatePolicy::Overwrite => match &found {
+                            mohona_manager::Duplicate::SameAddress { id, path, .. } => {
+                                if let Some(path) = path {
+                                    let _ = std::fs::remove_file(path);
+                                }
+                                store.delete_download(*id).map_err(|e| e.to_string())?;
+                            }
+                            mohona_manager::Duplicate::FileExists { path } => {
+                                let _ = std::fs::remove_file(path);
+                            }
+                        },
+                        DuplicatePolicy::Rename => {}
+                    }
+                }
                 let id = store
-                    .add_download(url.trim(), &dir, None)
+                    .add_download_with(url.trim(), &dir, None, sort)
                     .map_err(|e| e.to_string())?;
                 println!("#{id} added: {url}");
             }
-            Ok(())
+            if refused > 0 {
+                Err(format!("{refused} not added"))
+            } else {
+                Ok(())
+            }
         }
+        QueueCommand::Categories { action } => categories(&store, action),
         QueueCommand::List => list(&store),
         QueueCommand::Retry { id } => {
             let row = store
@@ -264,6 +341,48 @@ fn report_window(schedule: &Schedule) {
         (true, None) => println!("Open now."),
         (false, Some(c)) => println!("Closed now; opens in {c}."),
         (false, None) => println!("Closed."),
+    }
+}
+
+fn categories(store: &Store, action: Option<CategoryCommand>) -> Result<(), String> {
+    match action {
+        None => {
+            let all = store.categories().map_err(|e| e.to_string())?;
+            if all.is_empty() {
+                println!("No categories. Add one with `mohona queue categories add`.");
+            }
+            for c in all {
+                println!(
+                    "#{} {} -> {}  ({})",
+                    c.id,
+                    c.name,
+                    c.folder.as_deref().unwrap_or(&c.name),
+                    c.extensions.join(", ")
+                );
+            }
+            Ok(())
+        }
+        Some(CategoryCommand::Add {
+            name,
+            extensions,
+            folder,
+        }) => {
+            let list: Vec<String> = extensions
+                .split(',')
+                .map(|e| e.trim().trim_start_matches('.').to_lowercase())
+                .filter(|e| !e.is_empty())
+                .collect();
+            let id = store
+                .add_category(&name, &list, folder.as_deref())
+                .map_err(|e| e.to_string())?;
+            println!("#{id} {name} added");
+            Ok(())
+        }
+        Some(CategoryCommand::Remove { id }) => {
+            store.remove_category(id).map_err(|e| e.to_string())?;
+            println!("#{id} removed");
+            Ok(())
+        }
     }
 }
 
