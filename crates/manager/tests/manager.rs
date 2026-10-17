@@ -6,12 +6,13 @@ use std::time::{Duration, Instant};
 
 use mohona_core::RetryPolicy;
 use mohona_manager::{
-    Clock, DownloadStatus as Status, Manager, ManagerConfig, ManagerEvent, Moment, Schedule,
-    SpeedTarget, Window,
+    ActionRunner, AfterAction, Clock, DownloadStatus as Status, Manager, ManagerConfig,
+    ManagerEvent, Moment, Schedule, SpeedTarget, Window,
 };
 use mohona_net::{ClientConfig, HttpClient};
 use mohona_store::Store;
 use mohona_testserver::{bind, content_byte, serve, Config};
+use std::sync::{Arc, Mutex};
 
 async fn start_server() -> SocketAddr {
     let listener = bind("127.0.0.1:0".parse().unwrap()).await.unwrap();
@@ -793,4 +794,233 @@ async fn schedules_are_saved_checked_and_can_be_removed() {
 
     manager.set_schedule(1, None).await.unwrap();
     wait_for(&manager, id, Status::Completed).await;
+}
+
+/// A runner that only writes down what it was asked to do.
+#[derive(Default)]
+struct FakeRunner {
+    done: Mutex<Vec<AfterAction>>,
+    fail: bool,
+}
+
+impl ActionRunner for FakeRunner {
+    fn run(&self, action: &AfterAction) -> Result<(), String> {
+        self.done.lock().unwrap().push(action.clone());
+        if self.fail {
+            Err("no permission".into())
+        } else {
+            Ok(())
+        }
+    }
+}
+
+fn action_manager(db: &Path, runner: Arc<FakeRunner>) -> Manager {
+    let config = ManagerConfig {
+        runner: mohona_manager::Runner(runner),
+        countdown_tick: Duration::from_millis(100),
+        ..config()
+    };
+    Manager::start(Store::open(db).unwrap(), client(), config).unwrap()
+}
+
+async fn next_event(
+    events: &mut tokio::sync::broadcast::Receiver<ManagerEvent>,
+    wanted: impl Fn(&ManagerEvent) -> bool,
+) -> ManagerEvent {
+    tokio::time::timeout(Duration::from_secs(20), async {
+        loop {
+            let event = events.recv().await.unwrap();
+            if wanted(&event) {
+                return event;
+            }
+        }
+    })
+    .await
+    .expect("the expected event never came")
+}
+
+#[tokio::test]
+async fn the_action_runs_after_a_visible_countdown_when_everything_is_done() {
+    let addr = start_server().await;
+    let dir = tempfile::tempdir().unwrap();
+    let runner = Arc::new(FakeRunner::default());
+    let manager = action_manager(&dir.path().join("m.db"), runner.clone());
+    let mut events = manager.subscribe();
+    manager
+        .set_after_action(Some(AfterAction::Shutdown), 3)
+        .await
+        .unwrap();
+    for i in 0..2 {
+        manager
+            .add(
+                format!("http://{addr}/file?size=200000&n={i}"),
+                dir.path().join("out"),
+            )
+            .await
+            .unwrap();
+    }
+    let mut seconds = Vec::new();
+    loop {
+        match next_event(&mut events, |e| {
+            matches!(
+                e,
+                ManagerEvent::ActionCountdown { .. } | ManagerEvent::ActionDone { .. }
+            )
+        })
+        .await
+        {
+            ManagerEvent::ActionCountdown { seconds_left, .. } => seconds.push(seconds_left),
+            ManagerEvent::ActionDone { action } => {
+                assert_eq!(action, AfterAction::Shutdown);
+                break;
+            }
+            _ => unreachable!(),
+        }
+    }
+    assert_eq!(
+        seconds,
+        [3, 2, 1],
+        "the countdown is visible, second by second"
+    );
+    assert_eq!(*runner.done.lock().unwrap(), [AfterAction::Shutdown]);
+    // It happens once.
+    tokio::time::sleep(Duration::from_millis(400)).await;
+    assert_eq!(runner.done.lock().unwrap().len(), 1);
+}
+
+#[tokio::test]
+async fn cancelling_the_countdown_stops_the_action() {
+    let addr = start_server().await;
+    let dir = tempfile::tempdir().unwrap();
+    let runner = Arc::new(FakeRunner::default());
+    let manager = action_manager(&dir.path().join("m.db"), runner.clone());
+    let mut events = manager.subscribe();
+    manager
+        .set_after_action(Some(AfterAction::Sleep), 5)
+        .await
+        .unwrap();
+    manager
+        .add(
+            format!("http://{addr}/file?size=100000"),
+            dir.path().join("out"),
+        )
+        .await
+        .unwrap();
+    next_event(&mut events, |e| {
+        matches!(e, ManagerEvent::ActionCountdown { .. })
+    })
+    .await;
+    manager.cancel_action().await.unwrap();
+    let event = next_event(&mut events, |e| {
+        matches!(e, ManagerEvent::ActionCancelled { .. })
+    })
+    .await;
+    assert_eq!(event, ManagerEvent::ActionCancelled { still_armed: false });
+    tokio::time::sleep(Duration::from_millis(900)).await;
+    assert!(runner.done.lock().unwrap().is_empty());
+}
+
+#[tokio::test]
+async fn new_work_during_the_countdown_stops_it_and_it_starts_again_later() {
+    let addr = start_server().await;
+    let dir = tempfile::tempdir().unwrap();
+    let out = dir.path().join("out");
+    let runner = Arc::new(FakeRunner::default());
+    let manager = action_manager(&dir.path().join("m.db"), runner.clone());
+    let mut events = manager.subscribe();
+    manager
+        .set_after_action(Some(AfterAction::Exit), 10)
+        .await
+        .unwrap();
+    manager
+        .add(format!("http://{addr}/file?size=100000"), &out)
+        .await
+        .unwrap();
+    next_event(&mut events, |e| {
+        matches!(e, ManagerEvent::ActionCountdown { .. })
+    })
+    .await;
+
+    // More to download: the countdown stops, the action stays armed.
+    manager
+        .add(
+            format!("http://{addr}/file?size=2000000&limit=1000000&b=1"),
+            &out,
+        )
+        .await
+        .unwrap();
+    let event = next_event(&mut events, |e| {
+        matches!(e, ManagerEvent::ActionCancelled { .. })
+    })
+    .await;
+    assert_eq!(event, ManagerEvent::ActionCancelled { still_armed: true });
+    assert!(runner.done.lock().unwrap().is_empty());
+
+    next_event(&mut events, |e| {
+        matches!(e, ManagerEvent::ActionDone { .. })
+    })
+    .await;
+    assert_eq!(*runner.done.lock().unwrap(), [AfterAction::Exit]);
+    assert_eq!(manager.list().await.unwrap().len(), 2);
+    assert!(manager
+        .list()
+        .await
+        .unwrap()
+        .iter()
+        .all(|r| r.status == Status::Completed));
+}
+
+#[tokio::test]
+async fn an_idle_manager_does_not_trigger_the_action_by_itself() {
+    let dir = tempfile::tempdir().unwrap();
+    let runner = Arc::new(FakeRunner::default());
+    let manager = action_manager(&dir.path().join("m.db"), runner.clone());
+    manager
+        .set_after_action(Some(AfterAction::Shutdown), 0)
+        .await
+        .unwrap();
+    tokio::time::sleep(Duration::from_millis(500)).await;
+    assert!(
+        runner.done.lock().unwrap().is_empty(),
+        "nothing was downloaded"
+    );
+}
+
+#[tokio::test]
+async fn a_failing_action_is_reported() {
+    let addr = start_server().await;
+    let dir = tempfile::tempdir().unwrap();
+    let runner = Arc::new(FakeRunner {
+        fail: true,
+        ..FakeRunner::default()
+    });
+    let manager = action_manager(&dir.path().join("m.db"), runner);
+    let mut events = manager.subscribe();
+    manager
+        .set_after_action(
+            Some(AfterAction::Run {
+                program: "x".into(),
+                args: vec![],
+            }),
+            0,
+        )
+        .await
+        .unwrap();
+    manager
+        .add(
+            format!("http://{addr}/file?size=50000"),
+            dir.path().join("out"),
+        )
+        .await
+        .unwrap();
+    let event = next_event(&mut events, |e| {
+        matches!(e, ManagerEvent::ActionFailed { .. })
+    })
+    .await;
+    assert_eq!(
+        event,
+        ManagerEvent::ActionFailed {
+            message: "no permission".into()
+        }
+    );
 }

@@ -145,3 +145,16 @@ A queue may have a schedule: a list of windows, each with days (`mon`..`sun`, em
 - **Closing.** Downloads running in a queue whose window closes are stopped the same way as on shutdown: progress is kept and they go back to `queued`, so they continue from where they were when the window opens again. Downloads waiting to retry go back to `queued` too, and nothing new starts in a closed queue.
 - **Speed in a window.** While a window with a speed limit is open, its limit replaces the queue's own limit (the global and per-download limits still apply, and the slowest wins). Outside such windows the queue's own limit applies again.
 - **Not done:** one-off "start at 02:00 tonight" jobs (a window does the same job every night), time zone or daylight saving changes while running (the clock is read each check, so the schedule follows local time), and per-queue schedules in the command line beyond the default queue.
+
+## ADR-0015: After-download actions
+
+Status: accepted (17 October 2026)
+
+The manager can carry out one action when all downloads are done: `exit` (it only tells the application to close), `sleep`, `hibernate`, `shutdown`, or `run:<program> [arguments]` (started directly, with no shell). The rules are chosen so that nothing surprising can happen to the computer:
+
+- **Always a countdown.** When the work is done, a countdown (60 s by default in the command line) is reported second by second as `ActionCountdown` events, and can be cancelled (`cancel_action`, Ctrl-C in the command line). A countdown of 0 is possible but has to be asked for.
+- **Only for what finished after arming.** An action armed while nothing is downloading does nothing until a download finishes, so arming "shut down" on an idle list never shuts the computer down.
+- **New work cancels the countdown, not the action.** Adding or resuming a download during the countdown stops it (`ActionCancelled { still_armed: true }`); the countdown starts again when the list is empty again. Downloads that are queued, waiting for a schedule or waiting to retry count as work.
+- **Once, and not remembered.** After it ran, the action is disarmed. It is kept in memory only: a restart never inherits a pending shutdown.
+- **Per operating system.** Windows: `shutdown /s /t 0`, `rundll32 powrprof.dll,SetSuspendState`, `shutdown /h`. macOS: System Events, `pmset sleepnow`. Linux: `systemctl poweroff | suspend | hibernate`. The system part sits behind the `ActionRunner` trait, so tests use a fake. Failures are reported as `ActionFailed`, never retried.
+- **Not verified on every system:** the real shutdown, sleep and hibernate commands are only exercised by hand; automated tests use the fake runner. Sleep on Windows can instead hibernate if hibernation is on and sleep is off (a known quirk of `SetSuspendState`).

@@ -1,11 +1,14 @@
 //! `mohona queue ...`: the download list that is kept in the database.
 
 use std::path::PathBuf;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::Arc;
 use std::time::Duration;
 
 use clap::Subcommand;
 use mohona_manager::{
-    parse_days, DownloadStatus, Manager, ManagerConfig, ManagerEvent, Moment, Schedule, Window,
+    parse_days, AfterAction, DownloadStatus, Manager, ManagerConfig, ManagerEvent, Moment,
+    Schedule, Window,
 };
 use mohona_net::{ClientConfig, HttpClient};
 use mohona_store::Store;
@@ -33,6 +36,14 @@ pub enum QueueCommand {
         /// Speed limit for everything together, like 1M, or `off`. It is saved.
         #[arg(short = 'l', long, value_parser = parse_rate)]
         max_speed: Option<u64>,
+        /// What to do when everything is done: exit, sleep, hibernate,
+        /// shutdown or run:<program> [arguments]. A countdown runs first;
+        /// Ctrl-C during it cancels the action.
+        #[arg(long, value_parser = AfterAction::parse)]
+        then: Option<AfterAction>,
+        /// Seconds of countdown before the action
+        #[arg(long, default_value_t = 60)]
+        countdown: u32,
     },
     /// Choose when the queue may run, like
     /// `queue schedule --days mon-fri --from 01:00 --to 07:00 --speed 2M`.
@@ -136,6 +147,8 @@ pub async fn run(command: QueueCommand, db: PathBuf) -> Result<(), String> {
         QueueCommand::Run {
             simultaneous,
             max_speed,
+            then,
+            countdown,
         } => {
             if let Some(n) = simultaneous {
                 store
@@ -153,7 +166,7 @@ pub async fn run(command: QueueCommand, db: PathBuf) -> Result<(), String> {
                         .map_err(|e| e.to_string())?;
                 }
             }
-            run_queue(store).await
+            run_queue(store, then.map(|action| (action, countdown))).await
         }
     }
 }
@@ -284,7 +297,7 @@ fn list(store: &Store) -> Result<(), String> {
     Ok(())
 }
 
-async fn run_queue(store: Store) -> Result<(), String> {
+async fn run_queue(store: Store, then: Option<(AfterAction, u32)>) -> Result<(), String> {
     let client = HttpClient::new(&ClientConfig::default()).map_err(|e| describe(&e))?;
     let manager =
         Manager::start(store, client, ManagerConfig::default()).map_err(|e| e.to_string())?;
@@ -300,11 +313,33 @@ async fn run_queue(store: Store) -> Result<(), String> {
         report_window(&schedule);
     }
 
+    // The action waits for downloads that finish in this run.
+    let mut armed = then.is_some();
+    if let Some((action, seconds)) = then {
+        manager
+            .set_after_action(Some(action.clone()), seconds)
+            .await
+            .map_err(|e| e.to_string())?;
+        println!(
+            "When everything is done: {} (after a {seconds} s countdown).",
+            action.describe()
+        );
+    }
+    let counting = Arc::new(AtomicBool::new(false));
+    let mut finished_here = 0u32;
+
     let stopper = manager.clone();
+    let counting_for_signal = counting.clone();
     tokio::spawn(async move {
-        if tokio::signal::ctrl_c().await.is_ok() {
-            eprintln!("\nstopping, progress is kept...");
-            stopper.shutdown().await;
+        while tokio::signal::ctrl_c().await.is_ok() {
+            if counting_for_signal.load(Ordering::SeqCst) {
+                eprintln!("\ncancelling the action");
+                let _ = stopper.cancel_action().await;
+            } else {
+                eprintln!("\nstopping, progress is kept...");
+                stopper.shutdown().await;
+                break;
+            }
         }
     });
 
@@ -313,7 +348,36 @@ async fn run_queue(store: Store) -> Result<(), String> {
         tokio::select! {
             event = events.recv() => {
                 match event {
-                    Ok(ManagerEvent::State { id, status }) => announce(&manager, id, status).await,
+                    Ok(ManagerEvent::State { id, status }) => {
+                        if status == DownloadStatus::Completed {
+                            finished_here += 1;
+                        }
+                        announce(&manager, id, status).await;
+                    }
+                    Ok(ManagerEvent::ActionCountdown { action, seconds_left }) => {
+                        counting.store(true, Ordering::SeqCst);
+                        if seconds_left % 10 == 0 || seconds_left <= 10 {
+                            println!(
+                                "{} in {seconds_left} s - press Ctrl-C to cancel",
+                                capitalize(&action.describe())
+                            );
+                        }
+                    }
+                    Ok(ManagerEvent::ActionCancelled { .. }) => {
+                        counting.store(false, Ordering::SeqCst);
+                        armed = false;
+                        println!("The action was cancelled.");
+                    }
+                    Ok(ManagerEvent::ActionDone { action }) => {
+                        counting.store(false, Ordering::SeqCst);
+                        armed = false;
+                        println!("Done: {}.", action.describe());
+                    }
+                    Ok(ManagerEvent::ActionFailed { message }) => {
+                        counting.store(false, Ordering::SeqCst);
+                        armed = false;
+                        eprintln!("The action failed: {message}");
+                    }
                     Ok(ManagerEvent::QueueWindow { open, .. }) => {
                         println!("{}", if open { "The schedule opened." } else { "The schedule closed; downloads are stopped until it opens." });
                     }
@@ -333,7 +397,10 @@ async fn run_queue(store: Store) -> Result<(), String> {
                 let waiting = rows.iter().any(|r| {
                     matches!(r.status, DownloadStatus::Queued) || r.status.is_active()
                 });
-                if !waiting {
+                // With an action armed, stay until it has happened (or was
+                // cancelled), but only if something finished in this run.
+                let waiting_for_action = armed && (finished_here > 0 || counting.load(Ordering::SeqCst));
+                if !waiting && !waiting_for_action {
                     let failed = rows.iter().filter(|r| r.status == DownloadStatus::Failed).count();
                     manager.shutdown().await;
                     return if failed > 0 {
@@ -345,6 +412,14 @@ async fn run_queue(store: Store) -> Result<(), String> {
             }
         }
     }
+}
+
+fn capitalize(text: &str) -> String {
+    let mut chars = text.chars();
+    chars
+        .next()
+        .map(|first| first.to_uppercase().collect::<String>() + chars.as_str())
+        .unwrap_or_default()
 }
 
 async fn announce(manager: &Manager, id: i64, status: DownloadStatus) {

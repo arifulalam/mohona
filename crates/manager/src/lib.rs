@@ -10,8 +10,10 @@ use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
+mod actions;
 mod schedule;
 
+pub use actions::{ActionRunner, AfterAction, SystemRunner};
 pub use schedule::{parse_days, Moment, Schedule, Window};
 
 use mohona_core::{
@@ -89,6 +91,29 @@ pub enum ManagerEvent {
         /// What went wrong this time.
         message: String,
     },
+    /// The after-download action is about to happen; the person can still
+    /// cancel it.
+    ActionCountdown {
+        /// What will happen.
+        action: AfterAction,
+        /// Seconds until it does.
+        seconds_left: u32,
+    },
+    /// The countdown was stopped (by the person or because there is work again).
+    ActionCancelled {
+        /// Whether the action stays armed for later.
+        still_armed: bool,
+    },
+    /// The action was carried out. For `Exit` the application should close now.
+    ActionDone {
+        /// What was done.
+        action: AfterAction,
+    },
+    /// The action could not be carried out.
+    ActionFailed {
+        /// What went wrong.
+        message: String,
+    },
     /// A queue's schedule opened or closed.
     QueueWindow {
         /// The queue.
@@ -145,6 +170,9 @@ enum Command {
     List(oneshot::Sender<Result<Vec<DownloadRow>, ManagerError>>),
     SetQueueLimit(i64, u32, Reply),
     SetSchedule(i64, Option<Schedule>, Reply),
+    SetAction(Option<(AfterAction, u32)>, Reply),
+    /// A tick of the countdown with this generation number.
+    CountdownTick(u64),
     Queues(oneshot::Sender<Result<Vec<QueueRow>, ManagerError>>),
     /// Which speed limit to change, and to what (`None` removes it).
     SetSpeed(SpeedTarget, Option<u64>, Reply),
@@ -195,6 +223,22 @@ impl std::fmt::Debug for Clock {
     }
 }
 
+/// The thing that carries out after-download actions. Tests replace it.
+#[derive(Clone)]
+pub struct Runner(pub Arc<dyn ActionRunner>);
+
+impl Default for Runner {
+    fn default() -> Self {
+        Runner(Arc::new(SystemRunner))
+    }
+}
+
+impl std::fmt::Debug for Runner {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("Runner")
+    }
+}
+
 /// Settings for [`Manager::start`].
 #[derive(Clone, Debug)]
 pub struct ManagerConfig {
@@ -216,6 +260,10 @@ pub struct ManagerConfig {
     pub clock: Clock,
     /// How often schedules are checked.
     pub schedule_check: Duration,
+    /// Carries out after-download actions.
+    pub runner: Runner,
+    /// The length of one countdown second (only tests change it).
+    pub countdown_tick: Duration,
 }
 
 impl Default for ManagerConfig {
@@ -228,6 +276,8 @@ impl Default for ManagerConfig {
             retry_delay: Duration::from_secs(5),
             clock: Clock::default(),
             schedule_check: Duration::from_secs(10),
+            runner: Runner::default(),
+            countdown_tick: Duration::from_secs(1),
         }
     }
 }
@@ -262,6 +312,10 @@ impl Manager {
             queue_limits: HashMap::new(),
             download_limits: HashMap::new(),
             queue_open: HashMap::new(),
+            armed: None,
+            finished_since_armed: 0,
+            countdown: None,
+            generation: 0,
         };
         tokio::spawn(actor.run());
         Ok(Manager { commands, events })
@@ -342,6 +396,26 @@ impl Manager {
             .await
     }
 
+    /// Arm an action for when all downloads are finished, or disarm with
+    /// `None`. When the work is done, a countdown of `countdown_seconds`
+    /// runs (reported as events) before the action; [`Manager::cancel_action`]
+    /// stops it. Adding more downloads during the countdown stops it too, and
+    /// the action stays armed. The action only waits for downloads that finish
+    /// after it was armed, and it is not remembered across restarts.
+    pub async fn set_after_action(
+        &self,
+        action: Option<AfterAction>,
+        countdown_seconds: u32,
+    ) -> Result<(), ManagerError> {
+        self.ask(|r| Command::SetAction(action.map(|a| (a, countdown_seconds)), r))
+            .await
+    }
+
+    /// Stop a running countdown and disarm the action.
+    pub async fn cancel_action(&self) -> Result<(), ManagerError> {
+        self.set_after_action(None, 0).await
+    }
+
     /// Give a queue a schedule, or with `None` let it run at any time. Takes
     /// effect at once: a queue whose window is closed stops its downloads
     /// (keeping their progress) and starts them again when it opens.
@@ -408,6 +482,14 @@ struct Actor {
     download_limits: HashMap<i64, Arc<RateLimit>>,
     /// Whether each queue's schedule is open (queues not listed are open).
     queue_open: HashMap<i64, bool>,
+    /// The armed after-download action and the length of its countdown.
+    armed: Option<(AfterAction, u32)>,
+    /// Downloads that finished since the action was armed.
+    finished_since_armed: u32,
+    /// A countdown in progress: its generation number (so old ticks are
+    /// ignored) and the seconds left.
+    countdown: Option<(u64, u32)>,
+    generation: u64,
 }
 
 impl Actor {
@@ -428,12 +510,20 @@ impl Actor {
                         }
                         shutdown = Some(done);
                     } else {
+                        let may_change_work = !matches!(
+                            command,
+                            Command::Saved { .. } | Command::CountdownTick(_)
+                        );
                         self.handle(command);
+                        if may_change_work {
+                            self.check_idle();
+                        }
                     }
                 }
                 _ = check.tick() => {
                     if !self.stopping {
                         self.apply_schedules();
+                        self.check_idle();
                     }
                 }
             }
@@ -443,6 +533,102 @@ impl Actor {
         }
         if let Some(done) = shutdown {
             let _ = done.send(());
+        }
+    }
+
+    /// Arm or disarm the after-download action.
+    fn arm(&mut self, action: Option<(AfterAction, u32)>) {
+        if self.countdown.take().is_some() {
+            self.emit(ManagerEvent::ActionCancelled {
+                still_armed: action.is_some(),
+            });
+        }
+        self.armed = action;
+        self.finished_since_armed = 0;
+    }
+
+    /// Whether anything is still to be done: downloads that run, wait for a
+    /// slot, wait for a schedule or wait to retry.
+    fn has_work(&self) -> bool {
+        !self.running.is_empty()
+            || self.store.list_downloads().map_or(true, |rows| {
+                rows.iter().any(|r| {
+                    r.status == Status::Queued
+                        || r.status == Status::Retrying
+                        || r.status.is_active()
+                })
+            })
+    }
+
+    /// Start the countdown when everything is done, or stop it when there is
+    /// work again. Called after anything that may change either.
+    fn check_idle(&mut self) {
+        let Some((action, seconds)) = self.armed.clone() else {
+            return;
+        };
+        if self.has_work() {
+            if self.countdown.take().is_some() {
+                self.emit(ManagerEvent::ActionCancelled { still_armed: true });
+            }
+            return;
+        }
+        if self.countdown.is_some() || self.finished_since_armed == 0 || self.stopping {
+            return;
+        }
+        self.generation += 1;
+        let generation = self.generation;
+        self.countdown = Some((generation, seconds));
+        self.emit(ManagerEvent::ActionCountdown {
+            action,
+            seconds_left: seconds,
+        });
+        if seconds == 0 {
+            self.countdown_tick(generation);
+            return;
+        }
+        let commands = self.commands.clone();
+        let tick = self.config.countdown_tick;
+        tokio::spawn(async move {
+            loop {
+                tokio::time::sleep(tick).await;
+                if commands
+                    .send(Command::CountdownTick(generation))
+                    .await
+                    .is_err()
+                {
+                    break;
+                }
+            }
+        });
+    }
+
+    fn countdown_tick(&mut self, generation: u64) {
+        let Some((current, left)) = self.countdown else {
+            return;
+        };
+        if current != generation {
+            return;
+        }
+        let Some((action, _)) = self.armed.clone() else {
+            self.countdown = None;
+            return;
+        };
+        let left = left.saturating_sub(1);
+        if left > 0 {
+            self.countdown = Some((current, left));
+            self.emit(ManagerEvent::ActionCountdown {
+                action,
+                seconds_left: left,
+            });
+            return;
+        }
+        // Time is up. The action happens once.
+        self.countdown = None;
+        self.armed = None;
+        self.finished_since_armed = 0;
+        match self.config.runner.0.run(&action) {
+            Ok(()) => self.emit(ManagerEvent::ActionDone { action }),
+            Err(message) => self.emit(ManagerEvent::ActionFailed { message }),
         }
     }
 
@@ -469,15 +655,16 @@ impl Actor {
                 .entry(queue.id)
                 .or_insert_with(|| RateLimit::new(rate))
                 .set(rate);
-            let was_open = self.queue_open.insert(queue.id, open).unwrap_or(true);
-            if open != was_open {
+            let before = self.queue_open.insert(queue.id, open);
+            // The first look is not a change: nothing opened or closed.
+            if before.is_some_and(|was| was != open) {
                 self.emit(ManagerEvent::QueueWindow {
                     queue_id: queue.id,
                     open,
                 });
             }
             if open {
-                opened |= !was_open;
+                opened |= before == Some(false);
             } else {
                 self.close_queue(queue.id);
             }
@@ -573,6 +760,11 @@ impl Actor {
                 self.pump();
                 let _ = reply.send(result);
             }
+            Command::SetAction(action, reply) => {
+                self.arm(action);
+                let _ = reply.send(Ok(()));
+            }
+            Command::CountdownTick(generation) => self.countdown_tick(generation),
             Command::SetSchedule(queue_id, schedule, reply) => {
                 let _ = reply.send(self.set_schedule(queue_id, schedule));
             }
@@ -781,6 +973,8 @@ impl Actor {
         };
         match (result, intent) {
             (Ok(outcome), _) => {
+                self.retries.remove(&id);
+                self.finished_since_armed += 1;
                 let _ =
                     self.store
                         .set_completed(id, &outcome.path.to_string_lossy(), outcome.bytes);
