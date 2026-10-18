@@ -8,7 +8,7 @@ use reqwest::header::{
 };
 use reqwest::{Client, Response, StatusCode, Url};
 
-use crate::{filename_from_content_disposition, NetError};
+use crate::{filename_from_content_disposition, NetError, RequestContext};
 
 /// Settings for [`HttpClient`].
 #[derive(Clone, Debug)]
@@ -59,6 +59,7 @@ pub struct Probe {
 #[derive(Clone)]
 pub struct HttpClient {
     client: Client,
+    extra: HeaderMap,
 }
 
 /// The body of a successful response, read in chunks.
@@ -95,6 +96,17 @@ impl HttpClient {
         }
         Ok(Self {
             client: builder.build()?,
+            extra: HeaderMap::new(),
+        })
+    }
+
+    /// A client that sends `context` with every request. It shares
+    /// connections with this one. Fails if the context holds a header that
+    /// cannot be sent.
+    pub fn with_context(&self, context: &RequestContext) -> Result<Self, NetError> {
+        Ok(Self {
+            client: self.client.clone(),
+            extra: context.header_map()?,
         })
     }
 
@@ -107,7 +119,13 @@ impl HttpClient {
         let url = parse_url(url)?;
         let mut from_head = None;
 
-        if let Ok(response) = self.client.head(url.clone()).send().await {
+        if let Ok(response) = self
+            .client
+            .head(url.clone())
+            .headers(self.extra.clone())
+            .send()
+            .await
+        {
             if response.status().is_success() {
                 let mut probe = describe(&response);
                 probe.size = header_text(&response, &CONTENT_LENGTH).and_then(|v| v.parse().ok());
@@ -123,6 +141,7 @@ impl HttpClient {
         match self
             .client
             .get(url.clone())
+            .headers(self.extra.clone())
             .header(RANGE, "bytes=0-0")
             .send()
             .await
@@ -135,7 +154,12 @@ impl HttpClient {
     /// Start a `GET` and return its body. Fails on any non-success status.
     pub async fn get(&self, url: &str) -> Result<Body, NetError> {
         let url = parse_url(url)?;
-        let response = self.client.get(url.clone()).send().await?;
+        let response = self
+            .client
+            .get(url.clone())
+            .headers(self.extra.clone())
+            .send()
+            .await?;
         if !response.status().is_success() {
             return Err(status_error(&response, &url));
         }
@@ -160,6 +184,7 @@ impl HttpClient {
         let mut request = self
             .client
             .get(url.clone())
+            .headers(self.extra.clone())
             .header(RANGE, format!("bytes={first}-{last}"));
         // Weak validators ("W/...") are not allowed in `If-Range`.
         if let Some(etag) = etag.filter(|etag| !etag.starts_with("W/")) {

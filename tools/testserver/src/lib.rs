@@ -31,6 +31,9 @@ Endpoints
   /login      sets the cookie session=ok
   /cookie     like /file, but needs the cookie session=ok
   /referrer   like /file, but needs a Referer header
+  /guard      like /file, but needs the cookie session=ok, the Referer
+              https://example.org/page and the header X-Token: abc
+  /echo       answers with the request headers it received, one per line
 
 Query parameters (for /file and the endpoints that serve it)
   size=<bytes>        file size (default: the server's --size)
@@ -365,6 +368,38 @@ async fn route<W: AsyncWrite + Unpin>(
                     writer,
                     "403 Forbidden",
                     "cookie session=ok required\n",
+                    &[],
+                    keep_alive,
+                    head_only,
+                )
+                .await?;
+                Ok(keep_alive)
+            }
+        }
+        "/echo" => {
+            let mut names: Vec<_> = request.headers.iter().collect();
+            names.sort();
+            let body: String = names
+                .into_iter()
+                .map(|(name, value)| format!("{name}: {value}\n"))
+                .collect();
+            simple(writer, "200 OK", &body, &[], keep_alive, head_only).await?;
+            Ok(keep_alive)
+        }
+        "/guard" => {
+            let header = |name: &str| request.headers.get(name).map(String::as_str);
+            let cookie_ok = header("cookie")
+                .is_some_and(|v| v.split(';').any(|part| part.trim() == "session=ok"));
+            let allowed = cookie_ok
+                && header("referer") == Some("https://example.org/page")
+                && header("x-token") == Some("abc");
+            if allowed {
+                serve_file(request, writer, config, keep_alive, head_only).await
+            } else {
+                simple(
+                    writer,
+                    "403 Forbidden",
+                    "cookie, referer and x-token required\n",
                     &[],
                     keep_alive,
                     head_only,

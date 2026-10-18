@@ -90,3 +90,14 @@ mohona log 3                                # what happened to download #3
 ### Network changes
 
 `queue run` notices a Wi-Fi switch, a VPN going up or down, or the network going away: it pauses the downloads, keeps their progress, and continues when the new network is steady. `mohona network` shows the addresses it watches.
+
+### Cookies, referrer and headers
+
+For links that only work from a logged-in page:
+
+```
+mohona get <url> --cookie "session=abc" --referer https://example.org/page -H "X-Token: abc"
+mohona queue add <url> --cookie "session=abc" --referer https://example.org/page
+```
+
+The details are saved with the download (in plain text, in the database) so retries and restarts send them again.

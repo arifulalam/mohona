@@ -23,7 +23,7 @@ use mohona_core::{
     CancelToken, DownloadRequest, Error as CoreError, Event, Outcome, Progress, ProgressStore,
     RateLimit, RetryPolicy,
 };
-use mohona_net::HttpClient;
+use mohona_net::{HttpClient, RequestContext};
 use mohona_store::{CategoryRow, DownloadRow, ProgressRecord, QueueRow, Status, Store, StoreError};
 use tokio::sync::{broadcast, mpsc, oneshot};
 
@@ -217,6 +217,9 @@ pub struct AddRequest {
     pub sort_into_categories: bool,
     /// What to do about duplicates.
     pub duplicates: DuplicatePolicy,
+    /// Cookies, referrer, user agent and headers to send. Saved with the
+    /// download (in the database, in plain text).
+    pub context: RequestContext,
 }
 
 impl AddRequest {
@@ -227,6 +230,7 @@ impl AddRequest {
             dest_dir: dest_dir.into(),
             sort_into_categories: false,
             duplicates: DuplicatePolicy::Ask,
+            context: RequestContext::default(),
         }
     }
 }
@@ -761,6 +765,10 @@ impl Actor {
             None,
             request.sort_into_categories,
         )?;
+        if !request.context.is_empty() {
+            self.store
+                .set_headers_json(id, Some(&request.context.to_json()))?;
+        }
         let _ = self.store.add_log(id, "info", "added");
         self.emit(ManagerEvent::Added { id });
         self.pump();
@@ -1411,6 +1419,18 @@ impl Actor {
         }
         request.cancel = cancel;
         request.limits = self.limits_for(&row);
+        if let Ok(Some(json)) = self.store.headers_json(row.id) {
+            match RequestContext::from_json(&json) {
+                Ok(context) => request.context = context,
+                Err(error) => {
+                    let _ = self.store.add_log(
+                        row.id,
+                        "warn",
+                        &format!("ignoring saved headers: {error}"),
+                    );
+                }
+            }
+        }
         let route = row
             .auto_category
             .then(|| self.store.categories().ok())

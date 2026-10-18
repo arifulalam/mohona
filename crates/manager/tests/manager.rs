@@ -1302,3 +1302,44 @@ async fn it_stops_downloads_when_the_network_goes_away() {
     net.set(Some("192.168.1.10"));
     wait_for(&manager, id, Status::Completed).await;
 }
+
+#[tokio::test]
+async fn it_sends_saved_cookies_and_headers_and_keeps_them_across_restarts() {
+    let addr = start_server().await;
+    let dir = tempfile::tempdir().unwrap();
+    let db = dir.path().join("m.db");
+    let url = format!("http://{addr}/guard?size=300000");
+
+    let manager = manager_at(&db);
+    // Without the details the page refuses.
+    let refused = match manager
+        .add_checked(AddRequest::new(&url, dir.path().join("a")))
+        .await
+        .unwrap()
+    {
+        AddResult::Added(id) => id,
+        other => panic!("{other:?}"),
+    };
+    wait_for(&manager, refused, Status::Failed).await;
+
+    let mut request = AddRequest::new(&url, dir.path().join("b"));
+    request.duplicates = DuplicatePolicy::Rename;
+    request.context.cookies = Some("session=ok".into());
+    request.context.referrer = Some("https://example.org/page".into());
+    request.context.add_header_line("X-Token: abc").unwrap();
+    let AddResult::Added(id) = manager.add_checked(request).await.unwrap() else {
+        panic!("not added");
+    };
+    wait_for(&manager, id, Status::Completed).await;
+    manager.shutdown().await;
+
+    // The details are kept in the database with the download, so a start
+    // after a restart sends them again.
+    let saved = Store::open(&db).unwrap().headers_json(id).unwrap().unwrap();
+    assert!(saved.contains("session=ok"));
+    assert!(Store::open(&db)
+        .unwrap()
+        .headers_json(refused)
+        .unwrap()
+        .is_none());
+}

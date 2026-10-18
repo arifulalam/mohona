@@ -310,6 +310,29 @@ impl Store {
             .collect())
     }
 
+    /// The request details (cookies, headers) saved with a download, as the
+    /// JSON `mohona-net` writes, if any.
+    pub fn headers_json(&self, id: i64) -> Result<Option<String>, StoreError> {
+        Ok(self
+            .conn
+            .query_row(
+                "SELECT headers_json FROM downloads WHERE id=?1",
+                [id],
+                |r| r.get::<_, Option<String>>(0),
+            )
+            .optional()?
+            .flatten())
+    }
+
+    /// Save request details (cookies, headers) with a download.
+    pub fn set_headers_json(&self, id: i64, json: Option<&str>) -> Result<(), StoreError> {
+        self.conn.execute(
+            "UPDATE downloads SET headers_json=?2 WHERE id=?1",
+            params![id, json],
+        )?;
+        Ok(())
+    }
+
     /// Mark a download complete.
     pub fn set_completed(&self, id: i64, path: &str, bytes: u64) -> Result<(), StoreError> {
         self.conn.execute(

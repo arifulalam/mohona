@@ -84,7 +84,42 @@ enum Command {
         /// Speed limit, like 500K or 1.5M (bytes per second)
         #[arg(short = 'l', long, value_parser = parse_rate)]
         max_speed: Option<u64>,
+
+        #[command(flatten)]
+        request: RequestArgs,
     },
+}
+
+/// What to send with a download besides the address.
+#[derive(clap::Args, Clone, Default)]
+pub(crate) struct RequestArgs {
+    /// Send a header, like -H "Accept-Language: bn" (can be repeated)
+    #[arg(short = 'H', long = "header")]
+    headers: Vec<String>,
+    /// Send cookies, like --cookie "session=abc; theme=dark"
+    #[arg(long)]
+    cookie: Option<String>,
+    /// The page the link was on (the Referer header)
+    #[arg(long)]
+    referer: Option<String>,
+    /// Pretend to be this browser (the User-Agent header)
+    #[arg(long)]
+    user_agent: Option<String>,
+}
+
+impl RequestArgs {
+    pub(crate) fn context(&self) -> Result<mohona_net::RequestContext, String> {
+        let mut context = mohona_net::RequestContext {
+            cookies: self.cookie.clone(),
+            referrer: self.referer.clone(),
+            user_agent: self.user_agent.clone(),
+            ..Default::default()
+        };
+        for line in &self.headers {
+            context.add_header_line(line).map_err(|e| e.to_string())?;
+        }
+        Ok(context)
+    }
 }
 
 /// Read a speed such as `500K`, `1.5M`, `2G` or a plain number of bytes.
@@ -137,7 +172,17 @@ async fn main() -> ExitCode {
             connections,
             verbose,
             max_speed,
-        }) => match get(url, output, usize::from(connections), verbose, max_speed).await {
+            request,
+        }) => match get(
+            url,
+            output,
+            usize::from(connections),
+            verbose,
+            max_speed,
+            request,
+        )
+        .await
+        {
             Ok(()) => ExitCode::SUCCESS,
             Err(message) => {
                 eprintln!("error: {message}");
@@ -207,10 +252,12 @@ async fn get(
     connections: usize,
     verbose: bool,
     max_speed: Option<u64>,
+    args: RequestArgs,
 ) -> Result<(), String> {
     let client = HttpClient::new(&ClientConfig::default()).map_err(|error| describe(&error))?;
     let mut request = DownloadRequest::new(url, output);
     request.connections = connections;
+    request.context = args.context()?;
     if let Some(rate) = max_speed.filter(|rate| *rate > 0) {
         request.limits = vec![mohona_core::RateLimit::new(rate)];
     }

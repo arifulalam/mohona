@@ -58,6 +58,8 @@ pub enum QueueCommand {
         /// What to do about duplicates: ask, rename, skip or overwrite
         #[arg(long, default_value = "ask", value_parser = parse_policy)]
         duplicates: DuplicatePolicy,
+        #[command(flatten)]
+        request: crate::RequestArgs,
     },
     /// Show or change the categories files are sorted into
     Categories {
@@ -134,13 +136,16 @@ pub async fn run(command: QueueCommand, db: PathBuf) -> Result<(), String> {
             output,
             sort,
             duplicates,
+            request: args,
         } => {
+            let context = args.context()?;
             let dir = output.to_string_lossy().into_owned();
             let mut refused = 0;
             for url in urls {
                 let mut request = AddRequest::new(url.trim(), output.clone());
                 request.sort_into_categories = sort;
                 request.duplicates = duplicates;
+                request.context = context.clone();
                 if let Some(found) = find_duplicate(&store, &request) {
                     match duplicates {
                         DuplicatePolicy::Ask => {
@@ -169,6 +174,11 @@ pub async fn run(command: QueueCommand, db: PathBuf) -> Result<(), String> {
                 let id = store
                     .add_download_with(url.trim(), &dir, None, sort)
                     .map_err(|e| e.to_string())?;
+                if !context.is_empty() {
+                    store
+                        .set_headers_json(id, Some(&context.to_json()))
+                        .map_err(|e| e.to_string())?;
+                }
                 let _ = store.add_log(id, "info", "added");
                 println!("#{id} added: {url}");
             }

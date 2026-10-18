@@ -858,6 +858,8 @@ dependencies = [
  "mohona-testserver",
  "percent-encoding",
  "reqwest",
+ "serde",
+ "serde_json",
  "thiserror",
  "tokio",
 ]

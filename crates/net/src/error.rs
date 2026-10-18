@@ -42,6 +42,10 @@ pub enum NetError {
     #[error("the server did not send the requested part of the file ({0})")]
     WrongRange(String),
 
+    /// A header, cookie or the like cannot be sent.
+    #[error("invalid header: {0}")]
+    InvalidHeader(String),
+
     /// The request failed before or while receiving the response.
     #[error("network error")]
     Http(#[from] reqwest::Error),
@@ -65,9 +69,10 @@ impl NetError {
                     Failure::Transient
                 }
             }
-            NetError::InvalidUrl(_) | NetError::UnsupportedScheme(_) | NetError::WrongRange(_) => {
-                Failure::Fatal
-            }
+            NetError::InvalidUrl(_)
+            | NetError::UnsupportedScheme(_)
+            | NetError::InvalidHeader(_)
+            | NetError::WrongRange(_) => Failure::Fatal,
         }
     }
 

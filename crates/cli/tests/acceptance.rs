@@ -133,3 +133,57 @@ async fn killing_the_app_during_20_downloads_loses_nothing() {
         );
     }
 }
+
+/// A page that needs cookies, a referrer and a header: `get` and `queue add`
+/// work with the flags and fail without them.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn cookies_referer_and_headers_from_the_command_line() {
+    let addr = start_server().await;
+    let dir = tempfile::tempdir().unwrap();
+    let db = dir.path().join("m.db");
+    let url = format!("http://{addr}/guard?size=200000");
+    let flags = [
+        "--cookie",
+        "session=ok",
+        "--referer",
+        "https://example.org/page",
+        "-H",
+        "X-Token: abc",
+    ];
+    let run = |args: Vec<String>| {
+        let db = db.clone();
+        tokio::task::spawn_blocking(move || mohona(&db).args(args).output().unwrap())
+    };
+    let strings = |parts: &[&str]| parts.iter().map(|s| s.to_string()).collect::<Vec<_>>();
+
+    // `get` without the details is refused, and creates nothing.
+    let out = dir.path().join("get-out");
+    let mut args = strings(&["get", &url, "-o"]);
+    args.push(out.to_string_lossy().into_owned());
+    assert!(!run(args.clone()).await.unwrap().status.success());
+    // With them it works.
+    args.extend(strings(&flags));
+    assert!(run(args).await.unwrap().status.success());
+    assert_eq!(
+        std::fs::read(out.join("mohona-test.bin")).unwrap().len(),
+        200_000
+    );
+
+    // The same for the queue; the details are kept with the download.
+    let out = dir.path().join("queue-out");
+    let mut args = strings(&["queue", "add", &url, "-o"]);
+    args.push(out.to_string_lossy().into_owned());
+    args.extend(strings(&flags));
+    assert!(run(args).await.unwrap().status.success());
+    assert!(run(strings(&["queue", "run"]))
+        .await
+        .unwrap()
+        .status
+        .success());
+    let store = Store::open(&db).unwrap();
+    let rows = store.list_downloads().unwrap();
+    assert_eq!(rows[0].status, Status::Completed);
+    // The cookie is not shown in `queue list`.
+    let listing = run(strings(&["queue", "list"])).await.unwrap();
+    assert!(!String::from_utf8_lossy(&listing.stdout).contains("session=ok"));
+}

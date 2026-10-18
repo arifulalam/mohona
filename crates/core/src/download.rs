@@ -2,7 +2,7 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
-use mohona_net::{HttpClient, Probe};
+use mohona_net::{HttpClient, Probe, RequestContext};
 use tokio::fs::{self, File};
 use tokio::io::{AsyncWriteExt, BufWriter};
 use tokio::sync::mpsc::Sender;
@@ -45,6 +45,8 @@ pub struct DownloadRequest {
     /// Speed limits that apply to this download. They may be shared with
     /// other downloads and changed while it runs; it goes at the slowest.
     pub limits: Vec<Arc<RateLimit>>,
+    /// Cookies, referrer, user agent and headers sent with every request.
+    pub context: RequestContext,
 }
 
 impl DownloadRequest {
@@ -58,6 +60,7 @@ impl DownloadRequest {
             cancel: CancelToken::new(),
             progress: None,
             limits: Vec::new(),
+            context: RequestContext::default(),
         }
     }
 }
@@ -149,6 +152,13 @@ pub async fn download(
     if request.cancel.is_cancelled() {
         return Err(Error::Cancelled);
     }
+    let scoped;
+    let client = if request.context.is_empty() {
+        client
+    } else {
+        scoped = client.with_context(&request.context)?;
+        &scoped
+    };
     let probe = probe_with_retry(client, &request.url, &request.retry).await?;
     let filename = sanitize_filename(probe.filename.as_deref().unwrap_or(""));
     fs::create_dir_all(&request.dest_dir).await?;
