@@ -815,6 +815,8 @@ dependencies = [
  "mohona-manager",
  "mohona-net",
  "mohona-store",
+ "mohona-testserver",
+ "tempfile",
  "tokio",
 ]
 

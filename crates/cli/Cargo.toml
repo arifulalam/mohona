@@ -19,3 +19,7 @@ mohona-manager = { path = "../manager" }
 mohona-net = { version = "0.0.1", path = "../net" }
 mohona-store = { path = "../store" }
 tokio.workspace = true
+
+[dev-dependencies]
+mohona-testserver = { path = "../../tools/testserver" }
+tempfile = "3"

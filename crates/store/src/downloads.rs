@@ -323,7 +323,15 @@ impl Store {
     /// how far each segment is. It is all-or-nothing (one transaction), so
     /// after a crash the previous snapshot or the new one is there.
     pub fn save_progress(&self, id: i64, record: &ProgressRecord) -> Result<(), StoreError> {
-        let tx = self.conn.unchecked_transaction()?;
+        // IMMEDIATE takes the write lock at the start, so the busy timeout
+        // applies. A plain (deferred) transaction that has to upgrade from
+        // reading to writing fails at once when another connection wrote
+        // in between, and with many downloads saving progress that happened
+        // all the time.
+        let tx = rusqlite::Transaction::new_unchecked(
+            &self.conn,
+            rusqlite::TransactionBehavior::Immediate,
+        )?;
         let committed: u64 = record.segments.iter().map(|(s, c, _)| c - s).sum();
         tx.execute(
             "UPDATE downloads SET final_url=?2, filename=?3, size=?4, etag=?5, \
@@ -718,5 +726,40 @@ mod tests {
         assert_eq!(s.schema_version().unwrap(), crate::SCHEMA_VERSION);
         let r = s.list_downloads().unwrap();
         assert_eq!((r.len(), r[0].downloaded), (1, 0));
+    }
+
+    #[test]
+    fn many_connections_can_save_progress_at_once() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("m.db");
+        let first = Store::open(&path).unwrap();
+        let ids: Vec<i64> = (0..8)
+            .map(|i| first.add_download(&format!("u{i}"), "d", None).unwrap())
+            .collect();
+        let threads: Vec<_> = ids
+            .into_iter()
+            .map(|id| {
+                let path = path.clone();
+                std::thread::spawn(move || {
+                    let store = Store::open(&path).unwrap();
+                    for round in 0..50u64 {
+                        let record = ProgressRecord {
+                            final_url: "u".into(),
+                            filename: "f".into(),
+                            total: 1000,
+                            etag: None,
+                            last_modified: None,
+                            segments: vec![(0, round, 500), (500, 500 + round, 1000)],
+                        };
+                        store
+                            .save_progress(id, &record)
+                            .expect("save must not fail");
+                    }
+                })
+            })
+            .collect();
+        for t in threads {
+            t.join().unwrap();
+        }
     }
 }
