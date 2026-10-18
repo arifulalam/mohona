@@ -142,6 +142,11 @@ pub async fn run(command: QueueCommand, db: PathBuf) -> Result<(), String> {
             let dir = output.to_string_lossy().into_owned();
             let mut refused = 0;
             for url in urls {
+                let (url, from_address) = mohona_net::split_userinfo(&url);
+                let mut context = context.clone();
+                if context.credentials.is_none() {
+                    context.credentials = from_address;
+                }
                 let mut request = AddRequest::new(url.trim(), output.clone());
                 request.sort_into_categories = sort;
                 request.duplicates = duplicates;

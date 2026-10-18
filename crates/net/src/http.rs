@@ -8,7 +8,13 @@ use reqwest::header::{
 };
 use reqwest::{Client, Response, StatusCode, Url};
 
-use crate::{filename_from_content_disposition, NetError, RequestContext};
+use std::sync::{Arc, Mutex};
+
+use reqwest::header::{AUTHORIZATION, WWW_AUTHENTICATE};
+use reqwest::{Method, RequestBuilder};
+
+use crate::auth::{self, Scheme};
+use crate::{filename_from_content_disposition, Credentials, NetError, RequestContext};
 
 /// Settings for [`HttpClient`].
 #[derive(Clone, Debug)]
@@ -55,11 +61,17 @@ pub struct Probe {
     pub filename: Option<String>,
 }
 
+/// The origin that was logged in to, and how.
+type Answered = Arc<Mutex<Option<(String, Arc<Scheme>)>>>;
+
 /// An HTTP(S) client. Cheap to clone; clones share connections.
 #[derive(Clone)]
 pub struct HttpClient {
     client: Client,
     extra: HeaderMap,
+    credentials: Option<Credentials>,
+    /// How the server wanted to be answered, for the rest of the download.
+    answered: Answered,
 }
 
 /// The body of a successful response, read in chunks.
@@ -97,6 +109,8 @@ impl HttpClient {
         Ok(Self {
             client: builder.build()?,
             extra: HeaderMap::new(),
+            credentials: None,
+            answered: Arc::default(),
         })
     }
 
@@ -107,6 +121,8 @@ impl HttpClient {
         Ok(Self {
             client: self.client.clone(),
             extra: context.header_map()?,
+            credentials: context.credentials.clone(),
+            answered: Arc::default(),
         })
     }
 
@@ -119,13 +135,7 @@ impl HttpClient {
         let url = parse_url(url)?;
         let mut from_head = None;
 
-        if let Ok(response) = self
-            .client
-            .head(url.clone())
-            .headers(self.extra.clone())
-            .send()
-            .await
-        {
+        if let Ok(response) = self.send(Method::HEAD, &url, |r| r).await {
             if response.status().is_success() {
                 let mut probe = describe(&response);
                 probe.size = header_text(&response, &CONTENT_LENGTH).and_then(|v| v.parse().ok());
@@ -139,11 +149,7 @@ impl HttpClient {
         }
 
         match self
-            .client
-            .get(url.clone())
-            .headers(self.extra.clone())
-            .header(RANGE, "bytes=0-0")
-            .send()
+            .send(Method::GET, &url, |r| r.header(RANGE, "bytes=0-0"))
             .await
         {
             Ok(response) => probe_from_range_response(&response, from_head, &url),
@@ -154,12 +160,7 @@ impl HttpClient {
     /// Start a `GET` and return its body. Fails on any non-success status.
     pub async fn get(&self, url: &str) -> Result<Body, NetError> {
         let url = parse_url(url)?;
-        let response = self
-            .client
-            .get(url.clone())
-            .headers(self.extra.clone())
-            .send()
-            .await?;
+        let response = self.send(Method::GET, &url, |r| r).await?;
         if !response.status().is_success() {
             return Err(status_error(&response, &url));
         }
@@ -181,16 +182,18 @@ impl HttpClient {
         etag: Option<&str>,
     ) -> Result<Body, NetError> {
         let url = parse_url(url)?;
-        let mut request = self
-            .client
-            .get(url.clone())
-            .headers(self.extra.clone())
-            .header(RANGE, format!("bytes={first}-{last}"));
+        let range = format!("bytes={first}-{last}");
         // Weak validators ("W/...") are not allowed in `If-Range`.
-        if let Some(etag) = etag.filter(|etag| !etag.starts_with("W/")) {
-            request = request.header(IF_RANGE, etag);
-        }
-        let response = request.send().await?;
+        let if_range = etag.filter(|etag| !etag.starts_with("W/"));
+        let response = self
+            .send(Method::GET, &url, |mut r| {
+                r = r.header(RANGE, &range);
+                if let Some(etag) = if_range {
+                    r = r.header(IF_RANGE, etag);
+                }
+                r
+            })
+            .await?;
         let status = response.status();
         if status == StatusCode::PARTIAL_CONTENT {
             let start = header_text(&response, &CONTENT_RANGE)
@@ -210,6 +213,91 @@ impl HttpClient {
         } else {
             Err(status_error(&response, &url))
         }
+    }
+}
+
+impl HttpClient {
+    /// Send a request. If the server answers `401` and credentials were
+    /// given, answer its challenge (Digest preferred, else Basic) and send
+    /// again, once. What worked is remembered, so later requests carry the
+    /// answer from the start.
+    ///
+    /// Credentials go only to the host the request was addressed to: if a
+    /// redirect led somewhere else, a challenge from there is not answered.
+    async fn send(
+        &self,
+        method: Method,
+        url: &Url,
+        shape: impl Fn(RequestBuilder) -> RequestBuilder,
+    ) -> Result<Response, reqwest::Error> {
+        let build = |target: &Url, authorization: Option<String>| {
+            let mut request = shape(
+                self.client
+                    .request(method.clone(), target.clone())
+                    .headers(self.extra.clone()),
+            );
+            if let Some(mut text) = authorization.and_then(|t| HeaderValue::from_str(&t).ok()) {
+                text.set_sensitive(true);
+                request = request.header(AUTHORIZATION, text);
+            }
+            request
+        };
+        let Some(credentials) = &self.credentials else {
+            return build(url, None).send().await;
+        };
+        let origin = origin_of(url);
+        let remembered = self
+            .answered
+            .lock()
+            .ok()
+            .and_then(|slot| slot.clone())
+            .filter(|(known, _)| *known == origin)
+            .map(|(_, scheme)| scheme);
+        let first = remembered
+            .as_ref()
+            .map(|scheme| scheme.authorization(credentials, method.as_str(), &request_uri(url)));
+        let response = build(url, first).send().await?;
+        if response.status() != StatusCode::UNAUTHORIZED || origin_of(response.url()) != origin {
+            return Ok(response);
+        }
+        let lines: Vec<String> = response
+            .headers()
+            .get_all(WWW_AUTHENTICATE)
+            .iter()
+            .filter_map(|value| value.to_str().ok().map(str::to_string))
+            .collect();
+        let Some(scheme) = auth::choose(&lines) else {
+            return Ok(response);
+        };
+        // Answer at the address the challenge came from (after redirects).
+        let target = response.url().clone();
+        let scheme = Arc::new(scheme);
+        let header = scheme.authorization(credentials, method.as_str(), &request_uri(&target));
+        let second = build(&target, Some(header)).send().await?;
+        if second.status() != StatusCode::UNAUTHORIZED {
+            if let Ok(mut slot) = self.answered.lock() {
+                *slot = Some((origin, scheme));
+            }
+        }
+        Ok(second)
+    }
+}
+
+/// Scheme, host and port: what "the same server" means for credentials.
+fn origin_of(url: &Url) -> String {
+    format!(
+        "{}://{}:{}",
+        url.scheme(),
+        url.host_str().unwrap_or("").to_ascii_lowercase(),
+        url.port_or_known_default().unwrap_or(0)
+    )
+}
+
+/// The path and query as they appear in the request line (the Digest `uri`).
+fn request_uri(url: &Url) -> String {
+    match url.query() {
+        Some(query) => format!("{}?{query}", url.path()),
+        None => url.path().to_string(),
     }
 }
 

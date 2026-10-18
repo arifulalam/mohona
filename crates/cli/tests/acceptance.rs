@@ -187,3 +187,88 @@ async fn cookies_referer_and_headers_from_the_command_line() {
     let listing = run(strings(&["queue", "list"])).await.unwrap();
     assert!(!String::from_utf8_lossy(&listing.stdout).contains("session=ok"));
 }
+
+/// Logging in from the command line: `-u`, a login in the address, and the
+/// password from the environment.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn logging_in_from_the_command_line() {
+    let addr = start_server().await;
+    let dir = tempfile::tempdir().unwrap();
+    let db = dir.path().join("m.db");
+    let run = |args: Vec<String>, password: Option<&'static str>| {
+        let db = db.clone();
+        tokio::task::spawn_blocking(move || {
+            let mut command = mohona(&db);
+            command.args(args);
+            command.env_remove("MOHONA_PASSWORD");
+            if let Some(password) = password {
+                command.env("MOHONA_PASSWORD", password);
+            }
+            command.output().unwrap()
+        })
+    };
+    let get = |url: String, extra: &[&str], out: &str| {
+        let mut args = vec!["get".to_string(), url, "-o".into(), out.to_string()];
+        args.extend(extra.iter().map(|s| s.to_string()));
+        args
+    };
+    let out = |name: &str| dir.path().join(name).to_string_lossy().into_owned();
+
+    for (path, name) in [("auth", "basic"), ("digest", "digest")] {
+        let url = format!("http://{addr}/{path}?size=120000");
+        // No login: refused.
+        let refused = run(get(url.clone(), &[], &out(&format!("{name}-none"))), None)
+            .await
+            .unwrap();
+        assert!(!refused.status.success(), "{path} without login");
+        // Wrong password: refused.
+        let wrong = run(
+            get(
+                url.clone(),
+                &["-u", "mohona:wrong"],
+                &out(&format!("{name}-wrong")),
+            ),
+            None,
+        )
+        .await
+        .unwrap();
+        assert!(!wrong.status.success(), "{path} wrong password");
+        // Right: -u, the address, or the environment.
+        let ok = run(
+            get(
+                url.clone(),
+                &["-u", "mohona:secret"],
+                &out(&format!("{name}-u")),
+            ),
+            None,
+        )
+        .await
+        .unwrap();
+        assert!(ok.status.success(), "{path} -u");
+        let inline = format!("http://mohona:secret@{addr}/{path}?size=120000");
+        let ok = run(get(inline, &[], &out(&format!("{name}-inline"))), None)
+            .await
+            .unwrap();
+        assert!(ok.status.success(), "{path} login in address");
+        let ok = run(
+            get(url, &["-u", "mohona"], &out(&format!("{name}-env"))),
+            Some("secret"),
+        )
+        .await
+        .unwrap();
+        assert!(ok.status.success(), "{path} password from environment");
+        for suffix in ["u", "inline", "env"] {
+            let file = dir.path().join(format!("{name}-{suffix}/mohona-test.bin"));
+            assert_eq!(std::fs::read(file).unwrap().len(), 120_000);
+        }
+    }
+
+    // `-u name` with no MOHONA_PASSWORD is an error that says what to do.
+    let url = format!("http://{addr}/auth?size=1000");
+    let out_dir = out("noenv");
+    let no_password = run(get(url, &["-u", "mohona"], &out_dir), None)
+        .await
+        .unwrap();
+    assert!(!no_password.status.success());
+    assert!(String::from_utf8_lossy(&no_password.stderr).contains("MOHONA_PASSWORD"));
+}

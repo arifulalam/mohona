@@ -90,6 +90,20 @@ enum Command {
     },
 }
 
+/// `user:password`, or just `user` with the password from `fallback`.
+fn parse_login(text: &str, fallback: Option<String>) -> Result<mohona_net::Credentials, String> {
+    if let Some(login) = mohona_net::Credentials::parse(text) {
+        return Ok(login);
+    }
+    match (text.is_empty() || text.contains(':'), fallback) {
+        (false, Some(password)) => Ok(mohona_net::Credentials {
+            username: text.to_string(),
+            password,
+        }),
+        _ => Err("give --user as name:password, or as a name with the password in the MOHONA_PASSWORD environment variable".into()),
+    }
+}
+
 /// What to send with a download besides the address.
 #[derive(clap::Args, Clone, Default)]
 pub(crate) struct RequestArgs {
@@ -105,6 +119,11 @@ pub(crate) struct RequestArgs {
     /// Pretend to be this browser (the User-Agent header)
     #[arg(long)]
     user_agent: Option<String>,
+    /// Log in with user:password (Basic or Digest, when the server asks).
+    /// Without a password, MOHONA_PASSWORD is used. A user:password@ in the
+    /// address works too.
+    #[arg(short = 'u', long)]
+    user: Option<String>,
 }
 
 impl RequestArgs {
@@ -117,6 +136,9 @@ impl RequestArgs {
         };
         for line in &self.headers {
             context.add_header_line(line).map_err(|e| e.to_string())?;
+        }
+        if let Some(user) = &self.user {
+            context.credentials = Some(parse_login(user, std::env::var("MOHONA_PASSWORD").ok())?);
         }
         Ok(context)
     }
@@ -255,9 +277,15 @@ async fn get(
     args: RequestArgs,
 ) -> Result<(), String> {
     let client = HttpClient::new(&ClientConfig::default()).map_err(|error| describe(&error))?;
+    // A password written in the address is taken out of it, so it is only
+    // sent when the server asks for it.
+    let (url, from_address) = mohona_net::split_userinfo(&url);
     let mut request = DownloadRequest::new(url, output);
     request.connections = connections;
     request.context = args.context()?;
+    if request.context.credentials.is_none() {
+        request.context.credentials = from_address;
+    }
     if let Some(rate) = max_speed.filter(|rate| *rate > 0) {
         request.limits = vec![mohona_core::RateLimit::new(rate)];
     }

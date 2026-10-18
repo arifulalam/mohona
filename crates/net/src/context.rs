@@ -6,7 +6,7 @@ use std::fmt;
 use reqwest::header::{HeaderMap, HeaderName, HeaderValue, COOKIE, REFERER, USER_AGENT};
 use serde::{Deserialize, Serialize};
 
-use crate::NetError;
+use crate::{Credentials, NetError};
 
 /// Extra request details for one download. The browser extension fills this
 /// in from the page a download was started on; people can also give it on
@@ -28,6 +28,10 @@ pub struct RequestContext {
     /// Any other headers, as (name, value) pairs.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub headers: Vec<(String, String)>,
+    /// A user name and password, sent only when a server asks for them
+    /// (Basic or Digest), and only to that server.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub credentials: Option<Credentials>,
 }
 
 impl fmt::Debug for RequestContext {
@@ -36,6 +40,7 @@ impl fmt::Debug for RequestContext {
             .field("cookies", &self.cookies.as_ref().map(|_| "<hidden>"))
             .field("referrer", &self.referrer.as_ref().map(|_| "<hidden>"))
             .field("user_agent", &self.user_agent)
+            .field("credentials", &self.credentials)
             .field(
                 "headers",
                 &self.headers.iter().map(|(n, _)| n).collect::<Vec<_>>(),
@@ -64,6 +69,7 @@ impl RequestContext {
             && self.referrer.is_none()
             && self.user_agent.is_none()
             && self.headers.is_empty()
+            && self.credentials.is_none()
     }
 
     /// Parse `Name: value` (the way `curl -H` takes it) and add it.

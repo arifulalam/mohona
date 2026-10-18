@@ -4,11 +4,13 @@
 //! URL and start a download. FTP, SFTP, WebDAV, proxies and authentication
 //! follow in Phase 3, all behind one transport interface.
 
+mod auth;
 mod context;
 mod disposition;
 mod error;
 mod http;
 
+pub use auth::{split_userinfo, Credentials};
 pub use context::RequestContext;
 pub use disposition::filename_from_content_disposition;
 pub use error::{Failure, NetError};

@@ -1343,3 +1343,49 @@ async fn it_sends_saved_cookies_and_headers_and_keeps_them_across_restarts() {
         .unwrap()
         .is_none());
 }
+
+#[tokio::test]
+async fn it_logs_in_with_basic_and_digest_and_keeps_the_login_out_of_the_address() {
+    let addr = start_server().await;
+    let dir = tempfile::tempdir().unwrap();
+    let db = dir.path().join("m.db");
+    let manager = manager_at(&db);
+
+    // A login in the address: used when the server asks, not stored in the url.
+    let id = manager
+        .add(
+            format!("http://mohona:secret@{addr}/auth?size=100000"),
+            dir.path().join("basic"),
+        )
+        .await
+        .unwrap();
+    wait_for(&manager, id, Status::Completed).await;
+    let stored = manager.list().await.unwrap().remove(0);
+    assert!(
+        !stored.url.contains("secret") && !stored.url.contains('@'),
+        "{}",
+        stored.url
+    );
+
+    // Digest through the context.
+    let mut request = AddRequest::new(
+        format!("http://{addr}/digest?alg=sha256&size=100000"),
+        dir.path().join("digest"),
+    );
+    request.context.credentials = mohona_net::Credentials::parse("mohona:secret");
+    let AddResult::Added(digest) = manager.add_checked(request).await.unwrap() else {
+        panic!("not added");
+    };
+    wait_for(&manager, digest, Status::Completed).await;
+
+    // A wrong password fails (and is not retried forever: 401 is final).
+    let mut request = AddRequest::new(
+        format!("http://{addr}/digest?size=100000"),
+        dir.path().join("wrong"),
+    );
+    request.context.credentials = mohona_net::Credentials::parse("mohona:nope");
+    let AddResult::Added(wrong) = manager.add_checked(request).await.unwrap() else {
+        panic!("not added");
+    };
+    wait_for(&manager, wrong, Status::Failed).await;
+}

@@ -101,3 +101,13 @@ mohona queue add <url> --cookie "session=abc" --referer https://example.org/page
 ```
 
 The details are saved with the download (in plain text, in the database) so retries and restarts send them again.
+
+### Logging in
+
+```
+mohona get https://host/file.zip -u user:password        # Basic or Digest, whichever the server asks for
+MOHONA_PASSWORD=secret mohona get https://host/file.zip -u user
+mohona queue add https://user:password@host/file.zip      # the login is taken out of the address
+```
+
+The password is only sent when the server asks for it, and only to that server. It is kept in the database in plain text for now.

@@ -751,7 +751,13 @@ impl Actor {
         }
     }
 
-    fn add_checked(&mut self, request: AddRequest) -> Result<AddResult, ManagerError> {
+    fn add_checked(&mut self, mut request: AddRequest) -> Result<AddResult, ManagerError> {
+        // A login written in the address is kept apart from it.
+        let (url, from_address) = mohona_net::split_userinfo(&request.url);
+        request.url = url;
+        if request.context.credentials.is_none() {
+            request.context.credentials = from_address;
+        }
         let duplicate = find_duplicate(&self.store, &request);
         match (duplicate, request.duplicates) {
             (Some(found), DuplicatePolicy::Ask) => return Err(ManagerError::Duplicate(found)),
@@ -1001,11 +1007,19 @@ impl Actor {
                 queue_id,
                 reply,
             } => {
+                let (url, from_address) = mohona_net::split_userinfo(&url);
                 let result = self
                     .store
                     .add_download(url.trim(), &dest_dir.to_string_lossy(), queue_id)
                     .map_err(ManagerError::from);
                 if let Ok(id) = result {
+                    if let Some(credentials) = from_address {
+                        let context = RequestContext {
+                            credentials: Some(credentials),
+                            ..RequestContext::default()
+                        };
+                        let _ = self.store.set_headers_json(id, Some(&context.to_json()));
+                    }
                     let _ = self.store.add_log(id, "info", "added");
                     self.emit(ManagerEvent::Added { id });
                     self.pump();

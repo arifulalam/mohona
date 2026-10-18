@@ -7,6 +7,8 @@
 //! Every response closes or keeps the connection according to the request's
 //! `Connection` header (HTTP/1.1 keep-alive is the default).
 
+mod digest;
+
 use std::collections::HashMap;
 use std::io;
 use std::net::SocketAddr;
@@ -26,8 +28,13 @@ Mohona test server
 
 Endpoints
   /file       the generated file, with HTTP Range support
-  /redirect   302 redirect to /file, keeping the query string
+  /redirect   302 redirect to /file, keeping the query string, or to the
+              address given as to=<url>
   /auth       like /file, but needs Basic auth (user: mohona, password: secret)
+  /digest     like /file, but needs Digest auth (user: mohona, password: secret).
+              Options: alg=sha256 (default md5), qop=none (the old form),
+              expire=<n> (a nonce stops working after n answers; the server
+              then says stale=true)
   /login      sets the cookie session=ok
   /cookie     like /file, but needs the cookie session=ok
   /referrer   like /file, but needs a Referer header
@@ -133,6 +140,7 @@ pub async fn serve(listener: TcpListener, config: Config) -> io::Result<()> {
     let shared = Arc::new(Shared {
         config,
         active: AtomicUsize::new(0),
+        digest: digest::State::default(),
     });
     loop {
         let (stream, _) = listener.accept().await?;
@@ -148,6 +156,7 @@ struct Shared {
     config: Config,
     /// Responses with a body being sent right now (for `max_conns`).
     active: AtomicUsize,
+    digest: digest::State,
 }
 
 /// Counts one active response, and stops counting when dropped.
@@ -310,7 +319,10 @@ async fn route<W: AsyncWrite + Unpin>(
         }
         "/file" => serve_file(request, writer, config, keep_alive, head_only).await,
         "/redirect" => {
-            let location = if request.raw_query.is_empty() {
+            let location = if let Some(to) = request.query.get("to") {
+                // `to=<absolute address>`: send the client to another server.
+                to.clone()
+            } else if request.raw_query.is_empty() {
                 "/file".to_string()
             } else {
                 format!("/file?{}", request.raw_query)
@@ -342,6 +354,44 @@ async fn route<W: AsyncWrite + Unpin>(
                 )
                 .await?;
                 Ok(keep_alive)
+            }
+        }
+        "/digest" => {
+            let options = digest::Options {
+                sha256: request.query.get("alg").is_some_and(|v| v == "sha256"),
+                qop: request.query.get("qop").is_none_or(|v| v != "none"),
+                expire: request
+                    .query
+                    .get("expire")
+                    .and_then(|v| v.parse().ok())
+                    .unwrap_or(0),
+            };
+            let target = if request.raw_query.is_empty() {
+                request.path.clone()
+            } else {
+                format!("{}?{}", request.path, request.raw_query)
+            };
+            let verdict = config.digest.verify(
+                request.headers.get("authorization").map(String::as_str),
+                &request.method,
+                &target,
+                options,
+            );
+            match verdict {
+                Ok(()) => serve_file(request, writer, config, keep_alive, head_only).await,
+                Err(stale) => {
+                    let challenge = config.digest.challenge(options, stale);
+                    simple(
+                        writer,
+                        "401 Unauthorized",
+                        "digest authentication required\n",
+                        &[("WWW-Authenticate", &challenge)],
+                        keep_alive,
+                        head_only,
+                    )
+                    .await?;
+                    Ok(keep_alive)
+                }
             }
         }
         "/login" => {

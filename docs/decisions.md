@@ -191,3 +191,14 @@ Known limits, on purpose for now:
 - Cookies and header values are saved in the database in plain text. The plan's security list wants secrets in the system keychain; that comes with the desktop app and the credential work in this phase.
 - On a redirect to another host, the HTTP library drops `Cookie` and `Authorization`, as browsers do, but custom headers and `Referer` are still forwarded. Do not put a secret in a custom header for a link that redirects to a host you do not trust.
 - The plan's "one transport trait" step is postponed until the second transport (FTP) exists. A trait designed from one implementation tends to be wrong for the second; `HttpClient` already has the shape (probe, get, get_range) the trait will need.
+
+## 0021 – Basic and Digest authentication (Phase 3, step 3)
+
+Credentials (`user:password`) are part of the request context. They are not sent first: a request goes out plain, and only when the server answers `401` with a challenge is the answer sent, Digest preferred (SHA-256 before MD5, `qop=auth` or the old form, `-sess` variants), else Basic. What worked is remembered for the rest of that download, so its many connections do not each start with a refused request. Digest counts its `nc` per nonce; when connections race and the server refuses an out-of-order count, or a nonce expires, the client answers the new challenge and carries on (tested with a strict server that rejects replays and expires nonces).
+
+Rules that keep the password safe:
+- It is only sent to the origin (scheme, host, port) the request was addressed to. A challenge from a server reached through a redirect is not answered, and the HTTP library drops `Authorization` on cross-host redirects itself.
+- A `user:password@` in an address is taken out of it before anything is stored, so the download list and logs never hold it.
+- `Debug` output hides the password. On the command line: `-u user:password`, or `-u user` with `MOHONA_PASSWORD` set (a password typed on the command line stays in shell history).
+
+Limits: the password is saved in the database in plain text with the download's request details (same limit as ADR-0020; keychain comes later). Basic over plain `http://` sends the password readable on the network; the server decides which scheme it asks for, so use `https://` where it matters. `auth-int`, `userhash`, NTLM and Negotiate are not supported (NTLM and Negotiate are last in this phase and optional).
