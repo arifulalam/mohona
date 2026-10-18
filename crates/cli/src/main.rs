@@ -57,6 +57,8 @@ enum Command {
         #[arg(short, long, default_value_t = 50)]
         limit: u32,
     },
+    /// Show the network addresses Mohona watches for changes
+    Network,
     /// Show what happened to a download
     Log {
         /// The number shown by `queue list`
@@ -162,6 +164,23 @@ async fn main() -> ExitCode {
                 },
             )
         })),
+        Some(Command::Network) => {
+            use mohona_manager::NetworkProbe;
+            let state = mohona_manager::SystemNetwork.state();
+            let show =
+                |a: Option<std::net::IpAddr>| a.map_or("none".to_string(), |a| a.to_string());
+            println!("IPv4 route uses: {}", show(state.v4));
+            println!("IPv6 route uses: {}", show(state.v6));
+            println!(
+                "{}",
+                if state.online() {
+                    "Online."
+                } else {
+                    "Offline."
+                }
+            );
+            ExitCode::SUCCESS
+        }
         Some(Command::Log { id }) => {
             finish(open(&cli.db).and_then(|store| history::log(&store, id)))
         }

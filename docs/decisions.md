@@ -170,3 +170,9 @@ Duplicates are checked when adding: the same address already in the list (not co
 An FTS5 table (`downloads_fts`: name, address, category; one row per download, rowid = download id) is kept in step by triggers on `downloads`, so no code path can forget to index. Migration 004 backfills existing rows. What a person types is reduced to words of letters and digits, each matched as a prefix and all required, so `ubu 24` finds `ubuntu-24.04.iso` and no input can be an FTS syntax error. Filters (status, added-since, added-before, category name) combine with the text; results are newest first. Dates in the CLI are days in the local time zone, and `--until` includes the whole day.
 
 The `log` table now gets a line when a download is added, completes, fails or is scheduled for a retry; `mohona log <id>` shows it. Renaming a category does not re-index old rows (it is a rare action and the name is only a search aid).
+
+## 0018 – Network changes
+
+The manager watches the local address the system would use to reach a public address (IPv4 and IPv6), found by "connecting" a UDP socket, which sends nothing. When it changes, or the network goes away, running downloads are stopped with their progress kept and put back in the queue, and nothing starts. When the network has been online and unchanged for `network_settle` (3 s), downloads start again from where they were. If there is no network when the manager starts, downloads wait the same way.
+
+Why this and not a list of adapters: virtual adapters (Hyper-V, WSL, Docker) appear and disappear all the time and would stop downloads for nothing, while a Wi-Fi switch, a cable pulled, or a VPN going up or down changes the default route's address. What it cannot see: a change that leaves the address the same (a different router with the same IP range), which the normal automatic retries still handle. Checks run every 3 s (`network_check`). The probe is replaceable, so tests drive it.

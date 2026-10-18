@@ -86,3 +86,7 @@ mohona history --status failed --since 2026-10-01 --until 2026-10-17
 mohona history --category Video -l 20
 mohona log 3                                # what happened to download #3
 ```
+
+### Network changes
+
+`queue run` notices a Wi-Fi switch, a VPN going up or down, or the network going away: it pauses the downloads, keeps their progress, and continues when the new network is steady. `mohona network` shows the addresses it watches.

@@ -501,6 +501,19 @@ async fn run_queue(store: Store, then: Option<(AfterAction, u32)>) -> Result<(),
                     Ok(ManagerEvent::QueueWindow { open, .. }) => {
                         println!("{}", if open { "The schedule opened." } else { "The schedule closed; downloads are stopped until it opens." });
                     }
+                    Ok(ManagerEvent::NetworkChanged { online }) => {
+                        println!(
+                            "{}",
+                            if online {
+                                "The network changed; downloads are paused until it is steady."
+                            } else {
+                                "No network; downloads are paused until it is back."
+                            }
+                        );
+                    }
+                    Ok(ManagerEvent::NetworkResumed) => {
+                        println!("The network is back; continuing downloads.");
+                    }
                     Ok(ManagerEvent::RetryScheduled { id, attempt, wait, message }) => {
                         println!(
                             "#{id} network problem ({message}); trying again in {} s (retry {attempt})",

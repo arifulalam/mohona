@@ -9,6 +9,7 @@ use mohona_manager::{
     ActionRunner, AddRequest, AddResult, AfterAction, Clock, DownloadStatus as Status, Duplicate,
     DuplicatePolicy, Manager, ManagerConfig, ManagerEvent, Moment, Schedule, SpeedTarget, Window,
 };
+use mohona_manager::{Network, NetworkProbe, NetworkState};
 use mohona_net::{ClientConfig, HttpClient};
 use mohona_store::Store;
 use mohona_testserver::{bind, content_byte, serve, Config};
@@ -37,6 +38,34 @@ fn client() -> HttpClient {
     .unwrap()
 }
 
+/// A network that tests can switch.
+#[derive(Clone)]
+struct FakeNet(Arc<Mutex<NetworkState>>);
+
+impl FakeNet {
+    fn at(address: Option<&str>) -> Self {
+        FakeNet(Arc::new(Mutex::new(NetworkState {
+            v4: address.map(|a| a.parse().unwrap()),
+            v6: None,
+        })))
+    }
+    fn online() -> Self {
+        Self::at(Some("192.168.1.10"))
+    }
+    fn set(&self, address: Option<&str>) {
+        *self.0.lock().unwrap() = NetworkState {
+            v4: address.map(|a| a.parse().unwrap()),
+            v6: None,
+        };
+    }
+}
+
+impl NetworkProbe for FakeNet {
+    fn state(&self) -> NetworkState {
+        *self.0.lock().unwrap()
+    }
+}
+
 fn config() -> ManagerConfig {
     ManagerConfig {
         adaptive: false,
@@ -52,6 +81,10 @@ fn config() -> ManagerConfig {
         },
         max_retries: 3,
         retry_delay: Duration::from_millis(100),
+        // The machine running the tests may have no network at all.
+        network: Network(Arc::new(FakeNet::online())),
+        network_check: Duration::from_millis(50),
+        network_settle: Duration::from_millis(200),
         ..ManagerConfig::default()
     }
 }
@@ -1170,4 +1203,102 @@ async fn it_keeps_a_log_and_can_be_searched() {
         .unwrap();
     assert_eq!(found.len(), 1);
     assert_eq!(found[0].id, id);
+}
+
+fn manager_with_network(db: &Path, net: &FakeNet) -> Manager {
+    let config = ManagerConfig {
+        network: Network(Arc::new(net.clone())),
+        ..config()
+    };
+    Manager::start(Store::open(db).unwrap(), client(), config).unwrap()
+}
+
+#[tokio::test]
+async fn it_pauses_when_the_network_changes_and_resumes_after() {
+    let addr = start_server().await;
+    let dir = tempfile::tempdir().unwrap();
+    let net = FakeNet::online();
+    let manager = manager_with_network(&dir.path().join("m.db"), &net);
+    let mut events = manager.subscribe();
+    let id = manager
+        .add(
+            format!("http://{addr}/file?size=1000000&limit=250000"),
+            dir.path(),
+        )
+        .await
+        .unwrap();
+    wait_for(&manager, id, Status::Downloading).await;
+    wait_for_bytes(&manager, id, 50_000).await;
+
+    // Wi-Fi switch: a different local address.
+    net.set(Some("10.20.30.40"));
+    wait_for(&manager, id, Status::Queued).await;
+    let kept = manager.list().await.unwrap()[0].downloaded;
+    assert!(kept > 0 && kept < 1_000_000, "progress is kept: {kept}");
+
+    // After the settle time it starts again and finishes.
+    wait_for(&manager, id, Status::Completed).await;
+    let row = manager.list().await.unwrap().remove(0);
+    let bytes = std::fs::read(row.path.unwrap()).unwrap();
+    assert_eq!(bytes.len(), 1_000_000);
+    assert!(bytes
+        .iter()
+        .enumerate()
+        .all(|(i, b)| *b == content_byte(i as u64)));
+
+    let mut changed = false;
+    let mut resumed = false;
+    while let Ok(event) = events.try_recv() {
+        match event {
+            ManagerEvent::NetworkChanged { online: true } => changed = true,
+            ManagerEvent::NetworkResumed => resumed = changed,
+            _ => {}
+        }
+    }
+    assert!(changed && resumed);
+}
+
+#[tokio::test]
+async fn it_waits_while_offline_and_goes_on_when_the_network_returns() {
+    let addr = start_server().await;
+    let dir = tempfile::tempdir().unwrap();
+    let net = FakeNet::at(None);
+    let manager = manager_with_network(&dir.path().join("m.db"), &net);
+    let id = manager
+        .add(format!("http://{addr}/file?size=20000"), dir.path())
+        .await
+        .unwrap();
+    tokio::time::sleep(Duration::from_millis(500)).await;
+    let row = manager.list().await.unwrap().remove(0);
+    assert_eq!(
+        row.status,
+        Status::Queued,
+        "nothing starts without a network"
+    );
+
+    net.set(Some("192.168.0.2"));
+    wait_for(&manager, id, Status::Completed).await;
+}
+
+#[tokio::test]
+async fn it_stops_downloads_when_the_network_goes_away() {
+    let addr = start_server().await;
+    let dir = tempfile::tempdir().unwrap();
+    let net = FakeNet::online();
+    let manager = manager_with_network(&dir.path().join("m.db"), &net);
+    let id = manager
+        .add(
+            format!("http://{addr}/file?size=1000000&limit=250000"),
+            dir.path(),
+        )
+        .await
+        .unwrap();
+    wait_for_bytes(&manager, id, 50_000).await;
+    net.set(None);
+    wait_for(&manager, id, Status::Queued).await;
+    tokio::time::sleep(Duration::from_millis(600)).await;
+    let row = manager.list().await.unwrap().remove(0);
+    assert_eq!(row.status, Status::Queued, "stays stopped while offline");
+    net.set(Some("192.168.1.10"));
+    wait_for(&manager, id, Status::Completed).await;
 }

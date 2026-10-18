@@ -11,10 +11,12 @@ use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
 mod actions;
+mod network;
 mod routing;
 mod schedule;
 
 pub use actions::{ActionRunner, AfterAction, SystemRunner};
+pub use network::{NetworkProbe, NetworkState, SystemNetwork};
 pub use schedule::{parse_days, Moment, Schedule, Window};
 
 use mohona_core::{
@@ -120,6 +122,14 @@ pub enum ManagerEvent {
         /// What went wrong.
         message: String,
     },
+    /// The network changed (or went away). Running downloads were stopped
+    /// with their progress kept; they start again when it is steady.
+    NetworkChanged {
+        /// Whether there is any network now.
+        online: bool,
+    },
+    /// The network is steady again and downloads were started.
+    NetworkResumed,
     /// A queue's schedule opened or closed.
     QueueWindow {
         /// The queue.
@@ -268,6 +278,8 @@ enum Intent {
     Shutdown,
     /// The queue's schedule closed.
     Schedule,
+    /// The network changed.
+    Network,
 }
 
 enum Command {
@@ -352,6 +364,22 @@ impl std::fmt::Debug for Clock {
     }
 }
 
+/// What the manager asks about the network. Tests replace it.
+#[derive(Clone)]
+pub struct Network(pub Arc<dyn NetworkProbe>);
+
+impl Default for Network {
+    fn default() -> Self {
+        Network(Arc::new(SystemNetwork))
+    }
+}
+
+impl std::fmt::Debug for Network {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("Network")
+    }
+}
+
 /// The thing that carries out after-download actions. Tests replace it.
 #[derive(Clone)]
 pub struct Runner(pub Arc<dyn ActionRunner>);
@@ -393,6 +421,13 @@ pub struct ManagerConfig {
     pub runner: Runner,
     /// The length of one countdown second (only tests change it).
     pub countdown_tick: Duration,
+    /// Tells the manager about the network.
+    pub network: Network,
+    /// How often the network is looked at.
+    pub network_check: Duration,
+    /// How long the network must stay the same before downloads start again
+    /// after a change.
+    pub network_settle: Duration,
 }
 
 impl Default for ManagerConfig {
@@ -407,6 +442,9 @@ impl Default for ManagerConfig {
             schedule_check: Duration::from_secs(10),
             runner: Runner::default(),
             countdown_tick: Duration::from_secs(1),
+            network: Network::default(),
+            network_check: Duration::from_secs(3),
+            network_settle: Duration::from_secs(3),
         }
     }
 }
@@ -427,6 +465,7 @@ impl Manager {
             .setting(GLOBAL_SPEED_KEY)?
             .and_then(|text| text.parse::<u64>().ok())
             .unwrap_or(0);
+        let net = network::Watch::new(config.network.0.state(), std::time::Instant::now());
         let actor = Actor {
             store,
             client,
@@ -445,6 +484,7 @@ impl Manager {
             finished_since_armed: 0,
             countdown: None,
             generation: 0,
+            net,
         };
         tokio::spawn(actor.run());
         Ok(Manager { commands, events })
@@ -654,6 +694,7 @@ struct Actor {
     /// ignored) and the seconds left.
     countdown: Option<(u64, u32)>,
     generation: u64,
+    net: network::Watch,
 }
 
 impl Actor {
@@ -662,6 +703,7 @@ impl Actor {
         self.pump();
         let mut shutdown: Option<oneshot::Sender<()>> = None;
         let mut check = tokio::time::interval(self.config.schedule_check);
+        let mut net_check = tokio::time::interval(self.config.network_check);
         loop {
             tokio::select! {
                 command = self.inbox.recv() => {
@@ -688,6 +730,11 @@ impl Actor {
                     if !self.stopping {
                         self.apply_schedules();
                         self.check_idle();
+                    }
+                }
+                _ = net_check.tick() => {
+                    if !self.stopping {
+                        self.watch_network();
                     }
                 }
             }
@@ -872,6 +919,36 @@ impl Actor {
     }
 
     /// Stop what a queue is running and put what waits to retry back in line.
+    /// Look at the network: after a change, stop what is running (it keeps
+    /// its progress) and hold everything back until the network is steady.
+    fn watch_network(&mut self) {
+        let state = self.config.network.0.state();
+        let step = self
+            .net
+            .observe(state, std::time::Instant::now(), self.config.network_settle);
+        match step {
+            network::Step::Nothing => {}
+            network::Step::Changed { online } => {
+                for running in self.running.values_mut() {
+                    if running.intent.is_none() {
+                        running.intent = Some(Intent::Network);
+                        running.cancel.cancel();
+                    }
+                }
+                if let Ok(rows) = self.store.list_downloads() {
+                    for row in rows.into_iter().filter(|r| r.status == Status::Retrying) {
+                        self.set_status(row.id, Status::Queued, None);
+                    }
+                }
+                self.emit(ManagerEvent::NetworkChanged { online });
+            }
+            network::Step::Resume => {
+                self.emit(ManagerEvent::NetworkResumed);
+                self.pump();
+            }
+        }
+    }
+
     fn close_queue(&mut self, queue_id: i64) {
         let Ok(rows) = self.store.list_downloads() else {
             return;
@@ -1018,7 +1095,7 @@ impl Actor {
                 if !self.stopping && !self.running.contains_key(&id) {
                     if let Ok(row) = self.row(id) {
                         if row.status == Status::Retrying {
-                            if self.queue_is_open(row.queue_id) {
+                            if self.queue_is_open(row.queue_id) && !self.net.holding() {
                                 self.start(row);
                             } else {
                                 self.set_status(row.id, Status::Queued, None);
@@ -1219,7 +1296,7 @@ impl Actor {
                 });
             }
             (Err(_), Some(Intent::Pause)) => self.set_status(id, Status::Paused, None),
-            (Err(_), Some(Intent::Schedule)) => {
+            (Err(_), Some(Intent::Schedule | Intent::Network)) => {
                 // The queue's window closed: wait for it to open again.
                 self.set_status(id, Status::Queued, None);
             }
@@ -1291,7 +1368,7 @@ impl Actor {
 
     /// Start whatever the queues have room for.
     fn pump(&mut self) {
-        if self.stopping {
+        if self.stopping || self.net.holding() {
             return;
         }
         let Ok(ids) = self.store.next_to_start() else {
