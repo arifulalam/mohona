@@ -65,9 +65,62 @@ pub enum NetError {
     #[error("invalid header: {0}")]
     InvalidHeader(String),
 
+    /// The server's certificate was not accepted.
+    #[error("the server's certificate cannot be trusted: {0}. If you trust this server, give the authority that signed it with --ca-file FILE, or skip the check for this download with --insecure")]
+    Tls(String),
+
+    /// The file given as a certificate authority cannot be used.
+    #[error("cannot use the certificate file {path}: {reason}")]
+    InvalidCaFile {
+        /// The file.
+        path: String,
+        /// What is wrong with it.
+        reason: String,
+    },
+
     /// The request failed before or while receiving the response.
     #[error("network error")]
-    Http(#[from] reqwest::Error),
+    Http(#[source] reqwest::Error),
+}
+
+impl From<reqwest::Error> for NetError {
+    fn from(error: reqwest::Error) -> Self {
+        match explain_certificate(&error) {
+            Some(reason) => NetError::Tls(reason),
+            None => NetError::Http(error),
+        }
+    }
+}
+
+/// If the error is about the server's certificate, say what is wrong in
+/// plain words.
+fn explain_certificate(error: &reqwest::Error) -> Option<String> {
+    use std::error::Error;
+    // The debug form names the exact certificate problem even where the
+    // readable message does not.
+    let mut text = format!("{error:?} ");
+    let mut source: Option<&dyn Error> = Some(error);
+    while let Some(e) = source {
+        text.push_str(&e.to_string());
+        text.push(' ');
+        source = e.source();
+    }
+    let lower = text.to_ascii_lowercase();
+    if !(lower.contains("certificate") || lower.contains("unknownissuer")) {
+        return None;
+    }
+    let reason = if lower.contains("unknownissuer") || lower.contains("unknown issuer") {
+        "it was not signed by an authority this computer trusts"
+    } else if lower.contains("expired") {
+        "it has expired"
+    } else if lower.contains("notvalidyet") || lower.contains("not valid yet") {
+        "it is not valid yet (is this computer's clock right?)"
+    } else if lower.contains("notvalidforname") || lower.contains("not valid for name") {
+        "it is for a different name than the one in the address"
+    } else {
+        "it was refused"
+    };
+    Some(reason.to_string())
 }
 
 /// Say what a `401` means in this case, and what to do about it.
@@ -116,6 +169,8 @@ impl NetError {
             | NetError::UnsupportedScheme(_)
             | NetError::InvalidHeader(_)
             | NetError::InvalidProxy(_)
+            | NetError::Tls(_)
+            | NetError::InvalidCaFile { .. }
             | NetError::ProxyAuthRequired
             | NetError::WrongRange(_) => Failure::Fatal,
         }

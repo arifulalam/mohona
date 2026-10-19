@@ -131,6 +131,14 @@ pub(crate) struct RequestArgs {
     /// Do not use any proxy, not even the system one
     #[arg(long)]
     no_proxy: bool,
+    /// Also trust the certificate authority in this PEM file (for a server
+    /// with its own certificate)
+    #[arg(long, value_name = "FILE")]
+    ca_file: Option<std::path::PathBuf>,
+    /// Accept any certificate, even a wrong or expired one. Unsafe: use only
+    /// for a server you know
+    #[arg(long)]
+    insecure: bool,
 }
 
 impl RequestArgs {
@@ -151,6 +159,22 @@ impl RequestArgs {
             context.proxy = Some(mohona_net::ProxyChoice::parse(proxy).map_err(|e| e.to_string())?);
         } else if self.no_proxy {
             context.proxy = Some(mohona_net::ProxyChoice::Direct);
+        }
+        if self.insecure || self.ca_file.is_some() {
+            let ca_file = match &self.ca_file {
+                // Saved with the download, so keep the full path.
+                Some(path) => Some(
+                    std::path::absolute(path)
+                        .map_err(|e| format!("{}: {e}", path.display()))?
+                        .to_string_lossy()
+                        .into_owned(),
+                ),
+                None => None,
+            };
+            context.tls = Some(mohona_net::TlsOptions {
+                insecure: self.insecure,
+                ca_file,
+            });
         }
         Ok(context)
     }

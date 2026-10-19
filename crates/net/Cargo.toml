@@ -27,4 +27,5 @@ aws-lc-rs = { version = "1.18", features = ["prebuilt-nasm"] }
 
 [dev-dependencies]
 mohona-testserver = { path = "../../tools/testserver" }
+tempfile = "3"
 tokio.workspace = true

@@ -9,6 +9,7 @@
 
 mod digest;
 pub mod proxy;
+pub mod tls;
 
 use std::collections::HashMap;
 use std::io;
@@ -17,8 +18,8 @@ use std::sync::atomic::{AtomicU64, AtomicUsize, Ordering};
 use std::sync::Arc;
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
-use tokio::io::{AsyncBufReadExt, AsyncWrite, AsyncWriteExt, BufReader};
-use tokio::net::{TcpListener, TcpStream};
+use tokio::io::{AsyncBufReadExt, AsyncRead, AsyncWrite, AsyncWriteExt, BufReader};
+use tokio::net::TcpListener;
 
 /// Default size of the generated file: 1 GiB.
 pub const DEFAULT_SIZE: u64 = 1 << 30;
@@ -140,6 +141,15 @@ pub async fn bind(addr: SocketAddr) -> io::Result<TcpListener> {
 
 /// Accept connections forever.
 pub async fn serve(listener: TcpListener, config: Config) -> io::Result<()> {
+    serve_with(listener, config, None).await
+}
+
+/// Accept connections forever, over TLS when an acceptor is given.
+pub(crate) async fn serve_with(
+    listener: TcpListener,
+    config: Config,
+    tls: Option<tokio_rustls::TlsAcceptor>,
+) -> io::Result<()> {
     let shared = Arc::new(Shared {
         config,
         active: AtomicUsize::new(0),
@@ -147,9 +157,20 @@ pub async fn serve(listener: TcpListener, config: Config) -> io::Result<()> {
     });
     loop {
         let (stream, _) = listener.accept().await?;
+        let _ = stream.set_nodelay(true);
         let shared = Arc::clone(&shared);
+        let tls = tls.clone();
         tokio::spawn(async move {
-            let _ = handle_connection(stream, shared).await;
+            match tls {
+                None => {
+                    let _ = handle_connection(stream, shared).await;
+                }
+                Some(acceptor) => {
+                    if let Ok(stream) = acceptor.accept(stream).await {
+                        let _ = handle_connection(stream, shared).await;
+                    }
+                }
+            }
         });
     }
 }
@@ -180,9 +201,11 @@ struct Request {
     headers: HashMap<String, String>,
 }
 
-async fn handle_connection(stream: TcpStream, config: Arc<Shared>) -> io::Result<()> {
-    let _ = stream.set_nodelay(true);
-    let (read_half, mut writer) = stream.into_split();
+async fn handle_connection<S>(stream: S, config: Arc<Shared>) -> io::Result<()>
+where
+    S: AsyncRead + AsyncWrite + Unpin,
+{
+    let (read_half, mut writer) = tokio::io::split(stream);
     let mut reader = BufReader::new(read_half);
     loop {
         let Some(request) = read_request(&mut reader).await? else {

@@ -35,6 +35,8 @@ mohona get URL [-o FOLDER] [-c N] [-l SPEED] [-v] [request options]
 | `-u user:password` | Log in (Basic or Digest, when the server asks). Without `:password`, the `MOHONA_PASSWORD` environment variable is used. `user:pass@` in the URL also works |
 | `--proxy URL` | `http://`, `https://`, `socks5://` or `socks5h://` proxy; put `user:password@` in it for a login |
 | `--no-proxy` | Ignore every proxy, even the system one |
+| `--ca-file FILE` | Also trust the certificate authority in this PEM file (a server with its own certificate). The full path is saved with the download |
+| `--insecure` | Accept any certificate, even wrong or expired. Unsafe: only for a server you know |
 
 ### Example: plain download
 
@@ -69,6 +71,15 @@ mohona get URL --no-proxy
 
 `socks5h` lets the proxy look up the name; `socks5` looks it up on your computer.
 
+### Example: a server with its own certificate
+
+```
+mohona get https://nas.local/file.zip --ca-file my-ca.pem
+mohona get https://nas.local/file.zip --insecure
+```
+
+Certificates are checked by default. Prefer `--ca-file`: it still protects you against anyone else pretending to be the server. `--insecure` is for one download at a time and is never turned on by itself.
+
 ### Errors you may see
 
 | Message | What it means / what to do |
@@ -82,6 +93,9 @@ mohona get URL --no-proxy
 | `invalid proxy: "ftp://x": use http://, https://, socks5:// or socks5h://` | Fix the proxy address |
 | `the argument '--no-proxy' cannot be used with '--proxy <URL>'` | Use one or the other |
 | `invalid header: "Bad Header" is not like Name: value` | Headers need a colon |
+| `the server's certificate cannot be trusted: it was not signed by an authority this computer trusts ...` | Use `--ca-file` with the server's authority, or `--insecure` if you accept the risk |
+| `... : it has expired` / `it is for a different name than the one in the address` / `it is not valid yet (is this computer's clock right?)` | The server's certificate has a real problem; tell its owner. A wrong clock on your PC causes "not valid yet" |
+| `cannot use the certificate file X: ...` | The `--ca-file` is missing or is not a PEM certificate |
 | `network error: ... Connection refused` | The server (or your proxy) is not listening there |
 | `proxy asked for a login` (407) | Put `user:password@` in the `--proxy` address |
 

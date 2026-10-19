@@ -104,7 +104,7 @@ async fn http_proxy(mut client: TcpStream, auth: Login, state: ProxyHandle) -> i
         }
     }
     if method.eq_ignore_ascii_case("CONNECT") {
-        let mut upstream = TcpStream::connect(target).await?;
+        let mut upstream = connect_upstream(target).await?;
         state.targets.lock().unwrap().push(target.to_string());
         state.connections.fetch_add(1, Ordering::SeqCst);
         client
@@ -130,7 +130,7 @@ async fn http_proxy(mut client: TcpStream, auth: Login, state: ProxyHandle) -> i
     } else {
         format!("{host}:80")
     };
-    let mut upstream = TcpStream::connect(&host_port).await?;
+    let mut upstream = connect_upstream(&host_port).await?;
     state.targets.lock().unwrap().push(host_port);
     state.connections.fetch_add(1, Ordering::SeqCst);
     let mut forwarded = format!("{method} {path} {version}\r\n");
@@ -229,7 +229,7 @@ async fn socks5(mut client: TcpStream, auth: Login, state: ProxyHandle) -> io::R
         client.write_all(&[5, 7, 0, 1, 0, 0, 0, 0, 0, 0]).await?;
         return Ok(());
     }
-    let Ok(mut upstream) = TcpStream::connect(&target).await else {
+    let Ok(mut upstream) = connect_upstream(&target).await else {
         client.write_all(&[5, 5, 0, 1, 0, 0, 0, 0, 0, 0]).await?;
         return Ok(());
     };
@@ -238,4 +238,21 @@ async fn socks5(mut client: TcpStream, auth: Login, state: ProxyHandle) -> io::R
     client.write_all(&[5, 0, 0, 1, 0, 0, 0, 0, 0, 0]).await?;
     copy_bidirectional(&mut client, &mut upstream).await?;
     Ok(())
+}
+
+/// Connect to a target. The test server listens on IPv4 only, but on some
+/// systems (Windows) "localhost" turns into the IPv6 address first, so a
+/// refused local connection is tried again on 127.0.0.1.
+async fn connect_upstream(target: &str) -> std::io::Result<TcpStream> {
+    match TcpStream::connect(target).await {
+        Ok(stream) => Ok(stream),
+        Err(error) => {
+            let port = target.rsplit_once(':').map(|(_, port)| port);
+            let local = target.starts_with("localhost:") || target.starts_with("[::1]:");
+            match (local, port) {
+                (true, Some(port)) => TcpStream::connect(format!("127.0.0.1:{port}")).await,
+                _ => Err(error),
+            }
+        }
+    }
 }

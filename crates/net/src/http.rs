@@ -16,6 +16,7 @@ use reqwest::{Method, RequestBuilder};
 use crate::auth::{self, Scheme};
 use crate::{
     filename_from_content_disposition, Credentials, NetError, ProxyChoice, RequestContext,
+    TlsOptions,
 };
 
 /// Settings for [`HttpClient`].
@@ -99,7 +100,7 @@ impl HttpClient {
     pub fn new(config: &ClientConfig) -> Result<Self, NetError> {
         Ok(Self {
             config: config.clone(),
-            client: build_client(config, None)?,
+            client: build_client(config, None, None)?,
             extra: HeaderMap::new(),
             credentials: None,
             answered: Arc::default(),
@@ -108,7 +109,11 @@ impl HttpClient {
 }
 
 /// Build the underlying client. `proxy` replaces the system's settings.
-fn build_client(config: &ClientConfig, proxy: Option<&ProxyChoice>) -> Result<Client, NetError> {
+fn build_client(
+    config: &ClientConfig,
+    proxy: Option<&ProxyChoice>,
+    tls: Option<&TlsOptions>,
+) -> Result<Client, NetError> {
     {
         let mut headers = HeaderMap::new();
         // Ask for the file as stored. Compression would change sizes and
@@ -119,6 +124,26 @@ fn build_client(config: &ClientConfig, proxy: Option<&ProxyChoice>) -> Result<Cl
             .default_headers(headers)
             .connect_timeout(config.connect_timeout)
             .read_timeout(config.read_timeout);
+        if let Some(tls) = tls {
+            if tls.insecure {
+                builder = builder.danger_accept_invalid_certs(true);
+            }
+            if let Some(path) = &tls.ca_file {
+                let bad = |reason: String| NetError::InvalidCaFile {
+                    path: path.clone(),
+                    reason,
+                };
+                let pem = std::fs::read(path).map_err(|e| bad(e.to_string()))?;
+                let certificates =
+                    reqwest::Certificate::from_pem_bundle(&pem).map_err(|e| bad(e.to_string()))?;
+                if certificates.is_empty() {
+                    return Err(bad("it holds no certificate".into()));
+                }
+                for certificate in certificates {
+                    builder = builder.add_root_certificate(certificate);
+                }
+            }
+        }
         match proxy {
             Some(ProxyChoice::Direct) => builder = builder.no_proxy(),
             Some(ProxyChoice::Url(address)) => {
@@ -140,9 +165,10 @@ impl HttpClient {
     pub fn with_context(&self, context: &RequestContext) -> Result<Self, NetError> {
         // A proxy is part of the connection, so a download with its own
         // proxy gets its own connections. Others share this client's.
-        let client = match &context.proxy {
-            Some(choice) => build_client(&self.config, Some(choice))?,
-            None => self.client.clone(),
+        let client = if context.proxy.is_some() || context.tls.is_some() {
+            build_client(&self.config, context.proxy.as_ref(), context.tls.as_ref())?
+        } else {
+            self.client.clone()
         };
         Ok(Self {
             config: self.config.clone(),
@@ -182,7 +208,7 @@ impl HttpClient {
             Ok(response) => {
                 probe_from_range_response(&response, from_head, &url, self.credentials.is_some())
             }
-            Err(error) => from_head.ok_or(NetError::Http(error)),
+            Err(error) => from_head.ok_or(NetError::from(error)),
         }
     }
 

@@ -122,3 +122,12 @@ mohona queue add URL --proxy ...   # saved with the download
 ```
 
 `socks5h` lets the proxy look up the name; `socks5` looks it up here. Without either flag, the system proxy is used.
+
+### Certificates
+
+HTTPS certificates are checked. For a server with its own certificate:
+
+```
+mohona get https://host/file --ca-file my-ca.pem   # trust this authority too
+mohona get https://host/file --insecure            # skip the check (unsafe)
+```

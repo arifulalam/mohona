@@ -317,3 +317,60 @@ fn proxy_flags_send_the_download_through_the_proxy() {
     assert!(out.status.success());
     assert_eq!(proxy.relayed(), before);
 }
+
+#[test]
+fn certificate_flags_decide_whether_a_private_https_server_is_trusted() {
+    use mohona_testserver::tls::{serve_tls, Certificates};
+    let certificates = Certificates::new(false);
+    let rt = tokio::runtime::Runtime::new().unwrap();
+    let port = rt.block_on(async {
+        let listener = bind("127.0.0.1:0".parse().unwrap()).await.unwrap();
+        let port = listener.local_addr().unwrap().port();
+        let served = Certificates::clone_for_server(&certificates);
+        tokio::spawn(async move {
+            let _ = serve_tls(
+                listener,
+                Config {
+                    default_size: 30_000,
+                },
+                &served,
+            )
+            .await;
+        });
+        port
+    });
+    let dir = tempfile::tempdir().unwrap();
+    let ca = dir.path().join("ca.pem");
+    std::fs::write(&ca, &certificates.ca_pem).unwrap();
+    let url = format!("https://localhost:{port}/file");
+    let get = |extra: &[&str]| {
+        Command::new(env!("CARGO_BIN_EXE_mohona"))
+            .args(["get", &url, "-o"])
+            .arg(dir.path().join("out"))
+            .args(extra)
+            .output()
+            .unwrap()
+    };
+
+    let strict = get(&[]);
+    assert!(!strict.status.success());
+    let message = String::from_utf8_lossy(&strict.stderr);
+    assert!(
+        message.contains("certificate") && message.contains("--ca-file"),
+        "{message}"
+    );
+
+    let with_ca = get(&["--ca-file", ca.to_str().unwrap()]);
+    assert!(
+        with_ca.status.success(),
+        "{}",
+        String::from_utf8_lossy(&with_ca.stderr)
+    );
+
+    let insecure = get(&["--insecure"]);
+    assert!(
+        insecure.status.success(),
+        "{}",
+        String::from_utf8_lossy(&insecure.stderr)
+    );
+}

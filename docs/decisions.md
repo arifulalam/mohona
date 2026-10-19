@@ -214,3 +214,13 @@ A `401` now becomes its own error (`NetError::Unauthorized`) that names the kind
 **Errors.** A proxy that asks for a login we did not give is reported as such (407), not as a mystery failure.
 
 **Tests.** Test proxies count what they relay, so tests prove the traffic really went through them, including login, wrong login, and socks5 (address) versus socks5h (name).
+
+## ADR-0023: Certificates are checked strictly, with two deliberate exceptions
+
+**Decision.** HTTPS certificates are always checked against the computer's trusted authorities. A download may add its own authority (`--ca-file`, PEM) or skip the check (`--insecure`). Both are stored in the download's request context, so they apply to that download only and survive restarts. There is no global "ignore certificates" setting and `--insecure` is never implied.
+
+**Why.** Skipping the check silently makes every download readable and changeable by anyone on the path. Private servers are real, so the safer way out (trust one extra authority) is offered first and named in the error message.
+
+**Errors.** A refused certificate is its own error, not retried, explaining the cause (unknown authority, expired, not yet valid, wrong name) and the two ways out.
+
+**Tests.** The test server can speak HTTPS with a generated authority and certificate, expired or not, so each case is exercised for real.

@@ -11,5 +11,7 @@ publish = false
 base64 = "0.22"
 clap.workspace = true
 md-5 = "0.10"
+rcgen = "0.14.7"
 sha2 = "0.10"
 tokio.workspace = true
+tokio-rustls = "0.26.6"

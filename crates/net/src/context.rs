@@ -87,6 +87,22 @@ pub struct RequestContext {
     /// system's proxy settings apply.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub proxy: Option<ProxyChoice>,
+    /// How to check the server's certificate. Without it, the computer's
+    /// trusted authorities are used and anything else is refused.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub tls: Option<TlsOptions>,
+}
+
+/// Changes to the certificate check, for one download.
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct TlsOptions {
+    /// Accept any certificate, even a wrong or expired one. Unsafe: anyone on
+    /// the way can read and change the download.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub insecure: bool,
+    /// A file (PEM) with an extra certificate authority to trust.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub ca_file: Option<String>,
 }
 
 impl fmt::Debug for RequestContext {
@@ -97,6 +113,7 @@ impl fmt::Debug for RequestContext {
             .field("user_agent", &self.user_agent)
             .field("credentials", &self.credentials)
             .field("proxy", &self.proxy)
+            .field("tls", &self.tls)
             .field(
                 "headers",
                 &self.headers.iter().map(|(n, _)| n).collect::<Vec<_>>(),
@@ -127,6 +144,7 @@ impl RequestContext {
             && self.headers.is_empty()
             && self.credentials.is_none()
             && self.proxy.is_none()
+            && self.tls.is_none()
     }
 
     /// Parse `Name: value` (the way `curl -H` takes it) and add it.

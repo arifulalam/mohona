@@ -11,7 +11,7 @@ mod error;
 mod http;
 
 pub use auth::{split_userinfo, Credentials};
-pub use context::{ProxyChoice, RequestContext};
+pub use context::{ProxyChoice, RequestContext, TlsOptions};
 pub use disposition::filename_from_content_disposition;
 pub use error::{Failure, NetError};
 pub use http::{Body, ClientConfig, HttpClient, Probe};
