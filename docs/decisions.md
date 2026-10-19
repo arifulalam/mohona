@@ -202,3 +202,5 @@ Rules that keep the password safe:
 - `Debug` output hides the password. On the command line: `-u user:password`, or `-u user` with `MOHONA_PASSWORD` set (a password typed on the command line stays in shell history).
 
 Limits: the password is saved in the database in plain text with the download's request details (same limit as ADR-0020; keychain comes later). Basic over plain `http://` sends the password readable on the network; the server decides which scheme it asks for, so use `https://` where it matters. `auth-int`, `userhash`, NTLM and Negotiate are not supported (NTLM and Negotiate are last in this phase and optional).
+
+A `401` now becomes its own error (`NetError::Unauthorized`) that names the kinds of login the server asked for and says what to do: give `-u`, the user name or password was refused, the server wants something Mohona cannot do (Bearer, NTLM, Negotiate), or it did not say how to log in (a web login page: use `--cookie`).

@@ -35,6 +35,8 @@ Endpoints
               Options: alg=sha256 (default md5), qop=none (the old form),
               expire=<n> (a nonce stops working after n answers; the server
               then says stale=true)
+  /bearer     always 401, asking for a Bearer token
+  /silent401  always 401, without saying how to log in
   /login      sets the cookie session=ok
   /cookie     like /file, but needs the cookie session=ok
   /referrer   like /file, but needs a Referer header
@@ -393,6 +395,30 @@ async fn route<W: AsyncWrite + Unpin>(
                     Ok(keep_alive)
                 }
             }
+        }
+        "/bearer" => {
+            simple(
+                writer,
+                "401 Unauthorized",
+                "bearer token required\n",
+                &[("WWW-Authenticate", "Bearer realm=\"mohona\"")],
+                keep_alive,
+                head_only,
+            )
+            .await?;
+            Ok(keep_alive)
+        }
+        "/silent401" => {
+            simple(
+                writer,
+                "401 Unauthorized",
+                "log in on the web page\n",
+                &[],
+                keep_alive,
+                head_only,
+            )
+            .await?;
+            Ok(keep_alive)
         }
         "/login" => {
             simple(

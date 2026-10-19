@@ -152,7 +152,9 @@ impl HttpClient {
             .send(Method::GET, &url, |r| r.header(RANGE, "bytes=0-0"))
             .await
         {
-            Ok(response) => probe_from_range_response(&response, from_head, &url),
+            Ok(response) => {
+                probe_from_range_response(&response, from_head, &url, self.credentials.is_some())
+            }
             Err(error) => from_head.ok_or(NetError::Http(error)),
         }
     }
@@ -162,7 +164,7 @@ impl HttpClient {
         let url = parse_url(url)?;
         let response = self.send(Method::GET, &url, |r| r).await?;
         if !response.status().is_success() {
-            return Err(status_error(&response, &url));
+            return Err(status_error(&response, &url, self.credentials.is_some()));
         }
         Ok(Body { response })
     }
@@ -211,7 +213,7 @@ impl HttpClient {
                 status.as_u16()
             )))
         } else {
-            Err(status_error(&response, &url))
+            Err(status_error(&response, &url, self.credentials.is_some()))
         }
     }
 }
@@ -301,7 +303,22 @@ fn request_uri(url: &Url) -> String {
     }
 }
 
-fn status_error(response: &Response, url: &Url) -> NetError {
+fn status_error(response: &Response, url: &Url, credentials_given: bool) -> NetError {
+    if response.status() == StatusCode::UNAUTHORIZED {
+        let offered = response
+            .headers()
+            .get_all(WWW_AUTHENTICATE)
+            .iter()
+            .filter_map(|value| value.to_str().ok())
+            .flat_map(auth::parse_challenges)
+            .map(|challenge| challenge.scheme)
+            .collect();
+        return NetError::Unauthorized {
+            url: url.to_string(),
+            offered,
+            credentials_given,
+        };
+    }
     NetError::Status {
         status: response.status().as_u16(),
         url: url.to_string(),
@@ -370,6 +387,7 @@ fn probe_from_range_response(
     response: &Response,
     from_head: Option<Probe>,
     url: &Url,
+    credentials_given: bool,
 ) -> Result<Probe, NetError> {
     let mut probe = describe(response);
     match response.status() {
@@ -390,7 +408,7 @@ fn probe_from_range_response(
             probe.accepts_ranges = false;
         }
         _ => {
-            return from_head.ok_or_else(|| status_error(response, url));
+            return from_head.ok_or_else(|| status_error(response, url, credentials_given));
         }
     }
     Ok(probe)

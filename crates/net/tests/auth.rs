@@ -50,7 +50,7 @@ async fn size_of(client: &HttpClient, url: &str) -> usize {
 }
 
 fn is_401(error: &NetError) -> bool {
-    matches!(error, NetError::Status { status: 401, .. })
+    matches!(error, NetError::Unauthorized { .. })
 }
 
 #[tokio::test]
@@ -151,4 +151,46 @@ async fn credentials_are_not_given_to_another_server() {
         size_of(&good(), &format!("http://{second}/auth")).await,
         200_000
     );
+}
+
+#[tokio::test]
+async fn a_401_says_what_to_do() {
+    let addr = start().await;
+    let none = HttpClient::new(&ClientConfig {
+        use_system_proxy: false,
+        ..ClientConfig::default()
+    })
+    .unwrap();
+    let text = |e: NetError| e.to_string();
+
+    let basic = format!("http://{addr}/auth");
+    let msg = text(none.get(&basic).await.err().unwrap());
+    assert!(
+        msg.contains("401") && msg.contains("Basic") && msg.contains("-u user:password"),
+        "{msg}"
+    );
+
+    let digest = format!("http://{addr}/digest");
+    let msg = text(
+        client_with("mohona", "no")
+            .get(&digest)
+            .await
+            .err()
+            .unwrap(),
+    );
+    assert!(
+        msg.contains("refused the user name or password") && msg.contains("Digest"),
+        "{msg}"
+    );
+
+    // A server that asks for something Mohona cannot do, or says nothing.
+    let bearer = format!("http://{addr}/bearer");
+    let msg = text(good().get(&bearer).await.err().unwrap());
+    assert!(
+        msg.contains("Bearer") && msg.contains("does not support"),
+        "{msg}"
+    );
+    let silent = format!("http://{addr}/silent401");
+    let msg = text(good().get(&silent).await.err().unwrap());
+    assert!(msg.contains("--cookie"), "{msg}");
 }

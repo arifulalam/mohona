@@ -36,6 +36,17 @@ pub enum NetError {
         retry_after: Option<Duration>,
     },
 
+    /// The server wants a login (`401`).
+    #[error("{}", explain_unauthorized(.url, .offered, *.credentials_given))]
+    Unauthorized {
+        /// The URL that was requested.
+        url: String,
+        /// The kinds of login the server named (`Basic`, `Bearer`, ...).
+        offered: Vec<String>,
+        /// Whether a user name and password were given.
+        credentials_given: bool,
+    },
+
     /// A byte range was requested but the server answered with something else,
     /// for example the whole file (status 200) or a different part.
     /// This also happens when the file changed on the server.
@@ -49,6 +60,29 @@ pub enum NetError {
     /// The request failed before or while receiving the response.
     #[error("network error")]
     Http(#[from] reqwest::Error),
+}
+
+/// Say what a `401` means in this case, and what to do about it.
+fn explain_unauthorized(url: &str, offered: &[String], credentials_given: bool) -> String {
+    let usable =
+        |name: &&String| name.eq_ignore_ascii_case("basic") || name.eq_ignore_ascii_case("digest");
+    let has_usable = offered.iter().any(|n| usable(&n));
+    let names = offered.join(", ");
+    let reason = if offered.is_empty() {
+        "it did not say how to log in. The site may use a login page and cookies instead: \
+         log in with your browser and pass its cookie with --cookie"
+            .to_string()
+    } else if !has_usable {
+        format!(
+            "it asks for {names}, which Mohona does not support (it can do Basic and Digest). \
+             For a token, send it as a header with -H \"Authorization: ...\""
+        )
+    } else if credentials_given {
+        format!("it refused the user name or password (it accepts {names})")
+    } else {
+        format!("it asks for a login ({names}): give one with -u user:password")
+    };
+    format!("the server answered 401 for {url}: {reason}")
 }
 
 impl NetError {
@@ -70,6 +104,7 @@ impl NetError {
                 }
             }
             NetError::InvalidUrl(_)
+            | NetError::Unauthorized { .. }
             | NetError::UnsupportedScheme(_)
             | NetError::InvalidHeader(_)
             | NetError::WrongRange(_) => Failure::Fatal,
