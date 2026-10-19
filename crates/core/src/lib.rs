@@ -11,6 +11,7 @@ mod error;
 mod filename;
 mod ledger;
 mod limiter;
+mod mirrors;
 mod parallel;
 mod retry;
 mod segments;

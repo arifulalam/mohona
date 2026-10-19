@@ -149,6 +149,11 @@ pub(crate) struct RequestArgs {
     /// server announces itself are checked
     #[arg(long)]
     find_checksum: bool,
+    /// Another address of the same file (can be repeated). The download uses
+    /// all of them together and moves on when one fails. They must hold the
+    /// same file; the size is checked, so use --checksum to be sure
+    #[arg(long = "mirror", value_name = "URL")]
+    mirrors: Vec<String>,
 }
 
 impl RequestArgs {
@@ -174,6 +179,7 @@ impl RequestArgs {
             context.checksum = Some(mohona_net::Checksum::parse(text).map_err(|e| e.to_string())?);
         }
         context.find_checksum = self.find_checksum;
+        context.mirrors.clone_from(&self.mirrors);
         if self.insecure || self.ca_file.is_some() {
             let ca_file = match &self.ca_file {
                 // Saved with the download, so keep the full path.

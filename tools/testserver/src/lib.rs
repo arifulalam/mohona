@@ -671,6 +671,21 @@ async fn serve_file<W: AsyncWrite + Unpin>(
         return Ok(keep_alive);
     }
 
+    // `broken` answers HEAD normally but fails every GET, like a mirror that
+    // looks fine until you ask it for data.
+    if request.query.contains_key("broken") && !head_only {
+        simple(
+            writer,
+            "500 Internal Server Error",
+            "broken on purpose\n",
+            &[],
+            keep_alive,
+            head_only,
+        )
+        .await?;
+        return Ok(keep_alive);
+    }
+
     let size = query_u64(request, "size").unwrap_or(config.config.default_size);
     let etag_tag = request.query.get("etag").map_or("1", String::as_str);
     let etag = format!("\"mohona-{size}-{etag_tag}\"");

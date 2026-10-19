@@ -486,3 +486,85 @@ fn checksum_flags_check_the_file_and_keep_a_bad_one() {
     assert!(String::from_utf8_lossy(&list.stdout).contains("failed"));
     assert_eq!(std::fs::read_dir(dir.path().join("q")).unwrap().count(), 1);
 }
+
+#[test]
+fn mirrors_are_used_by_get_and_saved_by_the_queue() {
+    use mohona_testserver::proxy::start_http_proxy;
+    let rt = tokio::runtime::Runtime::new().unwrap();
+    let (a, b, proxy) = rt.block_on(async {
+        let mut servers = Vec::new();
+        for _ in 0..2 {
+            let listener = bind("127.0.0.1:0".parse().unwrap()).await.unwrap();
+            servers.push(listener.local_addr().unwrap());
+            tokio::spawn(async move {
+                let _ = serve(
+                    listener,
+                    Config {
+                        default_size: 3_000_000,
+                    },
+                )
+                .await;
+            });
+        }
+        (servers[0], servers[1], start_http_proxy(None).await)
+    });
+    let dir = tempfile::tempdir().unwrap();
+    let proxy_url = format!("http://{}", proxy.addr);
+    let mirror = format!("http://{b}/file");
+    let seen = |server: std::net::SocketAddr| {
+        proxy
+            .targets
+            .lock()
+            .unwrap()
+            .iter()
+            .filter(|t| **t == server.to_string())
+            .count()
+    };
+
+    let got = Command::new(env!("CARGO_BIN_EXE_mohona"))
+        .current_dir(dir.path())
+        .args(["get", &format!("http://{a}/file"), "-o", "out"])
+        .args(["--mirror", &mirror, "--proxy", &proxy_url, "-c", "4"])
+        .output()
+        .unwrap();
+    assert!(
+        got.status.success(),
+        "{}",
+        String::from_utf8_lossy(&got.stderr)
+    );
+    assert!(seen(a) >= 2 && seen(b) >= 2, "a {} b {}", seen(a), seen(b));
+
+    let (before_a, before_b) = (seen(a), seen(b));
+    let add = Command::new(env!("CARGO_BIN_EXE_mohona"))
+        .current_dir(dir.path())
+        .args([
+            "queue",
+            "add",
+            &format!("http://{a}/file?size=3000000"),
+            "-o",
+            "q",
+        ])
+        .args([
+            "--mirror",
+            &format!("http://{b}/file?size=3000000"),
+            "--proxy",
+            &proxy_url,
+        ])
+        .output()
+        .unwrap();
+    assert!(add.status.success());
+    let run = Command::new(env!("CARGO_BIN_EXE_mohona"))
+        .current_dir(dir.path())
+        .args(["queue", "run"])
+        .output()
+        .unwrap();
+    assert!(
+        run.status.success(),
+        "{}",
+        String::from_utf8_lossy(&run.stderr)
+    );
+    assert!(
+        seen(a) > before_a && seen(b) > before_b,
+        "the saved mirror was used"
+    );
+}

@@ -11,8 +11,9 @@ use crate::cancel::CancelToken;
 use crate::filename::{reserve_unique_path, sanitize_filename, unique_path};
 use crate::ledger::{Ledger, ProgressStore, Sink};
 use crate::limiter::{Limits, RateLimit};
-use crate::parallel::{fetch_segmented, Job, MIN_SEGMENT};
-use crate::retry::{probe_with_retry, RetryPolicy};
+use crate::mirrors;
+use crate::parallel::{fetch_segmented, Job, Source, MIN_SEGMENT};
+use crate::retry::RetryPolicy;
 use crate::verify::{self, Verified};
 use crate::Error;
 
@@ -162,7 +163,7 @@ pub async fn download(
         scoped = client.with_context(&request.context)?;
         &scoped
     };
-    let probe = probe_with_retry(client, &request.url, &request.retry).await?;
+    let (probe, other_mirrors) = mirrors::probe_main(client, request, events).await?;
     let filename = sanitize_filename(probe.filename.as_deref().unwrap_or(""));
     fs::create_dir_all(&request.dest_dir).await?;
 
@@ -239,8 +240,23 @@ pub async fn download(
     .await;
 
     let limits = Limits(request.limits.clone());
+    if ranged_total.is_none() && !other_mirrors.is_empty() {
+        emit(
+            events,
+            Event::Note(
+                "mirrors are only used for files the server can send in pieces; using one address"
+                    .into(),
+            ),
+        )
+        .await;
+    }
     let fetched = match ranged_total {
         Some(total) => {
+            let mut sources = vec![Source {
+                url: probe.final_url.clone(),
+                etag: probe.etag.clone(),
+            }];
+            sources.extend(mirrors::usable(client, &other_mirrors, total, events).await);
             let template = Ledger {
                 version: 1,
                 url: url_key,
@@ -257,8 +273,7 @@ pub async fn download(
             fetch_segmented(
                 &Job {
                     client,
-                    url: &probe.final_url,
-                    etag: probe.etag.as_deref(),
+                    sources: &sources,
                     total,
                     connections: wanted,
                     policy: &request.retry,

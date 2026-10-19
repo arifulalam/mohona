@@ -237,3 +237,13 @@ A `401` now becomes its own error (`NetError::Unauthorized`) that names the kind
 - A repeat would give the same bytes, so a mismatch is not retried.
 
 **Stored** with the download in the request context, so it survives restarts.
+
+## ADR-0025: Mirrors are extra sources for the same file, checked by size
+
+**Decision.** A download may list other addresses of the same file (`--mirror`, stored in the request context). Each mirror is probed; it is used only if its size equals the main address's size and it accepts byte ranges. Segments are handed out across the usable addresses, a failing address is given up after repeated failures with no data, and its segments are taken by the others. If the main address cannot be reached at the start, the first mirror that answers is the main one. If the file cannot be fetched in pieces, mirrors are ignored.
+
+**Why.**
+- Spreading segments over servers adds their speeds and survives one of them failing, using the segment machinery that already exists.
+- The size is the only thing known cheaply about a mirror. It catches stale versions, not wrong content: the docs say so and point to `--checksum`, which verifies the whole file at the end.
+- Mirrors are never trusted with more than the main address would be: same cookies, login, proxy and certificate settings, and each address has its own `If-Range` tag so a changed file is noticed.
+- Mirrors are never fatal: every skip or failure is a note, and only "no address works" is an error.

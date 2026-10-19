@@ -35,6 +35,7 @@ mohona get URL [-o FOLDER] [-c N] [-l SPEED] [-v] [request options]
 | `-u user:password` | Log in (Basic or Digest, when the server asks). Without `:password`, the `MOHONA_PASSWORD` environment variable is used. `user:pass@` in the URL also works |
 | `--proxy URL` | `http://`, `https://`, `socks5://` or `socks5h://` proxy; put `user:password@` in it for a login |
 | `--no-proxy` | Ignore every proxy, even the system one |
+| `--mirror URL` | Another address of the same file; repeat for more. The download uses all addresses together and moves on when one fails (see below) |
 | `--ca-file FILE` | Also trust the certificate authority in this PEM file (a server with its own certificate). The full path is saved with the download |
 | `--insecure` | Accept any certificate, even wrong or expired. Unsafe: only for a server you know |
 
@@ -103,6 +104,19 @@ error: the file does not match its checksum: expected sha256:cdcd... but it is s
 ```
 
 With `queue add`, `--checksum` works for one address at a time. The download ends as `failed` (it is not retried: the same bytes would come again).
+
+### Example: mirrors
+
+```
+mohona get https://main.example.com/tool.iso --mirror https://mirror1.example.org/tool.iso --mirror https://mirror2.example.net/tool.iso --checksum sha256:... -o downloads
+```
+
+- The pieces of the file are spread over all addresses, so you get the speed of several servers at once.
+- An address that fails, or keeps failing, is dropped and its pieces go to another one. If the main address is down at the start, the first mirror that answers takes its place.
+- A mirror is used only if it has the **same size** and can send parts of the file. Others are skipped with a note (`the mirror ... is not used: it has a different size (...)`). Same size does not prove same content, so add `--checksum` when you can.
+- If the file cannot be sent in pieces, mirrors are not used (a note says so).
+- Mirrors are saved with a queued download (`queue add URL --mirror ...`).
+- Every address uses the same cookies, login, proxy and certificate settings.
 
 ### Errors you may see
 

@@ -29,6 +29,13 @@ Format: **what to run** → **what should happen**.
 - [ ] A large file (1 GB or more): the check takes a moment after the download and the numbers still match what `certutil -hashfile FILE SHA256` prints in Windows.
 - [ ] A site that sends a `Digest` or `Content-MD5` header (try a few downloads with `-v`): checked automatically with no flag.
 
+## Mirrors
+
+- [ ] A real file with a main address and one or more mirrors (a Linux ISO often has several): `get MAIN --mirror OTHER -v --checksum sha256:...` → downloads, the checksum matches, and the verbose output shows more than one address used.
+- [ ] Turn one address off midway (disconnect it, or use a wrong second address) → the download still finishes.
+- [ ] A mirror with an older version of the file (same name, different size) → skipped with a note, not mixed in.
+- [ ] Mirrors with the same size but different content cannot be told apart by size: confirm `--checksum` catches it.
+
 ## Logins and cookies against a real site
 
 - [ ] A real HTTP Basic site: `get URL -u user:password` → downloads; wrong password → `refused the user name or password`.

@@ -99,6 +99,10 @@ pub struct RequestContext {
     /// `.sha512`, `.sha1`, `.md5`) and check against it if there is one.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub find_checksum: bool,
+    /// Other addresses of the same file. The download uses them together
+    /// with the main address, and moves on to another when one fails.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub mirrors: Vec<String>,
 }
 
 /// Changes to the certificate check, for one download.
@@ -124,6 +128,7 @@ impl fmt::Debug for RequestContext {
             .field("tls", &self.tls)
             .field("checksum", &self.checksum)
             .field("find_checksum", &self.find_checksum)
+            .field("mirrors", &self.mirrors.len())
             .field(
                 "headers",
                 &self.headers.iter().map(|(n, _)| n).collect::<Vec<_>>(),
@@ -157,6 +162,7 @@ impl RequestContext {
             && self.tls.is_none()
             && self.checksum.is_none()
             && !self.find_checksum
+            && self.mirrors.is_empty()
     }
 
     /// Parse `Name: value` (the way `curl -H` takes it) and add it.

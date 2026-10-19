@@ -13,7 +13,7 @@
 //! segment is picked up again after a pause.
 
 use std::path::{Path, PathBuf};
-use std::sync::atomic::{AtomicU64, AtomicUsize, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU32, AtomicU64, AtomicUsize, Ordering};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
@@ -41,11 +41,28 @@ const PROGRESS_INTERVAL: Duration = Duration::from_millis(100);
 /// How often progress is saved to the ledger.
 const CHECKPOINT_INTERVAL: Duration = Duration::from_secs(1);
 
+/// One address the file can be fetched from.
+#[derive(Clone, Debug)]
+pub(crate) struct Source {
+    /// The address (after redirects).
+    pub url: String,
+    /// Sent as `If-Range` to this address, so a file that changed is noticed.
+    pub etag: Option<String>,
+}
+
+/// A source and what has gone wrong with it.
+struct SourceState {
+    source: Source,
+    /// Given up on: it keeps failing, or its file is not the same.
+    dead: AtomicBool,
+    /// Failed attempts in a row, without getting any data.
+    strikes: AtomicU32,
+}
+
 /// What a worker needs to know, shared by all of them.
 struct Shared {
     client: HttpClient,
-    url: String,
-    etag: Option<String>,
+    sources: Vec<SourceState>,
     part_path: PathBuf,
     policy: RetryPolicy,
     scheduler: Scheduler,
@@ -59,6 +76,22 @@ struct Shared {
 }
 
 impl Shared {
+    /// The first live source at or after `preferred` (going around), so
+    /// segments spread over the sources and a dead one is skipped.
+    fn pick_source(&self, preferred: usize) -> Option<usize> {
+        let count = self.sources.len();
+        (0..count)
+            .map(|step| (preferred + step) % count)
+            .find(|index| !self.sources[*index].dead.load(Ordering::Relaxed))
+    }
+
+    fn alive(&self) -> usize {
+        self.sources
+            .iter()
+            .filter(|state| !state.dead.load(Ordering::Relaxed))
+            .count()
+    }
+
     /// Whether this worker should stop now (and, if so, uses up one request).
     fn should_retire(&self) -> bool {
         let mut asked = self.retire.load(Ordering::Relaxed);
@@ -120,10 +153,9 @@ impl FetchFailed {
 /// What to fetch and where to put it.
 pub(crate) struct Job<'a> {
     pub client: &'a HttpClient,
-    /// The address to download from (after redirects).
-    pub url: &'a str,
-    /// Sent as `If-Range`, so a file that changed is noticed.
-    pub etag: Option<&'a str>,
+    /// The addresses to download from, the main one first. Segments are
+    /// spread over them, and a failing one is replaced by another.
+    pub sources: &'a [Source],
     /// Size of the file in bytes.
     pub total: u64,
     /// The most connections to use at once.
@@ -149,8 +181,7 @@ pub(crate) async fn fetch_segmented(
 ) -> Result<Fetched, FetchFailed> {
     let Job {
         client,
-        url,
-        etag,
+        sources,
         total,
         connections,
         policy,
@@ -173,10 +204,24 @@ pub(crate) async fn fetch_segmented(
         create.await.map_err(FetchFailed::discard)?;
     }
 
+    // An adaptive download starts as one long request, like a browser's, and
+    // the tuner cuts it up when more connections prove worth it. With
+    // mirrors it starts with a request to each, so all of them are used.
+    let first_connections = if policy.adaptive {
+        sources.len().clamp(1, connections.max(1))
+    } else {
+        connections
+    };
     let shared = Arc::new(Shared {
         client: client.clone(),
-        url: url.to_string(),
-        etag: etag.map(str::to_string),
+        sources: sources
+            .iter()
+            .map(|source| SourceState {
+                source: source.clone(),
+                dead: AtomicBool::new(false),
+                strikes: AtomicU32::new(0),
+            })
+            .collect(),
         part_path: part_path.to_path_buf(),
         policy: policy.clone(),
         limits: limits.clone(),
@@ -184,11 +229,7 @@ pub(crate) async fn fetch_segmented(
         // the tuner cuts it up when more connections prove worth it.
         scheduler: match resume {
             Some(saved) => Scheduler::restore(saved, MIN_SEGMENT),
-            None => Scheduler::new(
-                total,
-                if policy.adaptive { 1 } else { connections },
-                MIN_SEGMENT,
-            ),
+            None => Scheduler::new(total, first_connections, MIN_SEGMENT),
         },
         downloaded: AtomicU64::new(0),
         retire: AtomicUsize::new(0),
@@ -214,7 +255,7 @@ pub(crate) async fn fetch_segmented(
     // Adaptive downloads start with one connection and let the tuner add more;
     // the other segments wait for it (or for a finished worker), see
     // `Scheduler::adopt`. Otherwise every connection starts at once.
-    let start = if policy.adaptive { 1 } else { connections };
+    let start = first_connections;
     for claim in shared.scheduler.initial_claims() {
         if workers.len() < start {
             spawn_worker(&mut workers, &shared, claim, Duration::ZERO);
@@ -499,22 +540,67 @@ impl Attempt {
 /// has reached its new end, or when the server pushes back.
 async fn run_worker(shared: &Shared, id: usize) -> Result<Ended, Error> {
     let mut failures = 0u32;
+    // Where to look first. It starts from the segment's number, so the
+    // segments of a file with several mirrors spread over them.
+    let mut turn = id;
+    let mut last_error: Option<Error> = None;
     loop {
         let (_, position, end) = shared.scheduler.state(id);
         if position >= end {
             return Ok(Ended::Done);
         }
-        match attempt(shared, id, position, end).await {
+        let Some(source) = shared.pick_source(turn) else {
+            return Err(last_error
+                .unwrap_or_else(|| Error::Io(std::io::Error::other("no address is left to try"))));
+        };
+        match attempt(shared, id, position, end, source).await {
             Ok(Stop::Reached) => return Ok(Ended::Done),
             Ok(Stop::Retired) => return Ok(Ended::Retired { id }),
-            Err(Attempt::Fatal(error)) => return Err(error),
+            Err(Attempt::Fatal(error)) => {
+                // A mirror whose file is not the same is dropped; the others
+                // may still be right.
+                let changed = matches!(&error, Error::Net(NetError::WrongRange(_)));
+                if changed && shared.alive() > 1 {
+                    shared.sources[source].dead.store(true, Ordering::Relaxed);
+                    last_error = Some(error);
+                    turn = source + 1;
+                    continue;
+                }
+                return Err(error);
+            }
             Err(Attempt::Retry {
                 failure,
                 retry_after,
                 error,
             }) => {
-                if shared.scheduler.state(id).1 > position {
+                let progressed = shared.scheduler.state(id).1 > position;
+                if progressed {
                     failures = 0; // it got somewhere: start counting afresh
+                    shared.sources[source].strikes.store(0, Ordering::Relaxed);
+                }
+                let alive = shared.alive();
+                if alive > 1 {
+                    // Another address may work right now: try it before
+                    // pausing. A source that keeps failing is given up on.
+                    let strikes = shared.sources[source]
+                        .strikes
+                        .fetch_add(1, Ordering::Relaxed)
+                        + 1;
+                    if strikes > shared.policy.max_attempts {
+                        shared.sources[source].dead.store(true, Ordering::Relaxed);
+                    }
+                    last_error = Some(error);
+                    turn = source + 1;
+                    failures += 1;
+                    let rounds = u32::try_from(alive).unwrap_or(u32::MAX);
+                    if failures > shared.policy.max_attempts.saturating_mul(rounds) {
+                        return Err(last_error.take().expect("just set"));
+                    }
+                    // A pause only after every address has had its turn.
+                    if failures % rounds == 0 {
+                        sleep(shared.policy.backoff(failures / rounds, retry_after)).await;
+                    }
+                    continue;
                 }
                 if failure == Failure::Throttled {
                     return Ok(Ended::Throttled {
@@ -544,12 +630,19 @@ enum Stop {
 /// One request for the rest of a segment, from `position` on. Everything
 /// received is written, and flushed, before this returns, so the scheduler's
 /// position always matches what is in the file.
-async fn attempt(shared: &Shared, id: usize, position: u64, end: u64) -> Result<Stop, Attempt> {
+async fn attempt(
+    shared: &Shared,
+    id: usize,
+    position: u64,
+    end: u64,
+    source: usize,
+) -> Result<Stop, Attempt> {
+    let from = &shared.sources[source].source;
     // Waiting for a connection can take a long time on a server that ignores
     // new ones, so a retire request must be able to interrupt it.
     let request = shared
         .client
-        .get_range(&shared.url, position, end - 1, shared.etag.as_deref());
+        .get_range(&from.url, position, end - 1, from.etag.as_deref());
     tokio::pin!(request);
     let mut body = loop {
         if shared.should_retire() {

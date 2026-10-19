@@ -140,3 +140,11 @@ mohona get URL --find-checksum             # use URL.sha256 (or .sha512/.sha1/.m
 ```
 
 Hashes the server announces itself are checked automatically. A file that does not match is kept, and the download is reported as failed.
+
+### Mirrors
+
+```
+mohona get URL --mirror URL2 --mirror URL3 --checksum sha256:...
+```
+
+The pieces of the file come from all addresses at once; a failing address is replaced by another. Only mirrors with the same size are used; add `--checksum` to be sure the content is the same.
