@@ -111,3 +111,14 @@ mohona queue add https://user:password@host/file.zip      # the login is taken o
 ```
 
 The password is only sent when the server asks for it, and only to that server. It is kept in the database in plain text for now.
+
+### Proxies
+
+```
+mohona get URL --proxy http://host:3128
+mohona get URL --proxy socks5h://user:password@127.0.0.1:1080
+mohona get URL --no-proxy          # ignore any system proxy
+mohona queue add URL --proxy ...   # saved with the download
+```
+
+`socks5h` lets the proxy look up the name; `socks5` looks it up here. Without either flag, the system proxy is used.

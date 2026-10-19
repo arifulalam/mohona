@@ -14,7 +14,7 @@ md-5 = "0.10"
 percent-encoding = "2.3.2"
 # HTTP/1.1 only (no "http2" feature): each segment must use its own TCP
 # connection, because HTTP/2 would multiplex them onto one.
-reqwest = { version = "0.13", default-features = false, features = ["rustls", "system-proxy"] }
+reqwest = { version = "0.13", default-features = false, features = ["rustls", "system-proxy", "socks"] }
 sha2 = "0.10"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"

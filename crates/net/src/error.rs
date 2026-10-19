@@ -53,6 +53,14 @@ pub enum NetError {
     #[error("the server did not send the requested part of the file ({0})")]
     WrongRange(String),
 
+    /// A proxy address cannot be used.
+    #[error("invalid proxy: {0}")]
+    InvalidProxy(String),
+
+    /// The proxy wants a login (`407`).
+    #[error("the proxy wants a login (407): put it in the proxy address, like http://user:password@host:port")]
+    ProxyAuthRequired,
+
     /// A header, cookie or the like cannot be sent.
     #[error("invalid header: {0}")]
     InvalidHeader(String),
@@ -107,6 +115,8 @@ impl NetError {
             | NetError::Unauthorized { .. }
             | NetError::UnsupportedScheme(_)
             | NetError::InvalidHeader(_)
+            | NetError::InvalidProxy(_)
+            | NetError::ProxyAuthRequired
             | NetError::WrongRange(_) => Failure::Fatal,
         }
     }

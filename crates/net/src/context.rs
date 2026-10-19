@@ -8,6 +8,57 @@ use serde::{Deserialize, Serialize};
 
 use crate::{Credentials, NetError};
 
+/// Which proxy a download goes through, instead of the system's.
+#[derive(Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub enum ProxyChoice {
+    /// No proxy at all, even if the system has one.
+    Direct,
+    /// This proxy: `http://host:port`, `https://host:port`, `socks5://host:port`
+    /// or `socks5h://host:port` (`socks5h` also looks names up through the
+    /// proxy). A `user:password@` in the address is the proxy's login.
+    Url(String),
+}
+
+impl fmt::Debug for ProxyChoice {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            ProxyChoice::Direct => f.write_str("Direct"),
+            // The address may hold a password.
+            ProxyChoice::Url(_) => f.write_str("Url(<hidden>)"),
+        }
+    }
+}
+
+impl ProxyChoice {
+    /// Read what a person typed: `direct`/`none`/`off`, or a proxy address.
+    /// An address without a scheme is taken as an HTTP proxy.
+    pub fn parse(text: &str) -> Result<Self, NetError> {
+        let text = text.trim();
+        if ["direct", "none", "off"]
+            .iter()
+            .any(|word| text.eq_ignore_ascii_case(word))
+        {
+            return Ok(ProxyChoice::Direct);
+        }
+        let full = if text.contains("://") {
+            text.to_string()
+        } else {
+            format!("http://{text}")
+        };
+        let url = reqwest::Url::parse(&full)
+            .map_err(|e| NetError::InvalidProxy(format!("{text:?} ({e})")))?;
+        if !matches!(url.scheme(), "http" | "https" | "socks5" | "socks5h") {
+            return Err(NetError::InvalidProxy(format!(
+                "{text:?}: use http://, https://, socks5:// or socks5h://"
+            )));
+        }
+        if url.host_str().is_none() {
+            return Err(NetError::InvalidProxy(format!("{text:?} has no host")));
+        }
+        Ok(ProxyChoice::Url(full))
+    }
+}
+
 /// Extra request details for one download. The browser extension fills this
 /// in from the page a download was started on; people can also give it on
 /// the command line.
@@ -32,6 +83,10 @@ pub struct RequestContext {
     /// (Basic or Digest), and only to that server.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub credentials: Option<Credentials>,
+    /// A proxy for this download, or `Direct` for none. Without it the
+    /// system's proxy settings apply.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub proxy: Option<ProxyChoice>,
 }
 
 impl fmt::Debug for RequestContext {
@@ -41,6 +96,7 @@ impl fmt::Debug for RequestContext {
             .field("referrer", &self.referrer.as_ref().map(|_| "<hidden>"))
             .field("user_agent", &self.user_agent)
             .field("credentials", &self.credentials)
+            .field("proxy", &self.proxy)
             .field(
                 "headers",
                 &self.headers.iter().map(|(n, _)| n).collect::<Vec<_>>(),
@@ -70,6 +126,7 @@ impl RequestContext {
             && self.user_agent.is_none()
             && self.headers.is_empty()
             && self.credentials.is_none()
+            && self.proxy.is_none()
     }
 
     /// Parse `Name: value` (the way `curl -H` takes it) and add it.

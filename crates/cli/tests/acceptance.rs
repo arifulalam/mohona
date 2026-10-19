@@ -272,3 +272,48 @@ async fn logging_in_from_the_command_line() {
     assert!(!no_password.status.success());
     assert!(String::from_utf8_lossy(&no_password.stderr).contains("MOHONA_PASSWORD"));
 }
+
+#[test]
+fn proxy_flags_send_the_download_through_the_proxy() {
+    use mohona_testserver::proxy::start_http_proxy;
+    let rt = tokio::runtime::Runtime::new().unwrap();
+    let (server, proxy) = rt.block_on(async {
+        let listener = mohona_testserver::bind("127.0.0.1:0".parse().unwrap())
+            .await
+            .unwrap();
+        let addr = listener.local_addr().unwrap();
+        tokio::spawn(async move {
+            let _ = mohona_testserver::serve(
+                listener,
+                mohona_testserver::Config {
+                    default_size: 50_000,
+                },
+            )
+            .await;
+        });
+        (addr, start_http_proxy(None).await)
+    });
+    let dir = tempfile::tempdir().unwrap();
+    let out = std::process::Command::new(env!("CARGO_BIN_EXE_mohona"))
+        .args(["get", &format!("http://{server}/file"), "-o"])
+        .arg(dir.path())
+        .args(["--proxy", &format!("http://{}", proxy.addr)])
+        .output()
+        .unwrap();
+    assert!(
+        out.status.success(),
+        "{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    assert!(proxy.relayed() > 0);
+
+    let before = proxy.relayed();
+    let out = std::process::Command::new(env!("CARGO_BIN_EXE_mohona"))
+        .args(["get", &format!("http://{server}/file?size=1000"), "-o"])
+        .arg(dir.path())
+        .args(["--no-proxy"])
+        .output()
+        .unwrap();
+    assert!(out.status.success());
+    assert_eq!(proxy.relayed(), before);
+}

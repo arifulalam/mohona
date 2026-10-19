@@ -14,7 +14,9 @@ use reqwest::header::{AUTHORIZATION, WWW_AUTHENTICATE};
 use reqwest::{Method, RequestBuilder};
 
 use crate::auth::{self, Scheme};
-use crate::{filename_from_content_disposition, Credentials, NetError, RequestContext};
+use crate::{
+    filename_from_content_disposition, Credentials, NetError, ProxyChoice, RequestContext,
+};
 
 /// Settings for [`HttpClient`].
 #[derive(Clone, Debug)]
@@ -67,6 +69,7 @@ type Answered = Arc<Mutex<Option<(String, Arc<Scheme>)>>>;
 /// An HTTP(S) client. Cheap to clone; clones share connections.
 #[derive(Clone)]
 pub struct HttpClient {
+    config: ClientConfig,
     client: Client,
     extra: HeaderMap,
     credentials: Option<Credentials>,
@@ -94,6 +97,19 @@ impl Body {
 impl HttpClient {
     /// Build a client.
     pub fn new(config: &ClientConfig) -> Result<Self, NetError> {
+        Ok(Self {
+            config: config.clone(),
+            client: build_client(config, None)?,
+            extra: HeaderMap::new(),
+            credentials: None,
+            answered: Arc::default(),
+        })
+    }
+}
+
+/// Build the underlying client. `proxy` replaces the system's settings.
+fn build_client(config: &ClientConfig, proxy: Option<&ProxyChoice>) -> Result<Client, NetError> {
+    {
         let mut headers = HeaderMap::new();
         // Ask for the file as stored. Compression would change sizes and
         // make byte ranges meaningless.
@@ -103,23 +119,34 @@ impl HttpClient {
             .default_headers(headers)
             .connect_timeout(config.connect_timeout)
             .read_timeout(config.read_timeout);
-        if !config.use_system_proxy {
-            builder = builder.no_proxy();
+        match proxy {
+            Some(ProxyChoice::Direct) => builder = builder.no_proxy(),
+            Some(ProxyChoice::Url(address)) => {
+                let proxy = reqwest::Proxy::all(address)
+                    .map_err(|e| NetError::InvalidProxy(e.to_string()))?;
+                builder = builder.no_proxy().proxy(proxy);
+            }
+            None if !config.use_system_proxy => builder = builder.no_proxy(),
+            None => {}
         }
-        Ok(Self {
-            client: builder.build()?,
-            extra: HeaderMap::new(),
-            credentials: None,
-            answered: Arc::default(),
-        })
+        Ok(builder.build()?)
     }
+}
 
+impl HttpClient {
     /// A client that sends `context` with every request. It shares
     /// connections with this one. Fails if the context holds a header that
     /// cannot be sent.
     pub fn with_context(&self, context: &RequestContext) -> Result<Self, NetError> {
+        // A proxy is part of the connection, so a download with its own
+        // proxy gets its own connections. Others share this client's.
+        let client = match &context.proxy {
+            Some(choice) => build_client(&self.config, Some(choice))?,
+            None => self.client.clone(),
+        };
         Ok(Self {
-            client: self.client.clone(),
+            config: self.config.clone(),
+            client,
             extra: context.header_map()?,
             credentials: context.credentials.clone(),
             answered: Arc::default(),
@@ -304,6 +331,9 @@ fn request_uri(url: &Url) -> String {
 }
 
 fn status_error(response: &Response, url: &Url, credentials_given: bool) -> NetError {
+    if response.status() == StatusCode::PROXY_AUTHENTICATION_REQUIRED {
+        return NetError::ProxyAuthRequired;
+    }
     if response.status() == StatusCode::UNAUTHORIZED {
         let offered = response
             .headers()

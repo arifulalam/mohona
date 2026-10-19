@@ -124,6 +124,13 @@ pub(crate) struct RequestArgs {
     /// address works too.
     #[arg(short = 'u', long)]
     user: Option<String>,
+    /// Go through a proxy: http://host:port, socks5://host:port or
+    /// socks5h://host:port (put user:password@ in it if it needs a login)
+    #[arg(long, value_name = "URL", conflicts_with = "no_proxy")]
+    proxy: Option<String>,
+    /// Do not use any proxy, not even the system one
+    #[arg(long)]
+    no_proxy: bool,
 }
 
 impl RequestArgs {
@@ -139,6 +146,11 @@ impl RequestArgs {
         }
         if let Some(user) = &self.user {
             context.credentials = Some(parse_login(user, std::env::var("MOHONA_PASSWORD").ok())?);
+        }
+        if let Some(proxy) = &self.proxy {
+            context.proxy = Some(mohona_net::ProxyChoice::parse(proxy).map_err(|e| e.to_string())?);
+        } else if self.no_proxy {
+            context.proxy = Some(mohona_net::ProxyChoice::Direct);
         }
         Ok(context)
     }

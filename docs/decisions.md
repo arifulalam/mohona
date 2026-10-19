@@ -204,3 +204,13 @@ Rules that keep the password safe:
 Limits: the password is saved in the database in plain text with the download's request details (same limit as ADR-0020; keychain comes later). Basic over plain `http://` sends the password readable on the network; the server decides which scheme it asks for, so use `https://` where it matters. `auth-int`, `userhash`, NTLM and Negotiate are not supported (NTLM and Negotiate are last in this phase and optional).
 
 A `401` now becomes its own error (`NetError::Unauthorized`) that names the kinds of login the server asked for and says what to do: give `-u`, the user name or password was refused, the server wants something Mohona cannot do (Bearer, NTLM, Negotiate), or it did not say how to log in (a web login page: use `--cookie`).
+
+## ADR-0022: Proxies are part of the request context
+
+**Decision.** A download may carry a proxy choice (`ProxyChoice::Direct` or a proxy address) inside its request context, so it is saved with the download and survives restarts. Supported: `http://`, `https://`, `socks5://` and `socks5h://` (names resolved by the proxy). An address with no scheme is read as `http://`. A login goes in the address (`user:pass@`) and is never printed. With no choice, the system proxy is used, as before.
+
+**Why.** Proxies are per-network and sometimes per-download; the context already travels with every request and is persisted. A different proxy needs a different connection pool, so a download with its own proxy gets its own client; others keep sharing connections.
+
+**Errors.** A proxy that asks for a login we did not give is reported as such (407), not as a mystery failure.
+
+**Tests.** Test proxies count what they relay, so tests prove the traffic really went through them, including login, wrong login, and socks5 (address) versus socks5h (name).
