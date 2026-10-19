@@ -6,7 +6,7 @@ use std::fmt;
 use reqwest::header::{HeaderMap, HeaderName, HeaderValue, COOKIE, REFERER, USER_AGENT};
 use serde::{Deserialize, Serialize};
 
-use crate::{Credentials, NetError};
+use crate::{Checksum, Credentials, NetError};
 
 /// Which proxy a download goes through, instead of the system's.
 #[derive(Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -91,6 +91,14 @@ pub struct RequestContext {
     /// trusted authorities are used and anything else is refused.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub tls: Option<TlsOptions>,
+    /// What the finished file must hash to. A file that does not match
+    /// fails the download (and is kept).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub checksum: Option<Checksum>,
+    /// Look for a checksum file next to the download (`<address>.sha256`,
+    /// `.sha512`, `.sha1`, `.md5`) and check against it if there is one.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub find_checksum: bool,
 }
 
 /// Changes to the certificate check, for one download.
@@ -114,6 +122,8 @@ impl fmt::Debug for RequestContext {
             .field("credentials", &self.credentials)
             .field("proxy", &self.proxy)
             .field("tls", &self.tls)
+            .field("checksum", &self.checksum)
+            .field("find_checksum", &self.find_checksum)
             .field(
                 "headers",
                 &self.headers.iter().map(|(n, _)| n).collect::<Vec<_>>(),
@@ -145,6 +155,8 @@ impl RequestContext {
             && self.credentials.is_none()
             && self.proxy.is_none()
             && self.tls.is_none()
+            && self.checksum.is_none()
+            && !self.find_checksum
     }
 
     /// Parse `Name: value` (the way `curl -H` takes it) and add it.

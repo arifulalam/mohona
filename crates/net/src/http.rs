@@ -14,6 +14,7 @@ use reqwest::header::{AUTHORIZATION, WWW_AUTHENTICATE};
 use reqwest::{Method, RequestBuilder};
 
 use crate::auth::{self, Scheme};
+use crate::Checksum;
 use crate::{
     filename_from_content_disposition, Credentials, NetError, ProxyChoice, RequestContext,
     TlsOptions,
@@ -62,6 +63,10 @@ pub struct Probe {
     /// File name from `Content-Disposition`, or else from the URL path.
     /// This is the raw name from the server: sanitize it before using it.
     pub filename: Option<String>,
+    /// Hashes of the whole file that the server announced (`Content-MD5`,
+    /// `Digest`, `Repr-Digest`). Only taken from answers about the whole
+    /// file, never from a partial answer.
+    pub digests: Vec<Checksum>,
 }
 
 /// The origin that was logged in to, and how.
@@ -418,7 +423,28 @@ fn describe(response: &Response) -> Probe {
         last_modified: header_text(response, &LAST_MODIFIED),
         content_type: header_text(response, &CONTENT_TYPE),
         filename,
+        digests: announced_digests(response),
     }
+}
+
+/// The hashes a server announces for the whole file. A partial answer
+/// (206) describes only a piece, so it announces nothing we can use.
+fn announced_digests(response: &Response) -> Vec<Checksum> {
+    if response.status() != StatusCode::OK {
+        return Vec::new();
+    }
+    let mut found = Vec::new();
+    if let Some(md5) = header_text(response, &HeaderName::from_static("content-md5"))
+        .and_then(|v| Checksum::from_content_md5(&v))
+    {
+        found.push(md5);
+    }
+    for name in ["digest", "repr-digest"] {
+        if let Some(value) = header_text(response, &HeaderName::from_static(name)) {
+            found.extend(Checksum::from_digest_header(&value));
+        }
+    }
+    found
 }
 
 fn filename_from_url(url: &Url) -> Option<String> {
@@ -446,6 +472,11 @@ fn probe_from_range_response(
     credentials_given: bool,
 ) -> Result<Probe, NetError> {
     let mut probe = describe(response);
+    if probe.digests.is_empty() {
+        if let Some(head) = &from_head {
+            probe.digests = head.digests.clone();
+        }
+    }
     match response.status() {
         StatusCode::PARTIAL_CONTENT => {
             probe.size =

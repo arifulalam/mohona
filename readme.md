@@ -131,3 +131,12 @@ HTTPS certificates are checked. For a server with its own certificate:
 mohona get https://host/file --ca-file my-ca.pem   # trust this authority too
 mohona get https://host/file --insecure            # skip the check (unsafe)
 ```
+
+### Checksums
+
+```
+mohona get URL --checksum sha256:ABC...    # check against a hash you have
+mohona get URL --find-checksum             # use URL.sha256 (or .sha512/.sha1/.md5) if it exists
+```
+
+Hashes the server announces itself are checked automatically. A file that does not match is kept, and the download is reported as failed.

@@ -139,6 +139,12 @@ pub async fn run(command: QueueCommand, db: PathBuf) -> Result<(), String> {
             request: args,
         } => {
             let context = args.context()?;
+            if context.checksum.is_some() && urls.len() > 1 {
+                return Err(
+                    "--checksum is for one file; add the addresses one at a time, or use --find-checksum"
+                        .into(),
+                );
+            }
             let dir = output.to_string_lossy().into_owned();
             let mut refused = 0;
             for url in urls {

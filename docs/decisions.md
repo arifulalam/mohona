@@ -224,3 +224,16 @@ A `401` now becomes its own error (`NetError::Unauthorized`) that names the kind
 **Errors.** A refused certificate is its own error, not retried, explaining the cause (unknown authority, expired, not yet valid, wrong name) and the two ways out.
 
 **Tests.** The test server can speak HTTPS with a generated authority and certificate, expired or not, so each case is exercised for real.
+
+## ADR-0024: Checksums are checked after the download, and a mismatch keeps the file
+
+**Decision.** A finished file may be checked against a checksum from, in order of priority: the person (`--checksum`), a checksum file next to the download (`--find-checksum`, opt-in), or a hash the server announced for the whole file (`Content-MD5`, `Digest`, `Repr-Digest`; the strongest wins). The check hashes the finished file once (MD5, SHA-1, SHA-256, SHA-512). A mismatch is an error that is not retried, and the file stays where it is, under its normal name.
+
+**Why.**
+- Hashing while downloading does not work with several connections writing out of order, and resumed downloads would need the earlier part re-read anyway. One pass over the finished file is simple and correct.
+- Looking for neighbor files costs requests (and some servers answer 200 with a web page for anything), so it is opt-in. Text that does not parse as a checksum, or a list that does not name the file, counts as "no checksum found", never as a failure.
+- Hashes from `206` answers describe a piece, not the file, so only whole-file answers are trusted.
+- Deleting a file after hours of download because of a wrong checksum (which may be a typo) is worse than keeping it; the message says where it is.
+- A repeat would give the same bytes, so a mismatch is not retried.
+
+**Stored** with the download in the request context, so it survives restarts.

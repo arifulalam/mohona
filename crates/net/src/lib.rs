@@ -5,12 +5,14 @@
 //! follow in Phase 3, all behind one transport interface.
 
 mod auth;
+mod checksum;
 mod context;
 mod disposition;
 mod error;
 mod http;
 
 pub use auth::{split_userinfo, Credentials};
+pub use checksum::{hash_file, Algorithm, Checksum};
 pub use context::{ProxyChoice, RequestContext, TlsOptions};
 pub use disposition::filename_from_content_disposition;
 pub use error::{Failure, NetError};

@@ -139,6 +139,16 @@ pub(crate) struct RequestArgs {
     /// for a server you know
     #[arg(long)]
     insecure: bool,
+    /// What the finished file must hash to, like sha256:ABC... (or just the
+    /// hash: md5, sha1, sha256 and sha512 are told apart by length). A
+    /// file that does not match fails, and is kept
+    #[arg(long, value_name = "HASH")]
+    checksum: Option<String>,
+    /// Look for a checksum file next to the download (address.sha256, .sha512,
+    /// .sha1 or .md5) and check against it. Without this, only hashes the
+    /// server announces itself are checked
+    #[arg(long)]
+    find_checksum: bool,
 }
 
 impl RequestArgs {
@@ -160,6 +170,10 @@ impl RequestArgs {
         } else if self.no_proxy {
             context.proxy = Some(mohona_net::ProxyChoice::Direct);
         }
+        if let Some(text) = &self.checksum {
+            context.checksum = Some(mohona_net::Checksum::parse(text).map_err(|e| e.to_string())?);
+        }
+        context.find_checksum = self.find_checksum;
         if self.insecure || self.ca_file.is_some() {
             let ca_file = match &self.ca_file {
                 // Saved with the download, so keep the full path.
@@ -368,6 +382,17 @@ async fn get(
         outcome.path.display(),
         format_bytes(outcome.bytes)
     );
+    if let Some(verified) = &outcome.verified {
+        let from = match &verified.source {
+            mohona_core::ChecksumSource::Given => "the checksum you gave".to_string(),
+            mohona_core::ChecksumSource::File(url) => url.clone(),
+            mohona_core::ChecksumSource::Header => "the server's headers".to_string(),
+        };
+        println!(
+            "Checked: {} matches ({from})",
+            verified.checksum.algorithm.name()
+        );
+    }
     Ok(())
 }
 

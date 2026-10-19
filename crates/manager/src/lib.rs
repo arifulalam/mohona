@@ -1307,9 +1307,16 @@ impl Actor {
                     id,
                     "info",
                     &format!(
-                        "completed: {} ({} bytes)",
+                        "completed: {} ({} bytes){}",
                         outcome.path.display(),
-                        outcome.bytes
+                        outcome.bytes,
+                        outcome
+                            .verified
+                            .as_ref()
+                            .map_or_else(String::new, |v| format!(
+                                ", {} checksum matched",
+                                v.checksum.algorithm.name()
+                            ))
                     ),
                 );
                 self.emit(ManagerEvent::State {
@@ -1554,7 +1561,7 @@ fn is_temporary(error: &CoreError) -> bool {
     match error {
         CoreError::Net(net) => net.failure() != mohona_net::Failure::Fatal,
         CoreError::Incomplete { .. } => true,
-        CoreError::Io(_) | CoreError::Cancelled => false,
+        CoreError::Io(_) | CoreError::Cancelled | CoreError::ChecksumMismatch { .. } => false,
     }
 }
 

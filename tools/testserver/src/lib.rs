@@ -9,6 +9,7 @@
 
 mod digest;
 pub mod proxy;
+mod sums;
 pub mod tls;
 
 use std::collections::HashMap;
@@ -344,6 +345,9 @@ async fn route<W: AsyncWrite + Unpin>(
             Ok(keep_alive)
         }
         "/file" => serve_file(request, writer, config, keep_alive, head_only).await,
+        path if path.starts_with("/sums/") => {
+            serve_sums(request, writer, config, keep_alive, head_only).await
+        }
         "/redirect" => {
             let location = if let Some(to) = request.query.get("to") {
                 // `to=<absolute address>`: send the client to another server.
@@ -555,6 +559,74 @@ fn random_u64() -> u64 {
     x
 }
 
+/// `/sums/<style>/<size>.bin` is a file; `/sums/<style>/<size>.bin.sha256`
+/// (or `.md5`, `.sha512`) is its checksum file, written in that style
+/// (see `sums::checksum_file`). `<style>` of `none` has no checksum files.
+async fn serve_sums<W: AsyncWrite + Unpin>(
+    request: &Request,
+    writer: &mut W,
+    config: &Shared,
+    keep_alive: bool,
+    head_only: bool,
+) -> io::Result<bool> {
+    let parts: Vec<&str> = request
+        .path
+        .trim_start_matches("/sums/")
+        .split('/')
+        .collect();
+    let (style, name) = match parts.as_slice() {
+        [style, name] => (*style, *name),
+        _ => ("", ""),
+    };
+    let (size_text, algorithm) = match name.split_once(".bin") {
+        Some((size, rest)) => (size, rest.trim_start_matches('.')),
+        None => ("", ""),
+    };
+    let Ok(size) = size_text.parse::<u64>() else {
+        simple(
+            writer,
+            "404 Not Found",
+            "not found\n",
+            &[],
+            keep_alive,
+            head_only,
+        )
+        .await?;
+        return Ok(keep_alive);
+    };
+    if algorithm.is_empty() {
+        let mut copy = Request {
+            method: request.method.clone(),
+            path: "/file".into(),
+            raw_query: request.raw_query.clone(),
+            query: request.query.clone(),
+            headers: request.headers.clone(),
+        };
+        copy.query.insert("size".into(), size.to_string());
+        return serve_file(&copy, writer, config, keep_alive, head_only).await;
+    }
+    let body = if style == "none" {
+        None
+    } else {
+        sums::checksum_file(size, algorithm, style)
+    };
+    match body {
+        Some(body) => simple(writer, "200 OK", &body, &[], keep_alive, head_only).await?,
+        None => {
+            simple(
+                writer,
+                "404 Not Found",
+                "not found\n",
+                &[],
+                keep_alive,
+                head_only,
+            )
+            .await?
+        }
+    }
+    Ok(keep_alive)
+}
+
 async fn serve_file<W: AsyncWrite + Unpin>(
     request: &Request,
     writer: &mut W,
@@ -659,6 +731,28 @@ async fn serve_file<W: AsyncWrite + Unpin>(
         head.push_str("Content-Range: ");
         head.push_str(&content_range);
         head.push_str("\r\n");
+    }
+    // `content_md5` and `digest` (`right` or `wrong`) announce a hash of the
+    // whole file, but only in answers about the whole file.
+    if status == "200 OK"
+        && (request.query.contains_key("content_md5") || request.query.contains_key("digest"))
+    {
+        let hashes = sums::hashes_of(size);
+        let pick = |value: Option<&String>, right: Vec<u8>| -> Option<String> {
+            value.map(|v| {
+                if v == "wrong" {
+                    sums::base64(&vec![0u8; right.len()])
+                } else {
+                    sums::base64(&right)
+                }
+            })
+        };
+        if let Some(md5) = pick(request.query.get("content_md5"), hashes.md5.clone()) {
+            head.push_str(&format!("Content-MD5: {md5}\r\n"));
+        }
+        if let Some(sha) = pick(request.query.get("digest"), hashes.sha256.clone()) {
+            head.push_str(&format!("Digest: sha-256={sha}\r\n"));
+        }
     }
     head.push_str("\r\n");
     writer.write_all(head.as_bytes()).await?;

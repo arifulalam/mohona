@@ -15,6 +15,7 @@ mod parallel;
 mod retry;
 mod segments;
 mod tuner;
+mod verify;
 
 pub use cancel::CancelToken;
 pub use download::{
@@ -27,6 +28,7 @@ pub use ledger::{Ledger as Progress, ProgressStore};
 pub use limiter::RateLimit;
 pub use retry::RetryPolicy;
 pub use segments::{split_evenly, Claim, Scheduler};
+pub use verify::{Source as ChecksumSource, Verified};
 
 /// The version of Mohona, taken from the crate manifest.
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");

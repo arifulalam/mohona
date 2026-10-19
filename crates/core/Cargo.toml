@@ -15,4 +15,5 @@ tokio.workspace = true
 
 [dev-dependencies]
 mohona-testserver = { path = "../../tools/testserver" }
+sha2 = "0.10"
 tempfile = "3.27.0"

@@ -13,6 +13,7 @@ use crate::ledger::{Ledger, ProgressStore, Sink};
 use crate::limiter::{Limits, RateLimit};
 use crate::parallel::{fetch_segmented, Job, MIN_SEGMENT};
 use crate::retry::{probe_with_retry, RetryPolicy};
+use crate::verify::{self, Verified};
 use crate::Error;
 
 const WRITE_BUFFER: usize = 256 * 1024;
@@ -122,6 +123,8 @@ pub struct Outcome {
     /// How many connections were opened for the file's data, including
     /// ones opened later to take over half of a slow segment.
     pub connections: usize,
+    /// The checksum the file passed, if one was found and checked.
+    pub verified: Option<Verified>,
 }
 
 /// Download one URL.
@@ -305,6 +308,18 @@ pub async fn download(
     }
     sink.clear();
 
+    // A file that does not match its checksum is an error, but it is kept:
+    // it may be what the person wants, and deleting hours of download is worse.
+    let name = final_path
+        .file_name()
+        .map_or_else(|| filename.clone(), |n| n.to_string_lossy().into_owned());
+    let verified = match verify::expected(client, &request.context, &probe, &name, events).await {
+        Some((checksum, source)) => {
+            Some(verify::check(&final_path, checksum, source, events).await?)
+        }
+        None => None,
+    };
+
     emit(
         events,
         Event::Finished {
@@ -318,6 +333,7 @@ pub async fn download(
         bytes,
         final_url: probe.final_url,
         connections,
+        verified,
     })
 }
 

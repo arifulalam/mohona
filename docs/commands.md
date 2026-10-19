@@ -80,6 +80,30 @@ mohona get https://nas.local/file.zip --insecure
 
 Certificates are checked by default. Prefer `--ca-file`: it still protects you against anyone else pretending to be the server. `--insecure` is for one download at a time and is never turned on by itself.
 
+### Example: check the file after downloading
+
+```
+$ mohona get https://example.com/tool.iso --checksum sha256:9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08 -o downloads
+Downloading tool.iso (1.9 MiB, up to 3 connections)
+Saved downloads/tool.iso (1.9 MiB)
+Checked: sha256 matches (the checksum you gave)
+
+$ mohona get https://example.com/tool.iso --find-checksum -o downloads
+Checked: sha256 matches (https://example.com/tool.iso.sha256)
+```
+
+- `--checksum HASH` takes `sha256:HEX`, or just the hex (md5, sha1, sha256 and sha512 are told apart by length).
+- `--find-checksum` looks for `<address>.sha256`, `.sha512`, `.sha1`, `.md5` next to the file (one hash, `hash  name`, or a list that names the file).
+- Without either flag, a hash the server announces itself (`Content-MD5`, `Digest`, `Repr-Digest` headers) is checked when there is one. Nothing is checked when nothing is announced.
+- A given checksum wins over a checksum file, which wins over the server's headers.
+- A file that does not match is **kept** and the command fails, because the file may be what you want and re-downloading is expensive:
+
+```
+error: the file does not match its checksum: expected sha256:cdcd... but it is sha256:9f86.... The file was kept at downloads/tool.iso (it may be damaged, or the checksum may be wrong)
+```
+
+With `queue add`, `--checksum` works for one address at a time. The download ends as `failed` (it is not retried: the same bytes would come again).
+
 ### Errors you may see
 
 | Message | What it means / what to do |
@@ -96,6 +120,9 @@ Certificates are checked by default. Prefer `--ca-file`: it still protects you a
 | `the server's certificate cannot be trusted: it was not signed by an authority this computer trusts ...` | Use `--ca-file` with the server's authority, or `--insecure` if you accept the risk |
 | `... : it has expired` / `it is for a different name than the one in the address` / `it is not valid yet (is this computer's clock right?)` | The server's certificate has a real problem; tell its owner. A wrong clock on your PC causes "not valid yet" |
 | `cannot use the certificate file X: ...` | The `--ca-file` is missing or is not a PEM certificate |
+| `invalid checksum "...": ...` | The `--checksum` value is not hex, or has the wrong length for its algorithm |
+| `the file does not match its checksum` | The file is damaged, the checksum is wrong, or someone changed the file. The file is kept; compare it with the source |
+| `--checksum is for one file; add the addresses one at a time...` | You gave `--checksum` with several addresses to `queue add` |
 | `network error: ... Connection refused` | The server (or your proxy) is not listening there |
 | `proxy asked for a login` (407) | Put `user:password@` in the `--proxy` address |
 

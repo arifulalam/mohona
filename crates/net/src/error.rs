@@ -65,6 +65,10 @@ pub enum NetError {
     #[error("invalid header: {0}")]
     InvalidHeader(String),
 
+    /// A checksum cannot be read.
+    #[error("invalid checksum {0}")]
+    InvalidChecksum(String),
+
     /// The server's certificate was not accepted.
     #[error("the server's certificate cannot be trusted: {0}. If you trust this server, give the authority that signed it with --ca-file FILE, or skip the check for this download with --insecure")]
     Tls(String),
@@ -170,6 +174,7 @@ impl NetError {
             | NetError::InvalidHeader(_)
             | NetError::InvalidProxy(_)
             | NetError::Tls(_)
+            | NetError::InvalidChecksum(_)
             | NetError::InvalidCaFile { .. }
             | NetError::ProxyAuthRequired
             | NetError::WrongRange(_) => Failure::Fatal,

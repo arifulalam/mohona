@@ -374,3 +374,115 @@ fn certificate_flags_decide_whether_a_private_https_server_is_trusted() {
         String::from_utf8_lossy(&insecure.stderr)
     );
 }
+
+#[test]
+fn checksum_flags_check_the_file_and_keep_a_bad_one() {
+    use sha2::{Digest, Sha256};
+    let rt = tokio::runtime::Runtime::new().unwrap();
+    let server = rt.block_on(async {
+        let listener = bind("127.0.0.1:0".parse().unwrap()).await.unwrap();
+        let addr = listener.local_addr().unwrap();
+        tokio::spawn(async move {
+            let _ = serve(
+                listener,
+                Config {
+                    default_size: 20_000,
+                },
+            )
+            .await;
+        });
+        addr
+    });
+    let mut data = vec![0u8; 20_000];
+    mohona_testserver::fill_content(0, &mut data);
+    let real: String = Sha256::digest(&data)
+        .iter()
+        .map(|b| format!("{b:02x}"))
+        .collect();
+    let dir = tempfile::tempdir().unwrap();
+    let out = dir.path().join("out");
+    let url = format!("http://{server}/file");
+    let get = |extra: &[&str]| {
+        Command::new(env!("CARGO_BIN_EXE_mohona"))
+            .current_dir(dir.path())
+            .args(["get", &url, "-o"])
+            .arg(&out)
+            .args(extra)
+            .output()
+            .unwrap()
+    };
+
+    let good = get(&["--checksum", &format!("sha256:{real}")]);
+    assert!(
+        good.status.success(),
+        "{}",
+        String::from_utf8_lossy(&good.stderr)
+    );
+    let said = String::from_utf8_lossy(&good.stdout);
+    assert!(said.contains("Checked: sha256 matches"), "{said}");
+
+    let bad = get(&["--checksum", &"cd".repeat(32)]);
+    assert!(!bad.status.success());
+    let message = String::from_utf8_lossy(&bad.stderr);
+    assert!(
+        message.contains("does not match its checksum") && message.contains("was kept at"),
+        "{message}"
+    );
+    // Both files are there: the good one and the kept bad one.
+    assert_eq!(std::fs::read_dir(&out).unwrap().count(), 2);
+
+    let nonsense = get(&["--checksum", "nothex"]);
+    assert!(!nonsense.status.success());
+    assert!(String::from_utf8_lossy(&nonsense.stderr).contains("invalid checksum"));
+
+    // One checksum cannot fit several files.
+    let many = Command::new(env!("CARGO_BIN_EXE_mohona"))
+        .current_dir(dir.path())
+        .args([
+            "queue",
+            "add",
+            &url,
+            &format!("{url}?size=5000"),
+            "--checksum",
+            &real,
+        ])
+        .output()
+        .unwrap();
+    assert!(!many.status.success());
+    assert!(String::from_utf8_lossy(&many.stderr).contains("one file"));
+
+    // In the queue, a mismatch ends as failed (not retried) and the log says why.
+    let add = Command::new(env!("CARGO_BIN_EXE_mohona"))
+        .current_dir(dir.path())
+        .args([
+            "queue",
+            "add",
+            &format!("{url}?size=7000"),
+            "-o",
+            "q",
+            "--checksum",
+            &"ef".repeat(32),
+        ])
+        .output()
+        .unwrap();
+    assert!(add.status.success());
+    let run = Command::new(env!("CARGO_BIN_EXE_mohona"))
+        .current_dir(dir.path())
+        .args(["queue", "run"])
+        .output()
+        .unwrap();
+    let text = format!(
+        "{}{}",
+        String::from_utf8_lossy(&run.stdout),
+        String::from_utf8_lossy(&run.stderr)
+    );
+    assert!(text.contains("does not match its checksum"), "{text}");
+    assert!(!text.contains("retrying"), "{text}");
+    let list = Command::new(env!("CARGO_BIN_EXE_mohona"))
+        .current_dir(dir.path())
+        .args(["queue", "list"])
+        .output()
+        .unwrap();
+    assert!(String::from_utf8_lossy(&list.stdout).contains("failed"));
+    assert_eq!(std::fs::read_dir(dir.path().join("q")).unwrap().count(), 1);
+}

@@ -17,6 +17,19 @@ pub enum Error {
     #[error("the download was stopped")]
     Cancelled,
 
+    /// The finished file does not hash to what it should. The file is kept.
+    #[error("the file does not match its checksum: expected {algorithm}:{expected} but it is {algorithm}:{actual}. The file was kept at {path} (it may be damaged, or the checksum may be wrong)", path = path.display())]
+    ChecksumMismatch {
+        /// The algorithm used.
+        algorithm: String,
+        /// What it should have been.
+        expected: String,
+        /// What it is.
+        actual: String,
+        /// Where the file was kept.
+        path: std::path::PathBuf,
+    },
+
     /// The transfer ended without an error, but with fewer bytes than promised.
     #[error("the download ended early: received {received} of {expected} bytes")]
     Incomplete {
