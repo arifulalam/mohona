@@ -170,6 +170,7 @@ async fn a_busy_server_is_given_fewer_connections() {
 async fn a_stopped_ftp_download_continues_from_where_it_was() {
     let server = start_ftp(FtpConfig {
         size: 6_000_000,
+        chunk_delay: Some(std::time::Duration::from_millis(2)),
         ..FtpConfig::default()
     })
     .await;

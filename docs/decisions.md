@@ -262,3 +262,14 @@ A `401` now becomes its own error (`NetError::Unauthorized`) that names the kind
 - Hand-written rather than a library because the surface is small, the tests need a matching hand-written server anyway (ADR-0004), and it keeps the dependency list short.
 
 **Not yet:** FTPS (next, with the TLS settings of ADR-0023), FTP through proxies, folder listings, active mode.
+
+## ADR-0027: FTPS is chosen by the scheme, always encrypts the data too, and uses the HTTPS certificate rules
+
+**Decision.** `ftps://` is implicit TLS (default port 990); `ftpes://` is explicit TLS (`AUTH TLS` on port 21). `ftp://` never upgrades by itself. After login, `PBSZ 0` and `PROT P` make data connections encrypted too. Certificates are checked with the same rules as HTTPS (system trust store through the platform verifier, plus `--ca-file`, or `--insecure`), and the same error message and meaning (ADR-0023).
+
+**Why.**
+- The scheme says what the person expects. Silently upgrading `ftp://` would make failures confusing against servers with broken TLS, and silently *not* upgrading `ftpes://` would be a security downgrade, so `ftpes://` fails if the server refuses `AUTH TLS` and no login is sent.
+- Encrypting only the commands would protect the password but not the files, which is rarely what people mean by FTPS.
+- One TLS configuration is made per client and shared by the control and data connections, so a data connection can resume the control connection's TLS session, which servers like vsftpd require by default.
+- Many FTP servers close the encrypted data connection without the TLS closing message. That is accepted, because the file's size and the server's final `226` reply tell whether everything arrived.
+- The platform verifier is used (as `reqwest` does) so Windows' own trust store and company inspection authorities apply the same way for HTTPS and FTPS.

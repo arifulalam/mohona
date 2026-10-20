@@ -7,13 +7,29 @@ use std::net::SocketAddr;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 
-use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
+use tokio::io::{AsyncBufReadExt, AsyncRead, AsyncWrite, AsyncWriteExt, BufReader};
 use tokio::net::{TcpListener, TcpStream};
+use tokio_rustls::TlsAcceptor;
+
+use crate::tls::Certificates;
+
+trait Io: AsyncRead + AsyncWrite + Unpin + Send {}
+impl<T: AsyncRead + AsyncWrite + Unpin + Send> Io for T {}
+type BoxIo = Box<dyn Io>;
+
+/// Encryption offered by the server.
+#[derive(Clone)]
+pub struct FtpTls {
+    /// The certificates it presents.
+    pub certificates: Certificates,
+    /// Encrypted from the first byte (`ftps://`), instead of after `AUTH TLS`.
+    pub implicit: bool,
+}
 
 use crate::fill_content;
 
 /// How the FTP server behaves.
-#[derive(Clone, Debug)]
+#[derive(Clone)]
 pub struct FtpConfig {
     /// Size of every `.bin` file.
     pub size: u64,
@@ -25,6 +41,11 @@ pub struct FtpConfig {
     pub max_connections: Option<usize>,
     /// Do not know `EPSV` (only `PASV`).
     pub no_epsv: bool,
+    /// Wait this long after each 32 KiB sent (to make transfers slow enough to
+    /// interrupt).
+    pub chunk_delay: Option<std::time::Duration>,
+    /// Offer encryption. Then `PROT P` encrypts data connections too.
+    pub tls: Option<FtpTls>,
 }
 
 impl Default for FtpConfig {
@@ -35,6 +56,8 @@ impl Default for FtpConfig {
             no_rest: false,
             max_connections: None,
             no_epsv: false,
+            chunk_delay: None,
+            tls: None,
         }
     }
 }
@@ -50,6 +73,10 @@ pub struct FtpHandle {
     pub retrievals: Arc<Mutex<Vec<(String, u64)>>>,
     /// The user names that logged in successfully.
     pub logins: Arc<Mutex<Vec<String>>>,
+    /// Data connections that were encrypted.
+    pub encrypted_transfers: Arc<AtomicUsize>,
+    /// Data connections that were not.
+    pub plain_transfers: Arc<AtomicUsize>,
 }
 
 pub async fn start_ftp(config: FtpConfig) -> FtpHandle {
@@ -59,6 +86,8 @@ pub async fn start_ftp(config: FtpConfig) -> FtpHandle {
         connections: Arc::default(),
         retrievals: Arc::default(),
         logins: Arc::default(),
+        encrypted_transfers: Arc::default(),
+        plain_transfers: Arc::default(),
     };
     let active = Arc::new(AtomicUsize::new(0));
     let shared = handle.clone();
@@ -93,14 +122,28 @@ async fn session(
     let before = active.fetch_add(1, Ordering::SeqCst);
     let _guard = Guard(active);
     let local = stream.local_addr()?.ip();
-    let (read, mut out) = stream.into_split();
-    let mut lines = BufReader::new(read);
+    let acceptor: Option<TlsAcceptor> = config.tls.as_ref().map(|t| t.certificates.acceptor());
+    let implicit = config.tls.as_ref().is_some_and(|t| t.implicit);
+    let mut io: BoxIo = Box::new(stream);
+    if implicit {
+        let Some(acceptor) = &acceptor else {
+            return Ok(());
+        };
+        io = Box::new(acceptor.accept(io).await?);
+    }
+    let mut lines = BufReader::new(io);
     if config.max_connections.is_some_and(|max| before >= max) {
-        out.write_all(b"421 Too many connections.\r\n").await?;
+        lines
+            .get_mut()
+            .write_all(b"421 Too many connections.\r\n")
+            .await?;
         return Ok(());
     }
-    out.write_all(b"220-Mohona test FTP\r\n220 ready\r\n")
+    lines
+        .get_mut()
+        .write_all(b"220-Mohona test FTP\r\n220 ready\r\n")
         .await?;
+    let mut protect_data = false;
 
     let (mut user, mut logged_in) = (String::new(), false);
     let mut rest = 0u64;
@@ -132,8 +175,21 @@ async fn session(
                 }
             }
             "QUIT" => {
-                out.write_all(b"221 bye\r\n").await?;
+                lines.get_mut().write_all(b"221 bye\r\n").await?;
                 return Ok(());
+            }
+            "AUTH" if acceptor.is_some() && !implicit && argument.eq_ignore_ascii_case("TLS") => {
+                lines.get_mut().write_all(b"234 go ahead\r\n").await?;
+                let plain =
+                    std::mem::replace(lines.get_mut(), Box::new(tokio::io::empty()) as BoxIo);
+                let secured = acceptor.as_ref().expect("checked").accept(plain).await?;
+                lines = BufReader::new(Box::new(secured));
+                continue;
+            }
+            "PBSZ" if acceptor.is_some() => "200 PBSZ=0\r\n".into(),
+            "PROT" if acceptor.is_some() => {
+                protect_data = argument.eq_ignore_ascii_case("P");
+                "200 ok\r\n".into()
             }
             _ if !logged_in => "530 Please login with USER and PASS.\r\n".into(),
             "TYPE" => "200 type set\r\n".into(),
@@ -191,8 +247,21 @@ async fn session(
                     (_, false) => "550 No such file.\r\n".into(),
                     (None, _) => "425 Use PASV first.\r\n".into(),
                     (Some(listener), true) => {
-                        out.write_all(b"150 Opening data connection.\r\n").await?;
-                        let (mut data, _) = listener.accept().await?;
+                        lines
+                            .get_mut()
+                            .write_all(b"150 Opening data connection.\r\n")
+                            .await?;
+                        let (data, _) = listener.accept().await?;
+                        let mut data: BoxIo = if protect_data {
+                            let Some(acceptor) = &acceptor else {
+                                return Ok(());
+                            };
+                            shared.encrypted_transfers.fetch_add(1, Ordering::SeqCst);
+                            Box::new(acceptor.accept(data).await?)
+                        } else {
+                            shared.plain_transfers.fetch_add(1, Ordering::SeqCst);
+                            Box::new(data)
+                        };
                         let mut offset = rest.min(config.size);
                         rest = 0;
                         let mut buffer = vec![0u8; 32 * 1024];
@@ -207,7 +276,11 @@ async fn session(
                                 break;
                             }
                             offset += n as u64;
+                            if let Some(delay) = config.chunk_delay {
+                                tokio::time::sleep(delay).await;
+                            }
                         }
+                        let _ = data.shutdown().await;
                         drop(data);
                         if complete {
                             "226 Transfer complete.\r\n".into()
@@ -219,6 +292,6 @@ async fn session(
             }
             _ => "502 not implemented\r\n".into(),
         };
-        out.write_all(reply.as_bytes()).await?;
+        lines.get_mut().write_all(reply.as_bytes()).await?;
     }
 }

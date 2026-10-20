@@ -21,6 +21,10 @@ serde_json = "1"
 thiserror = "2.0.21"
 tokio = { version = "1", features = ["net", "io-util", "time"] }
 sha1 = "0.10"
+tokio-rustls = { version = "0.26", default-features = false, features = ["aws-lc-rs", "tls12"] }
+rustls-platform-verifier = "0.7"
+rustls-pki-types = "1"
+rustls = { version = "0.23", default-features = false, features = ["aws_lc_rs", "std", "tls12"] }
 
 # On Windows, the TLS crypto library needs the NASM assembler unless prebuilt
 # objects are used. Enabling them means a plain `cargo build` just works.

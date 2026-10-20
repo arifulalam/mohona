@@ -22,7 +22,7 @@ pub enum NetError {
     InvalidUrl(String),
 
     /// The URL uses a scheme Mohona cannot download yet.
-    #[error("unsupported URL scheme \"{0}\" (only http, https and ftp work so far)")]
+    #[error("unsupported URL scheme \"{0}\" (only http, https, ftp, ftps and ftpes work so far)")]
     UnsupportedScheme(String),
 
     /// The server answered, but not with a success status.
@@ -122,6 +122,12 @@ fn explain_certificate(error: &reqwest::Error) -> Option<String> {
         text.push(' ');
         source = e.source();
     }
+    certificate_problem(&text)
+}
+
+/// If the text (an error and its causes) is about a server certificate, say
+/// what is wrong in plain words.
+pub(crate) fn certificate_problem(text: &str) -> Option<String> {
     let lower = text.to_ascii_lowercase();
     if !(lower.contains("certificate") || lower.contains("unknownissuer")) {
         return None;

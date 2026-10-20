@@ -1013,6 +1013,9 @@ dependencies = [
  "mohona-testserver",
  "percent-encoding",
  "reqwest",
+ "rustls",
+ "rustls-pki-types",
+ "rustls-platform-verifier",
  "serde",
  "serde_json",
  "sha1",
@@ -1020,6 +1023,7 @@ dependencies = [
  "tempfile",
  "thiserror",
  "tokio",
+ "tokio-rustls",
 ]
 
 [[package]]

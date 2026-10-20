@@ -81,6 +81,11 @@ pub struct HttpClient {
     credentials: Option<Credentials>,
     /// How the server wanted to be answered, for the rest of the download.
     answered: Answered,
+    /// The certificate rules for FTPS, as the context set them.
+    tls: Option<TlsOptions>,
+    /// The FTPS configuration made from `tls`, made once and shared so that
+    /// connections can resume each other's sessions.
+    ftp_tls: Arc<Mutex<Option<Arc<rustls::ClientConfig>>>>,
 }
 
 /// The body of a successful response, read in chunks.
@@ -120,6 +125,8 @@ impl HttpClient {
             extra: HeaderMap::new(),
             credentials: None,
             answered: Arc::default(),
+            tls: None,
+            ftp_tls: Arc::default(),
         })
     }
 }
@@ -192,7 +199,22 @@ impl HttpClient {
             extra: context.header_map()?,
             credentials: context.credentials.clone(),
             answered: Arc::default(),
+            tls: context.tls.clone(),
+            ftp_tls: Arc::default(),
         })
+    }
+
+    /// The TLS configuration for an FTP address that is encrypted, made on
+    /// first use. Plain `ftp://` needs none.
+    fn ftp_security(&self, url: &Url) -> Result<Option<Arc<rustls::ClientConfig>>, NetError> {
+        if crate::ftp::Security::of(url) == crate::ftp::Security::Plain {
+            return Ok(None);
+        }
+        let mut made = self.ftp_tls.lock().unwrap_or_else(|e| e.into_inner());
+        if made.is_none() {
+            *made = Some(crate::tlsconfig::client_config(self.tls.as_ref())?);
+        }
+        Ok(made.clone())
     }
 
     /// Find out size, range support, validators and file name for a URL.
@@ -202,8 +224,9 @@ impl HttpClient {
     /// on servers that reject `HEAD`.
     pub async fn probe(&self, url: &str) -> Result<Probe, NetError> {
         let url = parse_url(url)?;
-        if url.scheme() == "ftp" {
-            return crate::ftp::probe(&url, self.credentials.as_ref(), &self.config).await;
+        if is_ftp(&url) {
+            let tls = self.ftp_security(&url)?;
+            return crate::ftp::probe(&url, self.credentials.as_ref(), &self.config, &tls).await;
         }
         let mut from_head = None;
 
@@ -234,9 +257,11 @@ impl HttpClient {
     /// Start a `GET` and return its body. Fails on any non-success status.
     pub async fn get(&self, url: &str) -> Result<Body, NetError> {
         let url = parse_url(url)?;
-        if url.scheme() == "ftp" {
+        if is_ftp(&url) {
+            let tls = self.ftp_security(&url)?;
             let body =
-                crate::ftp::open(&url, self.credentials.as_ref(), &self.config, 0, None).await?;
+                crate::ftp::open(&url, self.credentials.as_ref(), &self.config, &tls, 0, None)
+                    .await?;
             return Ok(Body {
                 inner: BodyInner::Ftp(Box::new(body)),
             });
@@ -265,11 +290,13 @@ impl HttpClient {
         etag: Option<&str>,
     ) -> Result<Body, NetError> {
         let url = parse_url(url)?;
-        if url.scheme() == "ftp" {
+        if is_ftp(&url) {
+            let tls = self.ftp_security(&url)?;
             let body = crate::ftp::open(
                 &url,
                 self.credentials.as_ref(),
                 &self.config,
+                &tls,
                 first,
                 Some(last.saturating_sub(first) + 1),
             )
@@ -431,11 +458,15 @@ fn parse_retry_after(value: &str) -> Option<Duration> {
     value.trim().parse::<u64>().ok().map(Duration::from_secs)
 }
 
+fn is_ftp(url: &Url) -> bool {
+    matches!(url.scheme(), "ftp" | "ftps" | "ftpes")
+}
+
 fn parse_url(input: &str) -> Result<Url, NetError> {
     let url = Url::parse(input.trim())
         .map_err(|error| NetError::InvalidUrl(format!("{input} ({error})")))?;
     match url.scheme() {
-        "http" | "https" | "ftp" => Ok(url),
+        "http" | "https" | "ftp" | "ftps" | "ftpes" => Ok(url),
         other => Err(NetError::UnsupportedScheme(other.to_string())),
     }
 }

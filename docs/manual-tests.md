@@ -45,6 +45,14 @@ Format: **what to run** → **what should happen**.
 - [ ] A server that limits connections per address (many free ones allow 2 to 5): `get URL -c 8` → still finishes, using fewer connections.
 - [ ] A server with files that have spaces or non-English letters in the name.
 
+## FTPS
+
+- [ ] A server with explicit encryption (FileZilla Server, vsftpd with `ssl_enable=YES`, many hosting providers): `get ftpes://host/file -u user` → downloads. With a self-made certificate, expect the "not signed by an authority" error first, then success with `--ca-file` or `--insecure`.
+- [ ] A server with implicit encryption (port 990): `get ftps://host/file -u user`.
+- [ ] **vsftpd defaults to requiring TLS session reuse on data connections.** Mohona reuses sessions; if it fails with `522` or `425` on such a server while a normal client works, report it with the server's name and version.
+- [ ] Download with several connections (`-c 4`) from an encrypted server, then compare the file with its checksum.
+- [ ] Wireshark or the server log: nothing readable (login, file names) crosses the network before the encryption starts.
+
 ## Logins and cookies against a real site
 
 - [ ] A real HTTP Basic site: `get URL -u user:password` → downloads; wrong password → `refused the user name or password`.

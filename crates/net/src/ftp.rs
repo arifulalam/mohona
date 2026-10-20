@@ -5,20 +5,51 @@
 //! HTTP request opens its own range request. That keeps segments independent.
 
 use std::net::{IpAddr, SocketAddr};
+use std::sync::Arc;
 use std::time::Duration;
 
 use bytes::{Bytes, BytesMut};
 use percent_encoding::percent_decode_str;
 use reqwest::Url;
-use tokio::io::{AsyncBufReadExt, AsyncReadExt, AsyncWriteExt, BufReader};
+use rustls::pki_types::ServerName;
+use rustls::ClientConfig;
+use tokio::io::{AsyncBufReadExt, AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt, BufReader};
 use tokio::net::TcpStream;
 use tokio::time::timeout;
+use tokio_rustls::TlsConnector;
 
-use crate::http::{ClientConfig, Probe};
+use crate::http::Probe;
 use crate::{Credentials, NetError};
+
+/// A connection of either kind (plain or encrypted).
+trait Io: AsyncRead + AsyncWrite + Unpin + Send {}
+impl<T: AsyncRead + AsyncWrite + Unpin + Send> Io for T {}
+type BoxIo = Box<dyn Io>;
+
+/// How the connection is protected.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum Security {
+    /// Not at all (`ftp://`).
+    Plain,
+    /// Encrypted from the first byte (`ftps://`, port 990).
+    Implicit,
+    /// Starts plain and switches with `AUTH TLS` (`ftpes://`, port 21).
+    Explicit,
+}
+
+impl Security {
+    pub(crate) fn of(url: &Url) -> Self {
+        match url.scheme() {
+            "ftps" => Security::Implicit,
+            "ftpes" => Security::Explicit,
+            _ => Security::Plain,
+        }
+    }
+}
 
 /// What an FTP address names.
 struct Target {
+    security: Security,
     host: String,
     port: u16,
     path: String,
@@ -53,9 +84,15 @@ fn target(url: &Url, credentials: Option<&Credentials>) -> Result<Target, NetErr
     if path.contains(['\r', '\n']) {
         return Err(NetError::InvalidUrl(format!("{url} (bad characters)")));
     }
+    let security = Security::of(url);
     Ok(Target {
+        security,
         host,
-        port: url.port().unwrap_or(21),
+        port: url.port().unwrap_or(if security == Security::Implicit {
+            990
+        } else {
+            21
+        }),
         path,
         user,
         password,
@@ -68,13 +105,42 @@ fn io_error(error: std::io::Error) -> NetError {
 
 /// One FTP control connection, logged in.
 struct Control {
-    reader: BufReader<TcpStream>,
+    reader: BufReader<BoxIo>,
     peer: IpAddr,
     wait: Duration,
+    /// Set when the data connections must be encrypted too.
+    protect: Option<(TlsConnector, ServerName<'static>)>,
+}
+
+/// Turn a failed handshake into the right error: a refused certificate is
+/// explained, anything else is a connection problem.
+fn handshake_error(error: std::io::Error) -> NetError {
+    let text = format!("{error:?} {error}");
+    match crate::error::certificate_problem(&text) {
+        Some(reason) => NetError::Tls(reason),
+        None => io_error(error),
+    }
+}
+
+async fn encrypt(
+    stream: impl Io + 'static,
+    connector: &TlsConnector,
+    name: &ServerName<'static>,
+    wait: Duration,
+) -> Result<BoxIo, NetError> {
+    let stream = timeout(wait, connector.connect(name.clone(), stream))
+        .await
+        .map_err(|_| io_error(std::io::ErrorKind::TimedOut.into()))?
+        .map_err(handshake_error)?;
+    Ok(Box::new(stream))
 }
 
 impl Control {
-    async fn connect(target: &Target, config: &ClientConfig) -> Result<Self, NetError> {
+    async fn connect(
+        target: &Target,
+        config: &crate::http::ClientConfig,
+        tls: &Option<Arc<ClientConfig>>,
+    ) -> Result<Self, NetError> {
         let stream = timeout(
             config.connect_timeout,
             TcpStream::connect((target.host.as_str(), target.port)),
@@ -84,10 +150,24 @@ impl Control {
         .map_err(io_error)?;
         let _ = stream.set_nodelay(true);
         let peer = stream.peer_addr().map_err(io_error)?.ip();
+        let secured = match (target.security, tls) {
+            (Security::Plain, _) | (_, None) => None,
+            (_, Some(tls)) => {
+                let name = ServerName::try_from(target.host.clone()).map_err(|_| {
+                    NetError::InvalidUrl(format!("{} (not a valid host)", target.host))
+                })?;
+                Some((TlsConnector::from(tls.clone()), name))
+            }
+        };
+        let mut io: BoxIo = Box::new(stream);
+        if let (Security::Implicit, Some((connector, name))) = (target.security, &secured) {
+            io = encrypt(io, connector, name, config.read_timeout).await?;
+        }
         let mut control = Self {
-            reader: BufReader::new(stream),
+            reader: BufReader::new(io),
             peer,
             wait: config.read_timeout,
+            protect: None,
         };
         let (code, text) = control.reply().await?;
         if code != 220 {
@@ -95,6 +175,16 @@ impl Control {
                 code,
                 message: text,
             });
+        }
+        if let (Security::Explicit, Some((connector, name))) = (target.security, &secured) {
+            control.expect("AUTH TLS", &[234]).await?;
+            // The server waits for the handshake now, so nothing is buffered.
+            let plain = std::mem::replace(
+                control.reader.get_mut(),
+                Box::new(tokio::io::empty()) as BoxIo,
+            );
+            let encrypted = encrypt(plain, connector, name, config.read_timeout).await?;
+            control.reader = BufReader::new(encrypted);
         }
         let (code, text) = control.command(&format!("USER {}", target.user)).await?;
         match code {
@@ -116,6 +206,12 @@ impl Control {
                     message: text,
                 })
             }
+        }
+        if let Some(secured) = secured {
+            // Encrypt the file data as well, not only the commands.
+            control.expect("PBSZ 0", &[200]).await?;
+            control.expect("PROT P", &[200]).await?;
+            control.protect = Some(secured);
         }
         Ok(control)
     }
@@ -175,7 +271,7 @@ impl Control {
     }
 
     /// Open a passive data connection.
-    async fn passive(&mut self, config: &ClientConfig) -> Result<TcpStream, NetError> {
+    async fn passive(&mut self, config: &crate::http::ClientConfig) -> Result<TcpStream, NetError> {
         let port = match self.command("EPSV").await? {
             (229, text) => parse_epsv(&text),
             _ => None,
@@ -230,10 +326,11 @@ fn mdtm_validator(text: &str) -> String {
 pub(crate) async fn probe(
     url: &Url,
     credentials: Option<&Credentials>,
-    config: &ClientConfig,
+    config: &crate::http::ClientConfig,
+    tls: &Option<Arc<ClientConfig>>,
 ) -> Result<Probe, NetError> {
     let target = target(url, credentials)?;
-    let mut control = Control::connect(&target, config).await?;
+    let mut control = Control::connect(&target, config, tls).await?;
     control.expect("TYPE I", &[200]).await?;
     let size = match control.command(&format!("SIZE {}", target.path)).await? {
         (213, text) => text.trim().parse::<u64>().ok(),
@@ -266,7 +363,8 @@ pub(crate) async fn probe(
 
 /// A file being read from an FTP server.
 pub(crate) struct FtpBody {
-    data: TcpStream,
+    data: BoxIo,
+    protected: bool,
     control: Option<Control>,
     /// Bytes still wanted, when only a part was asked for.
     remaining: Option<u64>,
@@ -288,10 +386,17 @@ impl FtpBody {
             return Ok(None);
         }
         let mut buffer = BytesMut::with_capacity(64 * 1024);
-        let read = timeout(self.wait, self.data.read_buf(&mut buffer))
+        let read = match timeout(self.wait, self.data.read_buf(&mut buffer))
             .await
             .map_err(|_| io_error(std::io::ErrorKind::TimedOut.into()))?
-            .map_err(io_error)?;
+        {
+            Ok(read) => read,
+            // Many servers close an encrypted data connection without the
+            // closing handshake. The size and the server's final reply tell
+            // whether everything arrived.
+            Err(error) if self.protected && error.kind() == std::io::ErrorKind::UnexpectedEof => 0,
+            Err(error) => return Err(io_error(error)),
+        };
         if read == 0 {
             // The transfer ended: the server confirms or complains.
             self.finish(true).await?;
@@ -328,12 +433,13 @@ impl FtpBody {
 pub(crate) async fn open(
     url: &Url,
     credentials: Option<&Credentials>,
-    config: &ClientConfig,
+    config: &crate::http::ClientConfig,
+    tls: &Option<Arc<ClientConfig>>,
     first: u64,
     length: Option<u64>,
 ) -> Result<FtpBody, NetError> {
     let target = target(url, credentials)?;
-    let mut control = Control::connect(&target, config).await?;
+    let mut control = Control::connect(&target, config, tls).await?;
     control.expect("TYPE I", &[200]).await?;
     let data = control.passive(config).await?;
     if first > 0 {
@@ -348,8 +454,14 @@ pub(crate) async fn open(
     if code != 125 && code != 150 {
         return Err(NetError::Ftp { code, message });
     }
+    let protected = control.protect.is_some();
+    let data: BoxIo = match &control.protect {
+        Some((connector, name)) => encrypt(data, connector, name, config.read_timeout).await?,
+        None => Box::new(data),
+    };
     Ok(FtpBody {
         data,
+        protected,
         wait: config.read_timeout,
         control: Some(control),
         remaining: length,

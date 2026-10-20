@@ -156,4 +156,4 @@ mohona get ftp://host/pub/file.iso
 mohona get ftp://host/private/file.zip -u alice:secret
 ```
 
-Anonymous by default. Downloads are split into pieces and can be resumed, as with HTTP, when the server allows it.
+Use `ftps://` (encrypted from the start) or `ftpes://` (switches to encryption) for encrypted FTP; the certificate rules are the same as for HTTPS. Anonymous by default. Downloads are split into pieces and can be resumed, as with HTTP, when the server allows it.

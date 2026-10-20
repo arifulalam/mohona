@@ -116,8 +116,21 @@ mohona queue add ftp://alice:secret@host/private/file.zip     # the login is not
 - With no login, Mohona signs in as `anonymous`.
 - Resumable and split into pieces like HTTP, when the server supports `REST` (most do). Each piece uses its own connection; servers that allow only a few get fewer automatically (421).
 - Needs a file address, not a folder. Passive mode only (the usual one behind routers).
-- Not yet: FTPS (encrypted FTP), FTP through a proxy (`--proxy` is ignored for `ftp://`), and listing folders.
+- Not yet: FTP through a proxy (`--proxy` is ignored for FTP addresses), and listing folders.
 - Works with `--checksum`, `--mirror` (also mixed with http addresses of the same size) and the queue.
+
+### Example: encrypted FTP (FTPS)
+
+```
+mohona get ftps://host/file.zip -u alice:secret      # encrypted from the first byte (port 990)
+mohona get ftpes://host/file.zip -u alice:secret     # starts plain, then switches with AUTH TLS (port 21)
+mohona get ftpes://nas.local/file.zip --ca-file my-ca.pem
+mohona get ftpes://nas.local/file.zip --insecure
+```
+
+- Both encrypt the login **and** the file data. A plain `ftp://` address never switches to encryption by itself: if your server offers encryption, use `ftpes://`.
+- The certificate rules are the same as for HTTPS (`--ca-file`, `--insecure`; see above). The login is not sent until the connection is encrypted and the certificate accepted.
+- Errors: a refused certificate shows the same message as for HTTPS. `ftpes://` against a server without encryption fails with `the FTP server answered 502/504 ...`; no password is sent.
 
 ### Example: mirrors
 
@@ -141,7 +154,7 @@ mohona get https://main.example.com/tool.iso --mirror https://mirror1.example.or
 | `the server answered 401` with a note that it sent no login method | The site uses a web login page, not HTTP login. Log in in a browser and pass its cookie with `--cookie` |
 | `the server answered 404 ...` | The address is wrong or the file is gone |
 | `the server answered 500 ...` | The server itself failed; try later |
-| `unsupported URL scheme "sftp" (only http, https and ftp work so far)` | SFTP, FTPS and WebDAV come later in Phase 3 |
+| `unsupported URL scheme "sftp" (only http, https, ftp, ftps and ftpes work so far)` | SFTP, FTPS and WebDAV come later in Phase 3 |
 | `the FTP server answered 530: ... (it refused the login: give one with -u user:password)` | The FTP server wants a real login |
 | `the FTP server answered 550: ... (the file is not there, or you may not read it)` | Wrong path or no permission. Not retried |
 | `the FTP server answered 421: ... (the server is busy or limits connections: try fewer with -c)` | Too many connections to that server; Mohona already lowers them by itself, but `-c 2` helps up front |

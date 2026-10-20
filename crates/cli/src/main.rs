@@ -66,7 +66,7 @@ enum Command {
     },
     /// Download a URL
     Get {
-        /// The address to download (http, https or ftp)
+        /// The address to download (http, https, ftp, ftps or ftpes)
         url: String,
 
         /// Folder to save the file in

@@ -626,3 +626,47 @@ fn ftp_addresses_work_in_get_and_in_the_queue() {
         700_000
     );
 }
+
+#[test]
+fn ftps_uses_the_certificate_flags() {
+    use mohona_testserver::ftp::{start_ftp, FtpConfig, FtpTls};
+    use mohona_testserver::tls::Certificates;
+    let certificates = Certificates::new(false);
+    let rt = tokio::runtime::Runtime::new().unwrap();
+    let server = rt.block_on(start_ftp(FtpConfig {
+        size: 300_000,
+        tls: Some(FtpTls {
+            certificates: certificates.clone(),
+            implicit: true,
+        }),
+        ..FtpConfig::default()
+    }));
+    let dir = tempfile::tempdir().unwrap();
+    let ca = dir.path().join("ca.pem");
+    std::fs::write(&ca, &certificates.ca_pem).unwrap();
+    let url = format!("ftps://localhost:{}/x.bin", server.addr.port());
+    let get = |extra: &[&str]| {
+        Command::new(env!("CARGO_BIN_EXE_mohona"))
+            .current_dir(dir.path())
+            .args(["get", &url, "-o", "out"])
+            .args(extra)
+            .output()
+            .unwrap()
+    };
+    let strict = get(&[]);
+    assert!(!strict.status.success());
+    assert!(String::from_utf8_lossy(&strict.stderr).contains("--ca-file"));
+    let trusted = get(&["--ca-file", ca.to_str().unwrap()]);
+    assert!(
+        trusted.status.success(),
+        "{}",
+        String::from_utf8_lossy(&trusted.stderr)
+    );
+    assert!(get(&["--insecure"]).status.success());
+    assert_eq!(
+        std::fs::metadata(dir.path().join("out/x.bin"))
+            .unwrap()
+            .len(),
+        300_000
+    );
+}

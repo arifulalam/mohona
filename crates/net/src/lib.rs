@@ -11,6 +11,7 @@ mod disposition;
 mod error;
 mod ftp;
 mod http;
+mod tlsconfig;
 
 pub use auth::{split_userinfo, Credentials};
 pub use checksum::{hash_file, Algorithm, Checksum};

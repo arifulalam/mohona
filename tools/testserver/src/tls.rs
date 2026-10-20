@@ -12,6 +12,7 @@ use tokio_rustls::TlsAcceptor;
 use crate::Config;
 
 /// A certificate authority and a server certificate it signed.
+#[derive(Clone)]
 pub struct Certificates {
     /// The authority, as PEM. Give this to a client that should trust the server.
     pub ca_pem: String,
@@ -58,7 +59,8 @@ impl Certificates {
         }
     }
 
-    fn acceptor(&self) -> TlsAcceptor {
+    /// A TLS acceptor presenting this certificate.
+    pub fn acceptor(&self) -> TlsAcceptor {
         let config = ServerConfig::builder()
             .with_no_client_auth()
             .with_single_cert(
