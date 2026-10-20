@@ -36,6 +36,15 @@ Format: **what to run** → **what should happen**.
 - [ ] A mirror with an older version of the file (same name, different size) → skipped with a note, not mixed in.
 - [ ] Mirrors with the same size but different content cannot be told apart by size: confirm `--checksum` catches it.
 
+## FTP
+
+- [ ] A public FTP server (for example `ftp://ftp.gnu.org/gnu/hello/hello-2.12.1.tar.gz`, or any distribution mirror): `get URL -o downloads` → downloads with several connections; compare its size with the site's.
+- [ ] Windows firewall: the first run may ask to allow Mohona; passive FTP only makes outgoing connections, so it should work even if you say no.
+- [ ] A server needing a login (a router's USB share, a home server, FileZilla Server): `get ftp://host/file -u user` → downloads; wrong password → clear 530 message.
+- [ ] Stop with Ctrl+C midway and run again → continues from where it stopped.
+- [ ] A server that limits connections per address (many free ones allow 2 to 5): `get URL -c 8` → still finishes, using fewer connections.
+- [ ] A server with files that have spaces or non-English letters in the name.
+
 ## Logins and cookies against a real site
 
 - [ ] A real HTTP Basic site: `get URL -u user:password` → downloads; wrong password → `refused the user name or password`.

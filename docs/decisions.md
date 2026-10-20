@@ -247,3 +247,18 @@ A `401` now becomes its own error (`NetError::Unauthorized`) that names the kind
 - The size is the only thing known cheaply about a mirror. It catches stale versions, not wrong content: the docs say so and point to `--checksum`, which verifies the whole file at the end.
 - Mirrors are never trusted with more than the main address would be: same cookies, login, proxy and certificate settings, and each address has its own `If-Range` tag so a changed file is noticed.
 - Mirrors are never fatal: every skip or failure is a note, and only "no address works" is an error.
+
+## ADR-0026: FTP is handled inside the same client, chosen by the address
+
+**Decision.** `HttpClient` serves `ftp://` addresses too: `probe`, `get` and `get_range` look at the scheme, and the body it returns reads from either kind of connection. FTP is written by hand (about 300 lines) over tokio: passive mode (`EPSV`, then `PASV`), binary type, `SIZE`, `MDTM`, `REST`, `RETR`. Each request opens its own control connection and (for data) its own data connection.
+
+**Why.**
+- The download engine already needs exactly three things from a transport (probe, read from here, read this range). Routing by scheme keeps the engine, mirrors, checksums, queue, retries and the tuner unchanged and working for FTP at once. A separate transport trait would have touched every call site for no gain yet. When SFTP and WebDAV arrive, the same switch is extended; if it grows unwieldy, the trait comes then, with three real implementations to design it from.
+- One connection per piece mirrors HTTP ranges, so segments, resume, takeover of slow pieces and "fewer connections when the server pushes back" all work as they are. A `421` is treated like HTTP 429.
+- The address in a `PASV` answer is ignored and the control connection's address is used (the usual fix for servers behind NAT).
+- `MDTM` serves as the validator (like an ETag) so a changed file is noticed on resume. A server without `REST` or `SIZE` gets a single plain download.
+- A part ends by hanging up, not by sending `ABOR`: simpler, and what download tools do.
+- Credentials: the address's login or `-u`; otherwise `anonymous`.
+- Hand-written rather than a library because the surface is small, the tests need a matching hand-written server anyway (ADR-0004), and it keeps the dependency list short.
+
+**Not yet:** FTPS (next, with the TLS settings of ADR-0023), FTP through proxies, folder listings, active mode.

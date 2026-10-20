@@ -148,3 +148,12 @@ mohona get URL --mirror URL2 --mirror URL3 --checksum sha256:...
 ```
 
 The pieces of the file come from all addresses at once; a failing address is replaced by another. Only mirrors with the same size are used; add `--checksum` to be sure the content is the same.
+
+### FTP
+
+```
+mohona get ftp://host/pub/file.iso
+mohona get ftp://host/private/file.zip -u alice:secret
+```
+
+Anonymous by default. Downloads are split into pieces and can be resumed, as with HTTP, when the server allows it.

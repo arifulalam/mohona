@@ -9,6 +9,7 @@ mod checksum;
 mod context;
 mod disposition;
 mod error;
+mod ftp;
 mod http;
 
 pub use auth::{split_userinfo, Credentials};

@@ -568,3 +568,61 @@ fn mirrors_are_used_by_get_and_saved_by_the_queue() {
         "the saved mirror was used"
     );
 }
+
+#[test]
+fn ftp_addresses_work_in_get_and_in_the_queue() {
+    use mohona_testserver::ftp::{start_ftp, FtpConfig};
+    let rt = tokio::runtime::Runtime::new().unwrap();
+    let server = rt.block_on(start_ftp(FtpConfig {
+        size: 700_000,
+        login: Some(("pat".into(), "secret".into())),
+        ..FtpConfig::default()
+    }));
+    let dir = tempfile::tempdir().unwrap();
+    let run = |args: &[&str]| {
+        Command::new(env!("CARGO_BIN_EXE_mohona"))
+            .current_dir(dir.path())
+            .args(args)
+            .env("MOHONA_PASSWORD", "secret")
+            .output()
+            .unwrap()
+    };
+    let url = format!("ftp://{}/pub/file.bin", server.addr);
+
+    let refused = run(&["get", &url, "-o", "out"]);
+    assert!(!refused.status.success());
+    assert!(String::from_utf8_lossy(&refused.stderr).contains("-u user:password"));
+
+    let ok = run(&["get", &url, "-o", "out", "-u", "pat"]);
+    assert!(
+        ok.status.success(),
+        "{}",
+        String::from_utf8_lossy(&ok.stderr)
+    );
+    assert_eq!(
+        std::fs::metadata(dir.path().join("out/file.bin"))
+            .unwrap()
+            .len(),
+        700_000
+    );
+
+    // In the address, and through the queue (the login is not kept in the list).
+    let in_address = format!("ftp://pat:secret@{}/pub/two.bin", server.addr);
+    assert!(run(&["queue", "add", &in_address, "-o", "q"])
+        .status
+        .success());
+    let list = run(&["queue", "list"]);
+    assert!(!String::from_utf8_lossy(&list.stdout).contains("secret"));
+    let done = run(&["queue", "run"]);
+    assert!(
+        done.status.success(),
+        "{}",
+        String::from_utf8_lossy(&done.stderr)
+    );
+    assert_eq!(
+        std::fs::metadata(dir.path().join("q/two.bin"))
+            .unwrap()
+            .len(),
+        700_000
+    );
+}

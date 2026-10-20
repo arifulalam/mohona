@@ -22,7 +22,7 @@ pub enum NetError {
     InvalidUrl(String),
 
     /// The URL uses a scheme Mohona cannot download yet.
-    #[error("unsupported URL scheme \"{0}\" (only http and https work so far)")]
+    #[error("unsupported URL scheme \"{0}\" (only http, https and ftp work so far)")]
     UnsupportedScheme(String),
 
     /// The server answered, but not with a success status.
@@ -64,6 +64,19 @@ pub enum NetError {
     /// A header, cookie or the like cannot be sent.
     #[error("invalid header: {0}")]
     InvalidHeader(String),
+
+    /// An FTP server answered with an error.
+    #[error("{}", explain_ftp(*.code, .message))]
+    Ftp {
+        /// The three-digit reply code.
+        code: u16,
+        /// What the server said.
+        message: String,
+    },
+
+    /// The connection to an FTP server failed.
+    #[error("FTP connection problem: {0}")]
+    FtpIo(std::io::Error),
 
     /// A checksum cannot be read.
     #[error("invalid checksum {0}")]
@@ -127,6 +140,17 @@ fn explain_certificate(error: &reqwest::Error) -> Option<String> {
     Some(reason.to_string())
 }
 
+/// Say what an FTP error code means in this case, and what to do about it.
+fn explain_ftp(code: u16, message: &str) -> String {
+    let hint = match code {
+        421 => " (the server is busy or limits connections: try fewer with -c)",
+        530 | 331 | 332 => " (it refused the login: give one with -u user:password)",
+        550 => " (the file is not there, or you may not read it)",
+        _ => "",
+    };
+    format!("the FTP server answered {code}: {message}{hint}")
+}
+
 /// Say what a `401` means in this case, and what to do about it.
 fn explain_unauthorized(url: &str, offered: &[String], credentials_given: bool) -> String {
     let usable =
@@ -168,6 +192,15 @@ impl NetError {
                     Failure::Transient
                 }
             }
+            NetError::Ftp { code, .. } => match code {
+                421 => Failure::Throttled,
+                425 | 426 | 450 | 451 | 452 => Failure::Transient,
+                _ => Failure::Fatal,
+            },
+            NetError::FtpIo(error) => match error.kind() {
+                std::io::ErrorKind::ConnectionRefused => Failure::Throttled,
+                _ => Failure::Transient,
+            },
             NetError::InvalidUrl(_)
             | NetError::Unauthorized { .. }
             | NetError::UnsupportedScheme(_)

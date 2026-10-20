@@ -85,18 +85,29 @@ pub struct HttpClient {
 
 /// The body of a successful response, read in chunks.
 pub struct Body {
-    response: Response,
+    inner: BodyInner,
+}
+
+enum BodyInner {
+    Http(Response),
+    Ftp(Box<crate::ftp::FtpBody>),
 }
 
 impl Body {
-    /// Length of the body in bytes, if the server said.
+    /// Length of the body in bytes, if known.
     pub fn content_length(&self) -> Option<u64> {
-        self.response.content_length()
+        match &self.inner {
+            BodyInner::Http(response) => response.content_length(),
+            BodyInner::Ftp(body) => body.content_length(),
+        }
     }
 
     /// The next piece of the body, or `None` at the end.
     pub async fn chunk(&mut self) -> Result<Option<Bytes>, NetError> {
-        Ok(self.response.chunk().await?)
+        match &mut self.inner {
+            BodyInner::Http(response) => Ok(response.chunk().await?),
+            BodyInner::Ftp(body) => body.chunk().await,
+        }
     }
 }
 
@@ -191,6 +202,9 @@ impl HttpClient {
     /// on servers that reject `HEAD`.
     pub async fn probe(&self, url: &str) -> Result<Probe, NetError> {
         let url = parse_url(url)?;
+        if url.scheme() == "ftp" {
+            return crate::ftp::probe(&url, self.credentials.as_ref(), &self.config).await;
+        }
         let mut from_head = None;
 
         if let Ok(response) = self.send(Method::HEAD, &url, |r| r).await {
@@ -220,11 +234,20 @@ impl HttpClient {
     /// Start a `GET` and return its body. Fails on any non-success status.
     pub async fn get(&self, url: &str) -> Result<Body, NetError> {
         let url = parse_url(url)?;
+        if url.scheme() == "ftp" {
+            let body =
+                crate::ftp::open(&url, self.credentials.as_ref(), &self.config, 0, None).await?;
+            return Ok(Body {
+                inner: BodyInner::Ftp(Box::new(body)),
+            });
+        }
         let response = self.send(Method::GET, &url, |r| r).await?;
         if !response.status().is_success() {
             return Err(status_error(&response, &url, self.credentials.is_some()));
         }
-        Ok(Body { response })
+        Ok(Body {
+            inner: BodyInner::Http(response),
+        })
     }
 
     /// Start a `GET` for bytes `first..=last` and return its body.
@@ -242,6 +265,19 @@ impl HttpClient {
         etag: Option<&str>,
     ) -> Result<Body, NetError> {
         let url = parse_url(url)?;
+        if url.scheme() == "ftp" {
+            let body = crate::ftp::open(
+                &url,
+                self.credentials.as_ref(),
+                &self.config,
+                first,
+                Some(last.saturating_sub(first) + 1),
+            )
+            .await?;
+            return Ok(Body {
+                inner: BodyInner::Ftp(Box::new(body)),
+            });
+        }
         let range = format!("bytes={first}-{last}");
         // Weak validators ("W/...") are not allowed in `If-Range`.
         let if_range = etag.filter(|etag| !etag.starts_with("W/"));
@@ -264,7 +300,9 @@ impl HttpClient {
                     header_text(&response, &CONTENT_RANGE)
                 )));
             }
-            Ok(Body { response })
+            Ok(Body {
+                inner: BodyInner::Http(response),
+            })
         } else if status.is_success() {
             Err(NetError::WrongRange(format!(
                 "asked for bytes {first}-{last}, got status {}",
@@ -397,7 +435,7 @@ fn parse_url(input: &str) -> Result<Url, NetError> {
     let url = Url::parse(input.trim())
         .map_err(|error| NetError::InvalidUrl(format!("{input} ({error})")))?;
     match url.scheme() {
-        "http" | "https" => Ok(url),
+        "http" | "https" | "ftp" => Ok(url),
         other => Err(NetError::UnsupportedScheme(other.to_string())),
     }
 }

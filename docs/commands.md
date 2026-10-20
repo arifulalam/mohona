@@ -105,6 +105,20 @@ error: the file does not match its checksum: expected sha256:cdcd... but it is s
 
 With `queue add`, `--checksum` works for one address at a time. The download ends as `failed` (it is not retried: the same bytes would come again).
 
+### Example: FTP
+
+```
+mohona get ftp://ftp.example.org/pub/tool.iso -o downloads
+mohona get ftp://ftp.example.org/private/file.zip -u alice:secret -o downloads
+mohona queue add ftp://alice:secret@host/private/file.zip     # the login is not kept in the list
+```
+
+- With no login, Mohona signs in as `anonymous`.
+- Resumable and split into pieces like HTTP, when the server supports `REST` (most do). Each piece uses its own connection; servers that allow only a few get fewer automatically (421).
+- Needs a file address, not a folder. Passive mode only (the usual one behind routers).
+- Not yet: FTPS (encrypted FTP), FTP through a proxy (`--proxy` is ignored for `ftp://`), and listing folders.
+- Works with `--checksum`, `--mirror` (also mixed with http addresses of the same size) and the queue.
+
 ### Example: mirrors
 
 ```
@@ -127,7 +141,12 @@ mohona get https://main.example.com/tool.iso --mirror https://mirror1.example.or
 | `the server answered 401` with a note that it sent no login method | The site uses a web login page, not HTTP login. Log in in a browser and pass its cookie with `--cookie` |
 | `the server answered 404 ...` | The address is wrong or the file is gone |
 | `the server answered 500 ...` | The server itself failed; try later |
-| `unsupported URL scheme "ftp" (only http and https work so far)` | FTP/SFTP come in a later phase |
+| `unsupported URL scheme "sftp" (only http, https and ftp work so far)` | SFTP, FTPS and WebDAV come later in Phase 3 |
+| `the FTP server answered 530: ... (it refused the login: give one with -u user:password)` | The FTP server wants a real login |
+| `the FTP server answered 550: ... (the file is not there, or you may not read it)` | Wrong path or no permission. Not retried |
+| `the FTP server answered 421: ... (the server is busy or limits connections: try fewer with -c)` | Too many connections to that server; Mohona already lowers them by itself, but `-c 2` helps up front |
+| `FTP connection problem: ...` | The server is not reachable (down, wrong port, firewall) |
+| `invalid URL: ftp://host/dir/ (the address must name a file, not a folder)` | FTP addresses must name one file |
 | `invalid proxy: "ftp://x": use http://, https://, socks5:// or socks5h://` | Fix the proxy address |
 | `the argument '--no-proxy' cannot be used with '--proxy <URL>'` | Use one or the other |
 | `invalid header: "Bad Header" is not like Name: value` | Headers need a colon |

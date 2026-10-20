@@ -8,6 +8,7 @@
 //! `Connection` header (HTTP/1.1 keep-alive is the default).
 
 mod digest;
+pub mod ftp;
 pub mod proxy;
 mod sums;
 pub mod tls;
