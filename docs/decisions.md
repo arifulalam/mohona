@@ -273,3 +273,17 @@ A `401` now becomes its own error (`NetError::Unauthorized`) that names the kind
 - One TLS configuration is made per client and shared by the control and data connections, so a data connection can resume the control connection's TLS session, which servers like vsftpd require by default.
 - Many FTP servers close the encrypted data connection without the TLS closing message. That is accepted, because the file's size and the server's final `226` reply tell whether everything arrived.
 - The platform verifier is used (as `reqwest` does) so Windows' own trust store and company inspection authorities apply the same way for HTTPS and FTPS.
+
+## ADR-0028: SFTP uses russh, checks the host key first, and keeps key passphrases out of the database
+
+**Decision.** SFTP is served from the same client and chosen by the `sftp://` scheme (ADR-0026), built on the `russh` and `russh-sftp` crates (pure Rust, async, no C library to build on Windows). Every request opens its own SSH connection, logs in, and reads with the file's offset, so pieces, resume and slow-piece takeover work as for HTTP and FTP.
+
+**Host keys.** The server's key is judged before any credential is offered: `--host-key` (an exact fingerprint) wins; otherwise the OpenSSH `known_hosts` file (the person's own, or `--known-hosts`) decides. An unknown server is refused with its fingerprint and the two ways to trust it. `--trust-new-host` records a new server (like OpenSSH's `accept-new`). A server whose key *changed* is always refused, even with `--trust-new-host`, because that is exactly what an interception looks like. `--insecure` (the same flag as for certificates) turns the check off.
+
+**Login.** A user name is required (no "anonymous" for SSH). `--key` offers that key, then the password if there is one. Without `--key`, a password is used if given; otherwise the default keys in `~/.ssh` without passphrase are tried. No SSH agent and no `~/.ssh/config` yet.
+
+**Secrets.** A key's passphrase comes from `MOHONA_KEY_PASSPHRASE` and is never written to the database. Passwords follow the existing rule for logins (saved with the download until the keychain work).
+
+**Errors.** Host key problems, login failures and missing or forbidden files are final (not retried); connection and protocol hiccups are retried like HTTP. Messages say what to do.
+
+**Why not `ssh2`/libssh2:** blocking calls and a C dependency (OpenSSL or libssh2 builds on Windows are a recurring source of trouble); `russh` also gave a test server in the same language for ADR-0004-style tests.

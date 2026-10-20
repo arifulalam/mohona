@@ -118,7 +118,7 @@ async fn probe_reports_a_missing_page_as_a_status_error() {
 async fn probe_rejects_other_schemes_and_bad_urls() {
     let client = client();
     assert!(matches!(
-        client.probe("sftp://example.com/file").await.unwrap_err(),
+        client.probe("webdav://example.com/file").await.unwrap_err(),
         NetError::UnsupportedScheme(_)
     ));
     assert!(matches!(

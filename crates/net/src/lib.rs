@@ -11,11 +11,12 @@ mod disposition;
 mod error;
 mod ftp;
 mod http;
+mod sftp;
 mod tlsconfig;
 
 pub use auth::{split_userinfo, Credentials};
 pub use checksum::{hash_file, Algorithm, Checksum};
-pub use context::{ProxyChoice, RequestContext, TlsOptions};
+pub use context::{ProxyChoice, RequestContext, SshOptions, TlsOptions};
 pub use disposition::filename_from_content_disposition;
 pub use error::{Failure, NetError};
 pub use http::{Body, ClientConfig, HttpClient, Probe};

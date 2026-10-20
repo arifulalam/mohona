@@ -100,7 +100,7 @@ fn target(url: &Url, credentials: Option<&Credentials>) -> Result<Target, NetErr
 }
 
 fn io_error(error: std::io::Error) -> NetError {
-    NetError::FtpIo(error)
+    NetError::Connection(error)
 }
 
 /// One FTP control connection, logged in.

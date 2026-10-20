@@ -304,7 +304,10 @@ enum Command {
     List(oneshot::Sender<Result<Vec<DownloadRow>, ManagerError>>),
     SetQueueLimit(i64, u32, Reply),
     SetSchedule(i64, Option<Schedule>, Reply),
-    AddChecked(AddRequest, oneshot::Sender<Result<AddResult, ManagerError>>),
+    AddChecked(
+        Box<AddRequest>,
+        oneshot::Sender<Result<AddResult, ManagerError>>,
+    ),
     Categories(oneshot::Sender<Result<Vec<CategoryRow>, ManagerError>>),
     AddCategory {
         name: String,
@@ -531,7 +534,8 @@ impl Manager {
     /// Add a download, with sorting into categories and a policy for
     /// duplicates. [`Manager::add`] is the plain form.
     pub async fn add_checked(&self, request: AddRequest) -> Result<AddResult, ManagerError> {
-        self.ask(|reply| Command::AddChecked(request, reply)).await
+        self.ask(|reply| Command::AddChecked(Box::new(request), reply))
+            .await
     }
 
     /// All categories.
@@ -1058,7 +1062,7 @@ impl Actor {
                 let _ = reply.send(result);
             }
             Command::AddChecked(request, reply) => {
-                let _ = reply.send(self.add_checked(request));
+                let _ = reply.send(self.add_checked(*request));
             }
             Command::Categories(reply) => {
                 let _ = reply.send(self.store.categories().map_err(Into::into));

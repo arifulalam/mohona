@@ -10,6 +10,7 @@
 mod digest;
 pub mod ftp;
 pub mod proxy;
+pub mod sftp;
 mod sums;
 pub mod tls;
 

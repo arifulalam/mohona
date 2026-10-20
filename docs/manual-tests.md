@@ -53,6 +53,18 @@ Format: **what to run** → **what should happen**.
 - [ ] Download with several connections (`-c 4`) from an encrypted server, then compare the file with its checksum.
 - [ ] Wireshark or the server log: nothing readable (login, file names) crosses the network before the encryption starts.
 
+## SFTP
+
+- [ ] A real SSH server (a Linux box, a Raspberry Pi, a NAS, a hosting account): `get sftp://user@host/path/file -u user:password --trust-new-host` → downloads, and `.ssh\known_hosts` in your Windows user folder gets a new line.
+- [ ] Run it again without `--trust-new-host` → still works (the server is known now).
+- [ ] Compare the fingerprint in the first error (run without `--trust-new-host` against a new server) with `ssh-keygen -lf /etc/ssh/ssh_host_ed25519_key.pub` on the server → same `SHA256:` value.
+- [ ] Key login: `--key C:\Users\you\.ssh\id_ed25519` (no passphrase) → works. With a passphrase: needs `MOHONA_KEY_PASSPHRASE` set, otherwise the error mentions it. Try an RSA key (older servers) too.
+- [ ] With keys in the default place (`.ssh\id_ed25519`) and no `-u` password: `get sftp://user@host/file` works.
+- [ ] A server that allows few connections (`MaxSessions 2`): `-c 8` still finishes.
+- [ ] Reinstall or switch the server's host key (or edit known_hosts to a different key) → clear "not the one recorded" warning and no login attempt.
+- [ ] Servers with only old algorithms (very old routers): if `SSH problem:` appears while OpenSSH works, report the server's name and version.
+- [ ] Large file (1 GB+) with a checksum, over a real link.
+
 ## Logins and cookies against a real site
 
 - [ ] A real HTTP Basic site: `get URL -u user:password` → downloads; wrong password → `refused the user name or password`.

@@ -66,7 +66,7 @@ enum Command {
     },
     /// Download a URL
     Get {
-        /// The address to download (http, https, ftp, ftps or ftpes)
+        /// The address to download (http, https, ftp, ftps, ftpes or sftp)
         url: String,
 
         /// Folder to save the file in
@@ -135,10 +135,24 @@ pub(crate) struct RequestArgs {
     /// with its own certificate)
     #[arg(long, value_name = "FILE")]
     ca_file: Option<std::path::PathBuf>,
-    /// Accept any certificate, even a wrong or expired one. Unsafe: use only
-    /// for a server you know
+    /// Accept any certificate (or SSH host key), even a wrong one. Unsafe: use
+    /// only for a server you know
     #[arg(long)]
     insecure: bool,
+    /// SFTP: log in with this private key file (a passphrase is read from
+    /// MOHONA_KEY_PASSPHRASE and never saved)
+    #[arg(long, value_name = "FILE")]
+    key: Option<std::path::PathBuf>,
+    /// SFTP: trust only the server with this key fingerprint (SHA256:...)
+    #[arg(long, value_name = "FINGERPRINT")]
+    host_key: Option<String>,
+    /// SFTP: the file of known servers (default: ~/.ssh/known_hosts)
+    #[arg(long, value_name = "FILE")]
+    known_hosts: Option<std::path::PathBuf>,
+    /// SFTP: remember a server seen for the first time (in known_hosts).
+    /// A server whose key changed is never accepted this way
+    #[arg(long)]
+    trust_new_host: bool,
     /// What the finished file must hash to, like sha256:ABC... (or just the
     /// hash: md5, sha1, sha256 and sha512 are told apart by length). A
     /// file that does not match fails, and is kept
@@ -180,6 +194,24 @@ impl RequestArgs {
         }
         context.find_checksum = self.find_checksum;
         context.mirrors.clone_from(&self.mirrors);
+        if self.key.is_some()
+            || self.host_key.is_some()
+            || self.known_hosts.is_some()
+            || self.trust_new_host
+        {
+            let full = |path: &std::path::PathBuf| -> Result<String, String> {
+                Ok(std::path::absolute(path)
+                    .map_err(|e| format!("{}: {e}", path.display()))?
+                    .to_string_lossy()
+                    .into_owned())
+            };
+            context.ssh = Some(mohona_net::SshOptions {
+                key_file: self.key.as_ref().map(full).transpose()?,
+                host_key: self.host_key.clone(),
+                known_hosts: self.known_hosts.as_ref().map(full).transpose()?,
+                trust_new_host: self.trust_new_host,
+            });
+        }
         if self.insecure || self.ca_file.is_some() {
             let ca_file = match &self.ca_file {
                 // Saved with the download, so keep the full path.

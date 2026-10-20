@@ -37,7 +37,11 @@ mohona get URL [-o FOLDER] [-c N] [-l SPEED] [-v] [request options]
 | `--no-proxy` | Ignore every proxy, even the system one |
 | `--mirror URL` | Another address of the same file; repeat for more. The download uses all addresses together and moves on when one fails (see below) |
 | `--ca-file FILE` | Also trust the certificate authority in this PEM file (a server with its own certificate). The full path is saved with the download |
-| `--insecure` | Accept any certificate, even wrong or expired. Unsafe: only for a server you know |
+| `--insecure` | Accept any certificate (HTTPS, FTPS) or SSH host key (SFTP), even a wrong one. Unsafe: only for a server you know |
+| `--key FILE` | SFTP: log in with this private key. A passphrase is read from the `MOHONA_KEY_PASSPHRASE` environment variable and is never saved |
+| `--host-key SHA256:...` | SFTP: trust only the server with this key fingerprint |
+| `--known-hosts FILE` | SFTP: the list of known servers (default `.ssh/known_hosts` in your home folder, as OpenSSH uses) |
+| `--trust-new-host` | SFTP: remember a server seen for the first time. A server whose key *changed* is never accepted this way |
 
 ### Example: plain download
 
@@ -132,6 +136,27 @@ mohona get ftpes://nas.local/file.zip --insecure
 - The certificate rules are the same as for HTTPS (`--ca-file`, `--insecure`; see above). The login is not sent until the connection is encrypted and the certificate accepted.
 - Errors: a refused certificate shows the same message as for HTTPS. `ftpes://` against a server without encryption fails with `the FTP server answered 502/504 ...`; no password is sent.
 
+### Example: SFTP
+
+```
+mohona get sftp://alice@host/home/alice/file.zip -u alice:secret --host-key SHA256:abc...
+mohona get sftp://alice@host/data/file.zip --key ~/.ssh/id_ed25519 --trust-new-host
+set MOHONA_KEY_PASSPHRASE=my passphrase        (Windows; use export on Linux/macOS)
+mohona get sftp://alice@host/data/file.zip --key id_ed25519
+```
+
+- **A user name is required** (in the address or with `-u`). Without `--key`, a password is used if given; with neither, the keys `~/.ssh/id_ed25519`, `id_ecdsa` and `id_rsa` (no passphrase) are tried.
+- **The server is checked before any password or key is offered.** It must be in your `known_hosts` file, or match `--host-key`, or be remembered with `--trust-new-host`. The first time, the error shows the fingerprint to compare with what the server's owner gives you:
+
+```
+error: the server's SSH key was not accepted: host is not a known server (its key is SHA256:abc...). If that is the key you expect, trust it with --host-key SHA256:abc..., or with --trust-new-host to remember it
+```
+
+- **If a known server's key changed**, the download stops with a warning and `--trust-new-host` does not override it; check with the server's owner, then fix your known_hosts file.
+- Split into pieces and resumable like HTTP and FTP. Each piece uses its own SSH connection; servers that limit connections (`MaxSessions`, `MaxStartups`) get fewer automatically.
+- Works with `--checksum`, `--mirror` and the queue. Passwords given with `-u` are saved with a queued download like other logins; **key passphrases are not saved** (set the variable again when you run the queue).
+- Not yet: SSH agent, `~/.ssh/config` (hosts aliases, ProxyJump), SFTP through a proxy, folder listings.
+
 ### Example: mirrors
 
 ```
@@ -154,11 +179,18 @@ mohona get https://main.example.com/tool.iso --mirror https://mirror1.example.or
 | `the server answered 401` with a note that it sent no login method | The site uses a web login page, not HTTP login. Log in in a browser and pass its cookie with `--cookie` |
 | `the server answered 404 ...` | The address is wrong or the file is gone |
 | `the server answered 500 ...` | The server itself failed; try later |
-| `unsupported URL scheme "sftp" (only http, https, ftp, ftps and ftpes work so far)` | SFTP, FTPS and WebDAV come later in Phase 3 |
+| `unsupported URL scheme "webdav" (only http, https, ftp, ftps, ftpes and sftp work so far)` | WebDAV comes later in Phase 3 (WebDAV servers can usually be downloaded from with a plain `https://` address already) |
+| `SFTP login: the server refused the login for alice (wrong password or key?)` | Wrong password or key, or the account does not allow SFTP |
+| `SFTP login: no login to offer: give -u user:password, or --key FILE` | No password was given and no usable default key was found |
+| `SFTP login: SFTP needs a user name: ...` | Write `sftp://user@host/path` or use `-u` |
+| `SFTP login: cannot use the key file ...: ... (if the key has a passphrase, set MOHONA_KEY_PASSPHRASE)` | Key file unreadable, not a key, or a wrong/missing passphrase |
+| `the server's SSH key was not accepted: ...` | See the SFTP section: unknown server, changed key, or fingerprint mismatch |
+| `SFTP: /path: the file is not there` / `you may not read it` | Wrong path or no permission. Not retried |
+| `SSH problem: ...` | The SSH handshake or SFTP start failed (server down, no SFTP subsystem, incompatible algorithms) |
 | `the FTP server answered 530: ... (it refused the login: give one with -u user:password)` | The FTP server wants a real login |
 | `the FTP server answered 550: ... (the file is not there, or you may not read it)` | Wrong path or no permission. Not retried |
 | `the FTP server answered 421: ... (the server is busy or limits connections: try fewer with -c)` | Too many connections to that server; Mohona already lowers them by itself, but `-c 2` helps up front |
-| `FTP connection problem: ...` | The server is not reachable (down, wrong port, firewall) |
+| `connection problem: ...` | The server is not reachable (down, wrong port, firewall) |
 | `invalid URL: ftp://host/dir/ (the address must name a file, not a folder)` | FTP addresses must name one file |
 | `invalid proxy: "ftp://x": use http://, https://, socks5:// or socks5h://` | Fix the proxy address |
 | `the argument '--no-proxy' cannot be used with '--proxy <URL>'` | Use one or the other |

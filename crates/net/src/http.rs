@@ -14,11 +14,11 @@ use reqwest::header::{AUTHORIZATION, WWW_AUTHENTICATE};
 use reqwest::{Method, RequestBuilder};
 
 use crate::auth::{self, Scheme};
-use crate::Checksum;
 use crate::{
     filename_from_content_disposition, Credentials, NetError, ProxyChoice, RequestContext,
     TlsOptions,
 };
+use crate::{Checksum, SshOptions};
 
 /// Settings for [`HttpClient`].
 #[derive(Clone, Debug)]
@@ -83,6 +83,8 @@ pub struct HttpClient {
     answered: Answered,
     /// The certificate rules for FTPS, as the context set them.
     tls: Option<TlsOptions>,
+    /// The SSH settings for SFTP, as the context set them.
+    ssh: SshOptions,
     /// The FTPS configuration made from `tls`, made once and shared so that
     /// connections can resume each other's sessions.
     ftp_tls: Arc<Mutex<Option<Arc<rustls::ClientConfig>>>>,
@@ -96,6 +98,7 @@ pub struct Body {
 enum BodyInner {
     Http(Response),
     Ftp(Box<crate::ftp::FtpBody>),
+    Sftp(Box<crate::sftp::SftpBody>),
 }
 
 impl Body {
@@ -104,6 +107,7 @@ impl Body {
         match &self.inner {
             BodyInner::Http(response) => response.content_length(),
             BodyInner::Ftp(body) => body.content_length(),
+            BodyInner::Sftp(body) => body.content_length(),
         }
     }
 
@@ -112,6 +116,7 @@ impl Body {
         match &mut self.inner {
             BodyInner::Http(response) => Ok(response.chunk().await?),
             BodyInner::Ftp(body) => body.chunk().await,
+            BodyInner::Sftp(body) => body.chunk().await,
         }
     }
 }
@@ -126,6 +131,7 @@ impl HttpClient {
             credentials: None,
             answered: Arc::default(),
             tls: None,
+            ssh: SshOptions::default(),
             ftp_tls: Arc::default(),
         })
     }
@@ -200,7 +206,34 @@ impl HttpClient {
             credentials: context.credentials.clone(),
             answered: Arc::default(),
             tls: context.tls.clone(),
+            ssh: context.ssh.clone().unwrap_or_default(),
             ftp_tls: Arc::default(),
+        })
+    }
+
+    /// `--insecure` also means: accept any SSH host key.
+    fn accept_any_host(&self) -> bool {
+        self.tls.as_ref().is_some_and(|t| t.insecure)
+    }
+
+    async fn open_sftp(
+        &self,
+        url: &Url,
+        first: u64,
+        length: Option<u64>,
+    ) -> Result<Body, NetError> {
+        let body = crate::sftp::open(
+            url,
+            self.credentials.as_ref(),
+            &self.config,
+            &self.ssh,
+            self.accept_any_host(),
+            first,
+            length,
+        )
+        .await?;
+        Ok(Body {
+            inner: BodyInner::Sftp(Box::new(body)),
         })
     }
 
@@ -224,6 +257,16 @@ impl HttpClient {
     /// on servers that reject `HEAD`.
     pub async fn probe(&self, url: &str) -> Result<Probe, NetError> {
         let url = parse_url(url)?;
+        if url.scheme() == "sftp" {
+            return crate::sftp::probe(
+                &url,
+                self.credentials.as_ref(),
+                &self.config,
+                &self.ssh,
+                self.accept_any_host(),
+            )
+            .await;
+        }
         if is_ftp(&url) {
             let tls = self.ftp_security(&url)?;
             return crate::ftp::probe(&url, self.credentials.as_ref(), &self.config, &tls).await;
@@ -257,6 +300,9 @@ impl HttpClient {
     /// Start a `GET` and return its body. Fails on any non-success status.
     pub async fn get(&self, url: &str) -> Result<Body, NetError> {
         let url = parse_url(url)?;
+        if url.scheme() == "sftp" {
+            return self.open_sftp(&url, 0, None).await;
+        }
         if is_ftp(&url) {
             let tls = self.ftp_security(&url)?;
             let body =
@@ -290,6 +336,11 @@ impl HttpClient {
         etag: Option<&str>,
     ) -> Result<Body, NetError> {
         let url = parse_url(url)?;
+        if url.scheme() == "sftp" {
+            return self
+                .open_sftp(&url, first, Some(last.saturating_sub(first) + 1))
+                .await;
+        }
         if is_ftp(&url) {
             let tls = self.ftp_security(&url)?;
             let body = crate::ftp::open(
@@ -466,7 +517,7 @@ fn parse_url(input: &str) -> Result<Url, NetError> {
     let url = Url::parse(input.trim())
         .map_err(|error| NetError::InvalidUrl(format!("{input} ({error})")))?;
     match url.scheme() {
-        "http" | "https" | "ftp" | "ftps" | "ftpes" => Ok(url),
+        "http" | "https" | "ftp" | "ftps" | "ftpes" | "sftp" => Ok(url),
         other => Err(NetError::UnsupportedScheme(other.to_string())),
     }
 }

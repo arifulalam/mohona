@@ -670,3 +670,79 @@ fn ftps_uses_the_certificate_flags() {
         300_000
     );
 }
+
+#[test]
+fn sftp_flags_decide_trust_and_login() {
+    use mohona_testserver::sftp::{generate_key_pair, start_sftp, SftpConfig};
+    let (private, public) = generate_key_pair(Some("hunter2"));
+    let rt = tokio::runtime::Runtime::new().unwrap();
+    let server = rt.block_on(start_sftp(SftpConfig {
+        size: 400_000,
+        authorized_key: Some(public),
+        ..SftpConfig::default()
+    }));
+    let dir = tempfile::tempdir().unwrap();
+    let key = dir.path().join("key");
+    std::fs::write(&key, private).unwrap();
+    let known = dir.path().join("known_hosts");
+    let port = server.addr.port();
+    let url = format!("sftp://pat@127.0.0.1:{port}/data.bin");
+    let run = |args: &[&str], envs: &[(&str, &str)]| {
+        let mut command = Command::new(env!("CARGO_BIN_EXE_mohona"));
+        command
+            .current_dir(dir.path())
+            .args([
+                "get",
+                &url,
+                "-o",
+                "out",
+                "--known-hosts",
+                known.to_str().unwrap(),
+            ])
+            .args(args)
+            .env_remove("MOHONA_PASSWORD")
+            .env_remove("MOHONA_KEY_PASSPHRASE");
+        for (k, v) in envs {
+            command.env(k, v);
+        }
+        command.output().unwrap()
+    };
+    let text = |o: &std::process::Output| String::from_utf8_lossy(&o.stderr).into_owned();
+
+    // Unknown server: told how to trust it, and refused.
+    let unknown = run(&["-u", "pat:secret"], &[]);
+    assert!(!unknown.status.success());
+    assert!(
+        text(&unknown).contains(&server.fingerprint),
+        "{}",
+        text(&unknown)
+    );
+
+    // Wrong fingerprint.
+    let wrong = run(&["-u", "pat:secret", "--host-key", "SHA256:AAAA"], &[]);
+    assert!(text(&wrong).contains("you gave with --host-key"));
+
+    // Password login, remembering the server.
+    let ok = run(&["-u", "pat:secret", "--trust-new-host"], &[]);
+    assert!(ok.status.success(), "{}", text(&ok));
+    assert!(std::fs::read_to_string(&known)
+        .unwrap()
+        .contains("ssh-ed25519"));
+
+    // Key login: the passphrase comes from the environment only.
+    let no_pass = run(&["--key", key.to_str().unwrap()], &[]);
+    assert!(!no_pass.status.success());
+    assert!(text(&no_pass).contains("MOHONA_KEY_PASSPHRASE"));
+    let with_pass = run(
+        &["--key", key.to_str().unwrap()],
+        &[("MOHONA_KEY_PASSPHRASE", "hunter2")],
+    );
+    assert!(with_pass.status.success(), "{}", text(&with_pass));
+    assert_eq!(server.logins.lock().unwrap().last().unwrap().1, "key");
+    assert_eq!(
+        std::fs::metadata(dir.path().join("out/data.bin"))
+            .unwrap()
+            .len(),
+        400_000
+    );
+}

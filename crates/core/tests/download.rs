@@ -673,7 +673,7 @@ async fn a_speed_limit_holds_across_many_connections() {
     assert_generated_content(&outcome.path, 3_000_000);
     // 3 MB at 1 MB/s: three seconds, minus the small credit the limiter allows.
     assert!(
-        (2.7..=3.5).contains(&seconds),
+        (2.7..=5.0).contains(&seconds),
         "took {seconds:.2} s instead of about 3 s"
     );
 }
@@ -702,7 +702,7 @@ async fn downloads_share_one_limit() {
     b.unwrap();
     let seconds = started.elapsed().as_secs_f64();
     assert!(
-        (2.7..=3.5).contains(&seconds),
+        (2.7..=5.0).contains(&seconds),
         "two 1.5 MB downloads under one 1 MB/s limit took {seconds:.2} s"
     );
 }

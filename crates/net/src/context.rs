@@ -91,6 +91,9 @@ pub struct RequestContext {
     /// trusted authorities are used and anything else is refused.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub tls: Option<TlsOptions>,
+    /// How to trust the server and log in for SFTP.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub ssh: Option<SshOptions>,
     /// What the finished file must hash to. A file that does not match
     /// fails the download (and is kept).
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -103,6 +106,24 @@ pub struct RequestContext {
     /// with the main address, and moves on to another when one fails.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub mirrors: Vec<String>,
+}
+
+/// SSH settings for one download. A key's passphrase is not part of this: it
+/// is read from the environment when needed and never saved.
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct SshOptions {
+    /// A private key file to log in with.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub key_file: Option<String>,
+    /// Trust only the server whose key has this fingerprint (`SHA256:...`).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub host_key: Option<String>,
+    /// The file of known servers (default: `.ssh/known_hosts` in the home folder).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub known_hosts: Option<String>,
+    /// Remember a server seen for the first time (in the known-hosts file).
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub trust_new_host: bool,
 }
 
 /// Changes to the certificate check, for one download.
@@ -126,6 +147,7 @@ impl fmt::Debug for RequestContext {
             .field("credentials", &self.credentials)
             .field("proxy", &self.proxy)
             .field("tls", &self.tls)
+            .field("ssh", &self.ssh)
             .field("checksum", &self.checksum)
             .field("find_checksum", &self.find_checksum)
             .field("mirrors", &self.mirrors.len())
@@ -160,6 +182,7 @@ impl RequestContext {
             && self.credentials.is_none()
             && self.proxy.is_none()
             && self.tls.is_none()
+            && self.ssh.is_none()
             && self.checksum.is_none()
             && !self.find_checksum
             && self.mirrors.is_empty()

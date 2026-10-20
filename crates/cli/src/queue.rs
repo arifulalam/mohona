@@ -42,6 +42,8 @@ fn parse_policy(text: &str) -> Result<DuplicatePolicy, String> {
     }
 }
 
+// The request options make `add` big; this value is built once at start-up.
+#[allow(clippy::large_enum_variant)]
 #[derive(Subcommand)]
 pub enum QueueCommand {
     /// Add downloads to the list (they start with `queue run`)

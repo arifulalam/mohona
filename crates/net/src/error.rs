@@ -22,7 +22,9 @@ pub enum NetError {
     InvalidUrl(String),
 
     /// The URL uses a scheme Mohona cannot download yet.
-    #[error("unsupported URL scheme \"{0}\" (only http, https, ftp, ftps and ftpes work so far)")]
+    #[error(
+        "unsupported URL scheme \"{0}\" (only http, https, ftp, ftps, ftpes and sftp work so far)"
+    )]
     UnsupportedScheme(String),
 
     /// The server answered, but not with a success status.
@@ -74,9 +76,30 @@ pub enum NetError {
         message: String,
     },
 
-    /// The connection to an FTP server failed.
-    #[error("FTP connection problem: {0}")]
-    FtpIo(std::io::Error),
+    /// A connection could not be made or was lost (FTP, SFTP).
+    #[error("connection problem: {0}")]
+    Connection(std::io::Error),
+
+    /// An SSH problem other than the login or the server's key.
+    #[error("SSH problem: {0}")]
+    Ssh(String),
+
+    /// The SSH login did not work.
+    #[error("SFTP login: {0}")]
+    SshLogin(String),
+
+    /// The server's SSH key was not accepted.
+    #[error("the server's SSH key was not accepted: {0}")]
+    HostKey(String),
+
+    /// An SFTP error.
+    #[error("SFTP: {message}")]
+    Sftp {
+        /// What went wrong.
+        message: String,
+        /// Trying again cannot help.
+        fatal: bool,
+    },
 
     /// A checksum cannot be read.
     #[error("invalid checksum {0}")]
@@ -203,10 +226,19 @@ impl NetError {
                 425 | 426 | 450 | 451 | 452 => Failure::Transient,
                 _ => Failure::Fatal,
             },
-            NetError::FtpIo(error) => match error.kind() {
+            NetError::Connection(error) => match error.kind() {
                 std::io::ErrorKind::ConnectionRefused => Failure::Throttled,
                 _ => Failure::Transient,
             },
+            NetError::Ssh(_) => Failure::Transient,
+            NetError::Sftp { fatal, .. } => {
+                if *fatal {
+                    Failure::Fatal
+                } else {
+                    Failure::Transient
+                }
+            }
+            NetError::SshLogin(_) | NetError::HostKey(_) => Failure::Fatal,
             NetError::InvalidUrl(_)
             | NetError::Unauthorized { .. }
             | NetError::UnsupportedScheme(_)
