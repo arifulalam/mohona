@@ -169,7 +169,7 @@ async fn a_busy_server_is_given_fewer_connections() {
 #[tokio::test]
 async fn a_stopped_ftp_download_continues_from_where_it_was() {
     let server = start_ftp(FtpConfig {
-        size: 6_000_000,
+        size: 20_000_000,
         chunk_delay: Some(std::time::Duration::from_millis(2)),
         ..FtpConfig::default()
     })
@@ -188,7 +188,7 @@ async fn a_stopped_ftp_download_continues_from_where_it_was() {
     // Stop it once some data has arrived.
     while let Some(event) = rx.recv().await {
         if let mohona_core::Event::Progress { downloaded, .. } = event {
-            if downloaded > 500_000 {
+            if downloaded > 1_500_000 {
                 cancel.cancel();
                 break;
             }
@@ -202,7 +202,7 @@ async fn a_stopped_ftp_download_continues_from_where_it_was() {
     let mut again = request(&server, "/big.bin", dir.path());
     again.connections = 2;
     let outcome = download(&client, &again, None).await.unwrap();
-    assert_content(&outcome.path, 6_000_000);
+    assert_content(&outcome.path, 20_000_000);
 }
 
 #[tokio::test]

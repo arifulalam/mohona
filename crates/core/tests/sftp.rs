@@ -279,7 +279,7 @@ async fn a_missing_file_is_a_clear_final_error() {
 #[tokio::test]
 async fn a_stopped_sftp_download_continues() {
     let server = start_sftp(SftpConfig {
-        size: 6_000_000,
+        size: 20_000_000,
         read_delay: Some(Duration::from_millis(3)),
         ..SftpConfig::default()
     })
@@ -297,7 +297,7 @@ async fn a_stopped_sftp_download_continues() {
     };
     while let Some(event) = rx.recv().await {
         if let mohona_core::Event::Progress { downloaded, .. } = event {
-            if downloaded > 500_000 {
+            if downloaded > 4_000_000 {
                 cancel.cancel();
                 break;
             }
@@ -305,13 +305,23 @@ async fn a_stopped_sftp_download_continues() {
     }
     while rx.recv().await.is_some() {}
     assert!(matches!(first.await.unwrap(), Err(Error::Cancelled)));
-    assert!(mohona_core::partial_progress(dir.path(), &r.url).is_some());
+    assert!(
+        mohona_core::partial_progress(dir.path(), &r.url).is_some(),
+        "no saved progress; the folder holds: {:?}",
+        std::fs::read_dir(dir.path())
+            .unwrap()
+            .map(|e| {
+                let e = e.unwrap();
+                (e.file_name(), e.metadata().unwrap().len())
+            })
+            .collect::<Vec<_>>()
+    );
 
     let mut again = request(&server, dir.path(), pinned(&server));
     again.connections = 2;
     let outcome = download(&c, &again, None).await.unwrap();
     let data = std::fs::read(&outcome.path).unwrap();
-    assert_eq!(data.len(), 6_000_000);
+    assert_eq!(data.len(), 20_000_000);
     assert!(data
         .iter()
         .enumerate()
