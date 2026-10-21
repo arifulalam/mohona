@@ -15,6 +15,7 @@ mod mirrors;
 mod parallel;
 mod retry;
 mod segments;
+mod stream;
 mod tuner;
 mod verify;
 
@@ -29,6 +30,7 @@ pub use ledger::{Ledger as Progress, ProgressStore};
 pub use limiter::RateLimit;
 pub use retry::RetryPolicy;
 pub use segments::{split_evenly, Claim, Scheduler};
+pub use stream::{download_stream, StreamEvent, StreamOutcome, StreamRequest};
 pub use verify::{Source as ChecksumSource, Verified};
 
 /// The version of Mohona, taken from the crate manifest.

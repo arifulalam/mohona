@@ -1565,7 +1565,10 @@ fn is_temporary(error: &CoreError) -> bool {
     match error {
         CoreError::Net(net) => net.failure() != mohona_net::Failure::Fatal,
         CoreError::Incomplete { .. } => true,
-        CoreError::Io(_) | CoreError::Cancelled | CoreError::ChecksumMismatch { .. } => false,
+        CoreError::Io(_)
+        | CoreError::Cancelled
+        | CoreError::Stream(_)
+        | CoreError::ChecksumMismatch { .. } => false,
     }
 }
 

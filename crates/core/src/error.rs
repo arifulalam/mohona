@@ -30,6 +30,11 @@ pub enum Error {
         path: std::path::PathBuf,
     },
 
+    /// A stream (HLS or DASH) could not be put together: a bad key, a piece
+    /// that does not decrypt, and the like.
+    #[error("{0}")]
+    Stream(String),
+
     /// The transfer ended without an error, but with fewer bytes than promised.
     #[error("the download ended early: received {received} of {expected} bytes")]
     Incomplete {

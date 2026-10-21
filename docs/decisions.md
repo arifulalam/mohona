@@ -318,3 +318,15 @@ A `401` now becomes its own error (`NetError::Unauthorized`) that names the kind
 **On-demand files** (`SegmentBase`, a single `BaseURL`) are one whole-file segment, since the index and init parts are already inside the file.
 
 **Refused or not yet handled.** Any `ContentProtection` is refused as DRM (`MediaError::Protected`), because even common-encryption streams cannot be played without a licence. Live (`type="dynamic"`) manifests are refused with a clear message until the live-recording step. Template durations need a known period length (`mediaPresentationDuration` or `Period@duration`).
+
+## ADR-0032: Stream segments are saved one by one in a `.parts` folder and joined at the end
+
+**Decision.** `download_stream` fetches segments (8 at a time by default), retries each on its own with the usual retry rules, decrypts AES-128 pieces, and saves each finished piece as its own file in `<name>.parts/`. A piece is written under a temporary name and renamed, so it exists completely or not at all. When all pieces are there they are joined in order (an init segment goes in front whenever it changes) into `<name>.tmp`, which is renamed to the result, and the folder is removed.
+
+**Resume.** Resuming is "which piece files exist": nothing else needs to be saved, and a kill at any moment is safe. A `plan` file in the folder holds a fingerprint of the segment list (count, first and last address and range); a different playlist wipes the folder, so pieces of another stream are never mixed in.
+
+**Why not write straight into one file.** Segments finish out of order and differ in size, so a single file would need a separate index to resume, and decryption works on whole pieces anyway. The cost is that the result is copied once at the end and needs room for the pieces plus the file; segments are small, so it is quick, and the simpler failure behaviour is worth it.
+
+**Keys.** A key is fetched once per address (guarded by a lock so parallel segments do not all fetch it) through the same client, so cookies, logins and proxies apply. A key that is not 16 bytes is almost always a login page; the message says so.
+
+**Output.** The result is the pieces joined as they are: right for `.ts` and for fragmented MP4 of one track. Separate video and audio renditions are joined into one file by the muxing step (ffmpeg, next).
