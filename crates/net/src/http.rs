@@ -531,7 +531,8 @@ fn webdav_as_http(input: &str) -> std::borrow::Cow<'_, str> {
 }
 
 fn parse_url(input: &str) -> Result<Url, NetError> {
-    let url = Url::parse(&webdav_as_http(input))
+    let input = webdav_as_http(input);
+    let url = Url::parse(input.trim())
         .map_err(|error| NetError::InvalidUrl(format!("{input} ({error})")))?;
     match url.scheme() {
         "http" | "https" | "ftp" | "ftps" | "ftpes" | "sftp" => Ok(url),
