@@ -157,6 +157,18 @@ error: the server's SSH key was not accepted: host is not a known server (its ke
 - Works with `--checksum`, `--mirror` and the queue. Passwords given with `-u` are saved with a queued download like other logins; **key passphrases are not saved** (set the variable again when you run the queue).
 - Not yet: SSH agent, `~/.ssh/config` (hosts aliases, ProxyJump), SFTP through a proxy, folder listings.
 
+### Example: WebDAV
+
+```
+mohona get webdavs://cloud.example.com/remote.php/dav/files/alice/report.pdf -u alice:app-password
+mohona get dav://nas.local/share/video.mkv -u alice
+```
+
+- `webdav://` (also `dav://`) is `http://`, and `webdavs://` (also `davs://`) is `https://`. Everything that works for HTTP(S) works the same: Basic and Digest logins, cookies, proxies, certificates (`--ca-file`, `--insecure`), pieces, resume, mirrors, checksums, the queue.
+- Plain `http(s)://` addresses of WebDAV servers work too; the `webdav` names only say what the address is.
+- Nextcloud/ownCloud: use an **app password** (Settings, Security) with `-u`, not your main password.
+- Not yet: listing folders (`PROPFIND`), downloading whole folders.
+
 ### Example: mirrors
 
 ```
@@ -179,7 +191,7 @@ mohona get https://main.example.com/tool.iso --mirror https://mirror1.example.or
 | `the server answered 401` with a note that it sent no login method | The site uses a web login page, not HTTP login. Log in in a browser and pass its cookie with `--cookie` |
 | `the server answered 404 ...` | The address is wrong or the file is gone |
 | `the server answered 500 ...` | The server itself failed; try later |
-| `unsupported URL scheme "webdav" (only http, https, ftp, ftps, ftpes and sftp work so far)` | WebDAV comes later in Phase 3 (WebDAV servers can usually be downloaded from with a plain `https://` address already) |
+| `unsupported URL scheme "gopher" (only http, https, webdav, ftp, ftps, ftpes and sftp work so far)` | That kind of address is not supported |
 | `SFTP login: the server refused the login for alice (wrong password or key?)` | Wrong password or key, or the account does not allow SFTP |
 | `SFTP login: no login to offer: give -u user:password, or --key FILE` | No password was given and no usable default key was found |
 | `SFTP login: SFTP needs a user name: ...` | Write `sftp://user@host/path` or use `-u` |

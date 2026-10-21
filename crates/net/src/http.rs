@@ -513,8 +513,25 @@ fn is_ftp(url: &Url) -> bool {
     matches!(url.scheme(), "ftp" | "ftps" | "ftpes")
 }
 
+/// WebDAV addresses are HTTP(S) addresses with another name: `webdav://` and
+/// `dav://` mean `http://`, `webdavs://` and `davs://` mean `https://`.
+fn webdav_as_http(input: &str) -> std::borrow::Cow<'_, str> {
+    let input = input.trim();
+    if let Some((scheme, rest)) = input.split_once("://") {
+        let replacement = match scheme.to_ascii_lowercase().as_str() {
+            "webdav" | "dav" => Some("http"),
+            "webdavs" | "davs" => Some("https"),
+            _ => None,
+        };
+        if let Some(replacement) = replacement {
+            return std::borrow::Cow::Owned(format!("{replacement}://{rest}"));
+        }
+    }
+    std::borrow::Cow::Borrowed(input)
+}
+
 fn parse_url(input: &str) -> Result<Url, NetError> {
-    let url = Url::parse(input.trim())
+    let url = Url::parse(&webdav_as_http(input))
         .map_err(|error| NetError::InvalidUrl(format!("{input} ({error})")))?;
     match url.scheme() {
         "http" | "https" | "ftp" | "ftps" | "ftpes" | "sftp" => Ok(url),

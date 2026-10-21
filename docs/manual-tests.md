@@ -65,6 +65,13 @@ Format: **what to run** → **what should happen**.
 - [ ] Servers with only old algorithms (very old routers): if `SSH problem:` appears while OpenSSH works, report the server's name and version.
 - [ ] Large file (1 GB+) with a checksum, over a real link.
 
+## WebDAV
+
+- [ ] A Nextcloud or ownCloud account (or a NAS with WebDAV): `get webdavs://host/remote.php/dav/files/USER/file.pdf -u USER:app-password` → downloads; wrong password → clear 401 message.
+- [ ] A WebDAV share with Digest login (Apache `AuthType Digest`, some NAS boxes) → downloads.
+- [ ] A big file with `-c 4`: check it comes in pieces and the checksum matches (some WebDAV servers do not support ranges: then it must still download as one piece).
+- [ ] `webdav://` (plain, no encryption) on a home network server.
+
 ## Logins and cookies against a real site
 
 - [ ] A real HTTP Basic site: `get URL -u user:password` → downloads; wrong password → `refused the user name or password`.

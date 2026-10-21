@@ -166,3 +166,11 @@ mohona get sftp://alice@host/path/file.zip --key ~/.ssh/id_ed25519 --host-key SH
 ```
 
 The server's key is checked against your `known_hosts` (or a fingerprint you give) before any password or key is sent.
+
+### WebDAV
+
+```
+mohona get webdavs://cloud.example.com/remote.php/dav/files/alice/report.pdf -u alice:app-password
+```
+
+`webdav://` and `webdavs://` (or `dav://`, `davs://`) are HTTP and HTTPS with another name, so logins, certificates, proxies, pieces and resume all work.

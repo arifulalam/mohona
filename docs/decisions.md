@@ -287,3 +287,11 @@ A `401` now becomes its own error (`NetError::Unauthorized`) that names the kind
 **Errors.** Host key problems, login failures and missing or forbidden files are final (not retried); connection and protocol hiccups are retried like HTTP. Messages say what to do.
 
 **Why not `ssh2`/libssh2:** blocking calls and a C dependency (OpenSSL or libssh2 builds on Windows are a recurring source of trouble); `russh` also gave a test server in the same language for ADR-0004-style tests.
+
+## ADR-0029: WebDAV addresses are HTTP(S) addresses
+
+**Decision.** `webdav://` and `dav://` are read as `http://`; `webdavs://` and `davs://` as `https://`, in one place where addresses are parsed. There is no separate WebDAV transport.
+
+**Why.** Reading a file from a WebDAV server *is* an HTTP `GET`, with the same ranges, validators and Basic or Digest logins that already work. What the schemes add is only that people (and file managers such as GNOME's `dav://`) write them, so they should be accepted and mean what is expected, including the certificate rules for `webdavs://`. The address of the finished request after redirects is an ordinary http(s) address.
+
+**Not built:** `PROPFIND` to list folders or to learn a file's size on servers that refuse `HEAD`. `HEAD` plus a one-byte range request has worked on every server tried, so this waits for a server that needs it, or for folder downloads.

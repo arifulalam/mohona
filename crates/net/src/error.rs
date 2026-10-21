@@ -23,7 +23,7 @@ pub enum NetError {
 
     /// The URL uses a scheme Mohona cannot download yet.
     #[error(
-        "unsupported URL scheme \"{0}\" (only http, https, ftp, ftps, ftpes and sftp work so far)"
+        "unsupported URL scheme \"{0}\" (only http, https, webdav, ftp, ftps, ftpes and sftp work so far)"
     )]
     UnsupportedScheme(String),
 

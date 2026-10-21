@@ -746,3 +746,54 @@ fn sftp_flags_decide_trust_and_login() {
         400_000
     );
 }
+
+#[test]
+fn webdav_addresses_work_with_a_login_in_get_and_in_the_queue() {
+    let rt = tokio::runtime::Runtime::new().unwrap();
+    let server = rt.block_on(async {
+        let listener = bind("127.0.0.1:0".parse().unwrap()).await.unwrap();
+        let addr = listener.local_addr().unwrap();
+        tokio::spawn(async move {
+            let _ = serve(
+                listener,
+                Config {
+                    default_size: 90_000,
+                },
+            )
+            .await;
+        });
+        addr
+    });
+    let dir = tempfile::tempdir().unwrap();
+    let run = |args: &[&str]| {
+        Command::new(env!("CARGO_BIN_EXE_mohona"))
+            .current_dir(dir.path())
+            .args(args)
+            .output()
+            .unwrap()
+    };
+    let refused = run(&["get", &format!("webdav://{server}/auth"), "-o", "out"]);
+    assert!(!refused.status.success());
+    let ok = run(&[
+        "get",
+        &format!("webdav://{server}/auth"),
+        "-o",
+        "out",
+        "-u",
+        "mohona:secret",
+    ]);
+    assert!(
+        ok.status.success(),
+        "{}",
+        String::from_utf8_lossy(&ok.stderr)
+    );
+
+    let in_address = format!("dav://mohona:secret@{server}/auth?size=50000");
+    assert!(run(&["queue", "add", &in_address, "-o", "q"])
+        .status
+        .success());
+    let list = run(&["queue", "list"]);
+    assert!(!String::from_utf8_lossy(&list.stdout).contains("secret"));
+    assert!(run(&["queue", "run"]).status.success());
+    assert_eq!(std::fs::read_dir(dir.path().join("q")).unwrap().count(), 1);
+}
