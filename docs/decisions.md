@@ -295,3 +295,16 @@ A `401` now becomes its own error (`NetError::Unauthorized`) that names the kind
 **Why.** Reading a file from a WebDAV server *is* an HTTP `GET`, with the same ranges, validators and Basic or Digest logins that already work. What the schemes add is only that people (and file managers such as GNOME's `dav://`) write them, so they should be accepted and mean what is expected, including the certificate rules for `webdavs://`. The address of the finished request after redirects is an ordinary http(s) address.
 
 **Not built:** `PROPFIND` to list folders or to learn a file's size on servers that refuse `HEAD`. `HEAD` plus a one-byte range request has worked on every server tried, so this waits for a server that needs it, or for folder downloads.
+
+## ADR-0030: Media manifests are parsed in their own network-free crate
+
+**Decision.** `mohona-media` turns the text of a manifest into one common model (`MediaVariant`, `Track`, `Segment`, `SegmentList`) and does no network work. HLS comes first (`hls::parse`); DASH will produce the same model. Fetching playlists and segments is done by the callers with the normal transports, so proxies, logins, cookies and certificate rules apply to media exactly as to files.
+
+**Why.**
+- Parsing is pure, so it is tested with plain text and covers odd playlists without any server.
+- One model means the CLI, manager and UI never care whether a stream was HLS or DASH.
+- Offsets of byte-range pieces, init segments, keys and IVs are resolved *while parsing*, so every `Segment` can be downloaded on its own (needed for parallel fetching and for resuming by segment index).
+
+**DRM.** `SAMPLE-AES`, and any key format other than `identity` (FairPlay, Widevine and the like), end in `MediaError::Protected` with a message saying DRM is not supported, before anything is downloaded. Only plain AES-128 is accepted.
+
+**Not yet handled:** `EXT-X-SESSION-KEY`, I-frame playlists and closed captions inside the video are ignored on purpose; live playlist reloading belongs to the segment downloader.

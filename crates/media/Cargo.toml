@@ -1,0 +1,12 @@
+[package]
+name = "mohona-media"
+description = "Mohona media: HLS and DASH manifests, variants and segment lists"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+serde = { version = "1", features = ["derive"] }
+thiserror = "2.0.21"
+url = { version = "2", features = ["serde"] }

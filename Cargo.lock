@@ -1663,6 +1663,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "mohona-media"
+version = "0.0.1"
+dependencies = [
+ "serde",
+ "thiserror",
+ "url",
+]
+
+[[package]]
 name = "mohona-net"
 version = "0.0.1"
 dependencies = [
@@ -3232,6 +3241,7 @@ dependencies = [
  "idna",
  "percent-encoding",
  "serde",
+ "serde_derive",
 ]
 
 [[package]]
