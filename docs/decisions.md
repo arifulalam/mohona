@@ -308,3 +308,13 @@ A `401` now becomes its own error (`NetError::Unauthorized`) that names the kind
 **DRM.** `SAMPLE-AES`, and any key format other than `identity` (FairPlay, Widevine and the like), end in `MediaError::Protected` with a message saying DRM is not supported, before anything is downloaded. Only plain AES-128 is accepted.
 
 **Not yet handled:** `EXT-X-SESSION-KEY`, I-frame playlists and closed captions inside the video are ignored on purpose; live playlist reloading belongs to the segment downloader.
+
+## ADR-0031: DASH manifests become a flat list of renditions with every segment listed
+
+**Decision.** `dash::parse` returns `Vec<Rendition>`: one entry per (kind, representation id), with all its segments already resolved to addresses, byte ranges and init segments, periods joined (the first segment of a later period is marked `discontinuity`). It understands `SegmentTemplate` (by `$Number$`, by `$Time$`, with `SegmentTimeline` including `r="-1"`), `SegmentList`, `SegmentBase` and nested `BaseURL`s.
+
+**Why.** A DASH manifest is a tree whose rules (what a representation inherits from its set, how templates expand) are exactly the part that is easy to get wrong in the downloader. Doing all of it while parsing gives the segment downloader the same simple input as for HLS: a list of independent pieces. Choosing quality, audio language and subtitles then works on `Rendition` for DASH and on `MediaVariant` plus `Track` for HLS, with one picker later.
+
+**On-demand files** (`SegmentBase`, a single `BaseURL`) are one whole-file segment, since the index and init parts are already inside the file.
+
+**Refused or not yet handled.** Any `ContentProtection` is refused as DRM (`MediaError::Protected`), because even common-encryption streams cannot be played without a licence. Live (`type="dynamic"`) manifests are refused with a clear message until the live-recording step. Template durations need a known period length (`mediaPresentationDuration` or `Period@duration`).

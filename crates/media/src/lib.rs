@@ -5,12 +5,13 @@
 //! Fetching the manifest and its segments is done by the callers, with the
 //! normal Mohona transports.
 
+pub mod dash;
 mod error;
 pub mod hls;
 mod model;
 
 pub use error::MediaError;
 pub use model::{
-    ByteRange, Encryption, InitSegment, MediaKind, MediaVariant, Resolution, Segment, SegmentList,
-    Track,
+    ByteRange, Encryption, InitSegment, MediaKind, MediaVariant, Rendition, Resolution, Segment,
+    SegmentList, Track,
 };

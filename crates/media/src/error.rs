@@ -10,6 +10,9 @@ pub enum MediaError {
     /// The stream is protected in a way Mohona does not handle (DRM).
     #[error("this stream is protected ({0}); DRM-protected streams are not supported")]
     Protected(String),
+    /// The manifest is not valid XML.
+    #[error("the manifest is not readable XML: {0}")]
+    Xml(String),
     /// The playlist has no segments to download.
     #[error("the playlist lists no segments")]
     Empty,

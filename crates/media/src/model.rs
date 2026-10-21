@@ -140,3 +140,18 @@ impl SegmentList {
         self.segments.iter().map(|s| s.duration).sum()
     }
 }
+
+/// One downloadable stream of a DASH manifest: a quality of video, an audio
+/// language or a subtitle track, with its segments already listed (all
+/// periods joined).
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct Rendition {
+    pub kind: MediaKind,
+    pub id: String,
+    pub bandwidth: u64,
+    pub resolution: Option<Resolution>,
+    pub codecs: Option<String>,
+    pub language: Option<String>,
+    pub mime_type: Option<String>,
+    pub segments: SegmentList,
+}
