@@ -14,6 +14,7 @@ use tokio::sync::mpsc;
 
 mod history;
 mod queue;
+mod stream;
 
 #[derive(Parser)]
 #[command(
@@ -63,6 +64,54 @@ enum Command {
     Log {
         /// The number shown by `queue list`
         id: i64,
+    },
+    /// Download an HLS (.m3u8) or DASH (.mpd) stream
+    Stream {
+        /// The address of the playlist or manifest
+        url: String,
+
+        /// Folder to save the file in
+        #[arg(short, long, default_value = ".")]
+        output: PathBuf,
+
+        /// Name for the file, without the extension (default: from the address)
+        #[arg(short, long)]
+        name: Option<String>,
+
+        /// best, worst, audio, or a height like 720 (the best one not taller than that)
+        #[arg(short, long, default_value = "best")]
+        quality: String,
+
+        /// Audio language or name to download, like en or Bangla
+        #[arg(long)]
+        audio: Option<String>,
+
+        /// Only show the qualities and languages the stream offers
+        #[arg(long)]
+        list: bool,
+
+        /// Keep video and audio as two files instead of joining them with ffmpeg
+        #[arg(long)]
+        no_join: bool,
+
+        /// File type to join into: mp4 (default) or mkv
+        #[arg(long, default_value = "mp4")]
+        container: String,
+
+        /// Where ffmpeg is (the program, or the folder holding it); default: MOHONA_FFMPEG, next to mohona, or the PATH
+        #[arg(long)]
+        ffmpeg: Option<PathBuf>,
+
+        /// Segments to fetch at once (1 to 32)
+        #[arg(short = 'c', long, default_value_t = 8, value_parser = clap::value_parser!(u16).range(1..=32))]
+        connections: u16,
+
+        /// Speed limit, like 500K or 1.5M (bytes per second)
+        #[arg(short = 'l', long, value_parser = parse_rate)]
+        max_speed: Option<u64>,
+
+        #[command(flatten)]
+        request: RequestArgs,
     },
     /// Download a URL
     Get {
@@ -299,6 +348,36 @@ async fn main() -> ExitCode {
                 ExitCode::FAILURE
             }
         },
+        Some(Command::Stream {
+            url,
+            output,
+            name,
+            quality,
+            audio,
+            list,
+            no_join,
+            container,
+            ffmpeg,
+            connections,
+            max_speed,
+            request,
+        }) => finish(
+            stream::run(stream::StreamArgs {
+                url,
+                output,
+                name,
+                quality,
+                audio,
+                list,
+                no_join,
+                container,
+                ffmpeg,
+                connections: usize::from(connections),
+                max_speed,
+                request,
+            })
+            .await,
+        ),
         Some(Command::History {
             text,
             status,

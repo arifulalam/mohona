@@ -797,3 +797,217 @@ fn webdav_addresses_work_with_a_login_in_get_and_in_the_queue() {
     assert!(run(&["queue", "run"]).status.success());
     assert_eq!(std::fs::read_dir(dir.path().join("q")).unwrap().count(), 1);
 }
+
+fn content(sizes: &[usize]) -> Vec<u8> {
+    let mut all = Vec::new();
+    for size in sizes {
+        let mut piece = vec![0u8; *size];
+        mohona_testserver::fill_content(0, &mut piece);
+        all.extend(piece);
+    }
+    all
+}
+
+fn start_media_server() -> (tokio::runtime::Runtime, std::net::SocketAddr) {
+    let rt = tokio::runtime::Runtime::new().unwrap();
+    let addr = rt.block_on(start_server());
+    (rt, addr)
+}
+
+fn stream(dir: &Path, args: &[&str]) -> std::process::Output {
+    Command::new(MOHONA)
+        .current_dir(dir)
+        .arg("stream")
+        .args(args)
+        .output()
+        .unwrap()
+}
+
+fn text(out: &std::process::Output) -> String {
+    format!(
+        "{}{}",
+        String::from_utf8_lossy(&out.stdout),
+        String::from_utf8_lossy(&out.stderr)
+    )
+}
+
+#[test]
+fn stream_lists_what_an_hls_master_offers() {
+    let (_rt, server) = start_media_server();
+    let dir = tempfile::tempdir().unwrap();
+    let out = stream(
+        dir.path(),
+        &[&format!("http://{server}/hls/master.m3u8"), "--list"],
+    );
+    let shown = text(&out);
+    assert!(out.status.success(), "{shown}");
+    assert!(shown.contains("3 qualities"), "{shown}");
+    assert!(shown.contains("720p 2.5 Mbit/s"), "{shown}");
+    assert!(shown.contains("(sound only)"), "{shown}");
+    assert!(shown.contains("Audio: en (default), bn"), "{shown}");
+    // Nothing is downloaded when only listing.
+    assert_eq!(std::fs::read_dir(dir.path()).unwrap().count(), 0);
+}
+
+#[test]
+fn stream_downloads_hls_video_and_its_audio() {
+    let (_rt, server) = start_media_server();
+    let dir = tempfile::tempdir().unwrap();
+    let url = format!("http://{server}/hls/master.m3u8");
+    let out = stream(dir.path(), &[&url, "-o", "out", "--no-join"]);
+    let shown = text(&out);
+    assert!(out.status.success(), "{shown}");
+    // The name comes from the address ("hls"), the best quality and the default audio.
+    assert_eq!(
+        std::fs::read(dir.path().join("out/hls.ts")).unwrap(),
+        content(&[1000, 1100, 1200])
+    );
+    assert_eq!(
+        std::fs::read(dir.path().join("out/hls.audio.ts")).unwrap(),
+        content(&[300, 310])
+    );
+    assert!(shown.contains("Quality: 720p"), "{shown}");
+    assert!(shown.contains("two files"), "{shown}");
+    // Only the two results are left (no .parts folders).
+    assert_eq!(
+        std::fs::read_dir(dir.path().join("out")).unwrap().count(),
+        2
+    );
+
+    let out = stream(
+        dir.path(),
+        &[
+            &url,
+            "-o",
+            "second",
+            "-q",
+            "360",
+            "--audio",
+            "bn",
+            "--name",
+            "clip",
+            "--no-join",
+        ],
+    );
+    assert!(out.status.success(), "{}", text(&out));
+    assert_eq!(
+        std::fs::read(dir.path().join("second/clip.ts")).unwrap(),
+        content(&[500, 600, 700])
+    );
+    assert_eq!(
+        std::fs::read(dir.path().join("second/clip.audio.ts")).unwrap(),
+        content(&[400, 410])
+    );
+
+    let out = stream(
+        dir.path(),
+        &[&url, "-o", "third", "-q", "audio", "--name", "song"],
+    );
+    assert!(out.status.success(), "{}", text(&out));
+    assert_eq!(
+        std::fs::read(dir.path().join("third/song.ts")).unwrap(),
+        content(&[100, 200])
+    );
+    assert_eq!(
+        std::fs::read_dir(dir.path().join("third")).unwrap().count(),
+        1
+    );
+}
+
+#[test]
+fn stream_downloads_dash_video_and_audio() {
+    let (_rt, server) = start_media_server();
+    let dir = tempfile::tempdir().unwrap();
+    let url = format!("http://{server}/dash/manifest.mpd");
+    let listed = text(&stream(dir.path(), &[&url, "--list"]));
+    assert!(listed.contains("Video: 720p 2.5 Mbit/s"), "{listed}");
+    assert!(listed.contains("Audio: 0.1 Mbit/s [en]"), "{listed}");
+    let out = stream(dir.path(), &[&url, "-o", "out", "-q", "720", "--no-join"]);
+    assert!(out.status.success(), "{}", text(&out));
+    // Names come from the address: "dash" (manifest is a generic name).
+    assert_eq!(
+        std::fs::read(dir.path().join("out/dash.mp4")).unwrap(),
+        content(&[100, 200, 300])
+    );
+    assert_eq!(
+        std::fs::read(dir.path().join("out/dash.audio.m4a")).unwrap(),
+        content(&[15, 25, 35])
+    );
+}
+
+#[test]
+fn stream_without_ffmpeg_keeps_two_files_and_says_how_to_fix_it() {
+    let (_rt, server) = start_media_server();
+    let dir = tempfile::tempdir().unwrap();
+    let url = format!("http://{server}/hls/master.m3u8");
+    let out = stream(
+        dir.path(),
+        &[&url, "-o", "out", "--ffmpeg", "no-such-folder"],
+    );
+    let shown = text(&out);
+    // Not having ffmpeg is not a failure: the downloads are good.
+    assert!(out.status.success(), "{shown}");
+    assert!(shown.contains("ffmpeg was not found"), "{shown}");
+    assert!(shown.contains("--ffmpeg"), "{shown}");
+    assert!(dir.path().join("out/hls.ts").is_file());
+    assert!(dir.path().join("out/hls.audio.ts").is_file());
+}
+
+#[test]
+fn stream_joining_with_a_broken_ffmpeg_result_keeps_the_files() {
+    // Whatever ffmpeg is installed here (or none), joining the test server's
+    // fake media cannot work; the files must survive either way.
+    let (_rt, server) = start_media_server();
+    let dir = tempfile::tempdir().unwrap();
+    let url = format!("http://{server}/hls/master.m3u8");
+    let out = stream(dir.path(), &[&url, "-o", "out"]);
+    let shown = text(&out);
+    assert!(out.status.success(), "{shown}");
+    assert!(
+        shown.contains("ffmpeg could not join") || shown.contains("ffmpeg was not found"),
+        "{shown}"
+    );
+    assert!(dir.path().join("out/hls.ts").is_file());
+    assert!(dir.path().join("out/hls.audio.ts").is_file());
+    assert!(!dir.path().join("out/hls.mp4").exists());
+}
+
+#[test]
+fn stream_explains_problems() {
+    let (_rt, server) = start_media_server();
+    let dir = tempfile::tempdir().unwrap();
+    let base = format!("http://{server}");
+    let out = stream(dir.path(), &[&format!("{base}/hls/protected.m3u8")]);
+    assert!(!out.status.success());
+    assert!(text(&out).contains("DRM"), "{}", text(&out));
+
+    let out = stream(
+        dir.path(),
+        &[&format!("{base}/hls/master.m3u8"), "--audio", "fr"],
+    );
+    assert!(!out.status.success());
+    assert!(
+        text(&out).contains("this stream has: en, bn"),
+        "{}",
+        text(&out)
+    );
+
+    let out = stream(
+        dir.path(),
+        &[&format!("{base}/hls/master.m3u8"), "-q", "hd"],
+    );
+    assert!(!out.status.success());
+    assert!(text(&out).contains("not a quality"), "{}", text(&out));
+
+    let out = stream(dir.path(), &[&format!("{base}/info")]);
+    assert!(!out.status.success());
+    assert!(
+        text(&out).contains("neither an HLS playlist nor a DASH manifest"),
+        "{}",
+        text(&out)
+    );
+
+    let out = stream(dir.path(), &[&format!("{base}/hls/missing.m3u8")]);
+    assert!(!out.status.success());
+    assert!(text(&out).contains("404"), "{}", text(&out));
+}

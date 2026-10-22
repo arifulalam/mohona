@@ -220,6 +220,78 @@ Many connections can make some servers time out (some limit one address to a few
 
 ---
 
+## `stream` — download an HLS (.m3u8) or DASH (.mpd) stream
+
+```
+mohona stream <URL> [-q best|worst|audio|720] [--audio en] [--list] [--no-join] [--container mp4|mkv] [--ffmpeg PATH] [-o FOLDER] [-n NAME] [-c N] [-l SPEED] [request options]
+```
+
+The address can be a playlist or manifest; Mohona tells HLS and DASH apart by reading it. The request options are the same as for `get` (`-H`, `--cookie`, `--referer`, `--user-agent`, `-u`, `--proxy`, `--no-proxy`, `--ca-file`, `--insecure`), so a stream behind a login, cookie or proxy works the same way. `--checksum`, `--mirror` and the SFTP options are accepted but do nothing for streams.
+
+| Option | Meaning |
+|---|---|
+| `-q`, `--quality` | `best` (default), `worst`, `audio` (sound only), or a height like `720` or `720p`: the best one *not taller* than that (if all are taller, the smallest). |
+| `--audio` | Audio language or name (like `en` or `Bangla`) when the stream has several. Default: the one marked default, else the first. |
+| `--list` | Show what the stream offers and exit without downloading. |
+| `--no-join` | Keep video and audio as two files; do not run ffmpeg. |
+| `--container` | File type to join into: `mp4` (default) or `mkv`. |
+| `--ffmpeg` | Where ffmpeg is (the program, or the folder holding it). Default: the `MOHONA_FFMPEG` variable, next to `mohona`, then the `PATH`. |
+| `-o`, `--output` | Folder to save in (default: the current folder). |
+| `-n`, `--name` | File name without extension (default: from the address). |
+| `-c`, `--connections` | Segments fetched at once, 1 to 32 (default 8). |
+| `-l`, `--max-speed` | Speed limit, like `500K` or `1.5M`. |
+
+### Example: see what is offered
+
+```
+$ mohona stream https://example.com/video/master.m3u8 --list
+HLS stream with 3 qualities:
+  720p 2.5 Mbit/s  [avc1.4d401f,mp4a.40.2]
+  360p 0.8 Mbit/s  [avc1.42c01e,mp4a.40.2]
+  0.1 Mbit/s  [mp4a.40.5]  (sound only)
+Audio: en (default), bn
+```
+
+For DASH the list shows one line per video, audio and subtitle stream, each with its segment count.
+
+### Example: download
+
+```
+$ mohona stream https://example.com/video/master.m3u8 -o videos -q 360
+Quality: 360p 0.8 Mbit/s  [avc1.42c01e,mp4a.40.2]
+Audio: en
+Downloading video ...
+  3/3 segments, 1.8 KiB
+Saved videos/master.ts (1.8 KiB)
+Downloading audio ...
+  2/2 segments, 610 B
+Joining video and audio with ffmpeg ...
+Saved videos/master.mp4 (2.4 KiB)
+```
+
+When the audio is separate from the video (most DASH streams, many HLS ones) both are downloaded and then joined into one file by **ffmpeg**, which only copies the streams (no re-encoding, no quality loss, fast). The two downloaded files are removed only after the join worked.
+
+If ffmpeg is not installed, nothing fails: you keep `NAME.EXT` (video) and `NAME.audio.EXT` (audio), and Mohona says how to install ffmpeg or point to it. To join them later without downloading again: `ffmpeg -i NAME.mp4 -i NAME.audio.m4a -map 0:v:0 -map 1:a:0 -c copy joined.mp4` (use the real file names). `--no-join` keeps two files on purpose. The extension of the unjoined files is `.ts` for MPEG-TS segments and `.mp4` / `.m4a` for fragmented MP4.
+
+### Stop and resume
+
+Press Ctrl-C at any time. Finished segments are kept in a `NAME.EXT.parts` folder beside the result. Run the same command again and only the missing segments are fetched. When everything is there the pieces are joined and the folder is removed.
+
+### Errors you may see
+
+| Message | What it means and what to do |
+|---|---|
+| `"huge" is not a quality (use best, worst, audio, or a height like 720)` | Fix the `-q` value. |
+| `the server answered 404 for ...` | The playlist address is wrong or expired (many sites give out short-lived addresses). Get a fresh one. |
+| `... is not a stream: it is neither an HLS playlist nor a DASH manifest` | The address gave a web page or something else. Look for the real `.m3u8` or `.mpd` address (browser developer tools, Network tab). |
+| `this stream is protected (...); DRM-protected streams are not supported` | The stream uses DRM (Widevine, PlayReady, FairPlay, SAMPLE-AES). Mohona cannot and will not download it. |
+| `this is a live DASH stream; live streams are not supported yet` | Live recording comes later in Phase 4. |
+| `the encryption key at ... is N bytes, not 16 (the server may require a login or cookie)` | The key address returned a page instead of a key. Add `--cookie`, `-H` or `-u` the way the site needs. |
+| `segment N could not be decrypted (wrong key or damaged data)` | The key does not match. Try again later; if it repeats the stream may be using a scheme Mohona does not support. |
+| `ffmpeg could not join the files: ...` | ffmpeg refused the two files (often a codec the chosen container cannot hold). The two files are kept; try `--container mkv`, or join by hand. |
+| `Video and audio are saved as two files because ffmpeg was not found.` | Not an error. Install ffmpeg (Windows: `winget install ffmpeg`) or use `--ffmpeg PATH`. |
+| `the playlist lists no segments` | Nothing to download (for example an empty or ended live playlist). |
+
 ## `queue` — a saved list of downloads
 
 The list lives in the `--db` file, so it survives closing the window, a crash, or a restart. Downloads continue where they stopped.

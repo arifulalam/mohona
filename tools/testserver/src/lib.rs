@@ -9,6 +9,7 @@
 
 mod digest;
 pub mod ftp;
+mod media;
 pub mod proxy;
 pub mod sftp;
 mod sums;
@@ -349,6 +350,23 @@ async fn route<W: AsyncWrite + Unpin>(
         "/file" => serve_file(request, writer, config, keep_alive, head_only).await,
         path if path.starts_with("/sums/") => {
             serve_sums(request, writer, config, keep_alive, head_only).await
+        }
+        path if path.starts_with("/hls/") || path.starts_with("/dash/") => {
+            match media::body(path) {
+                Some(body) => simple(writer, "200 OK", &body, &[], keep_alive, head_only).await?,
+                None => {
+                    simple(
+                        writer,
+                        "404 Not Found",
+                        "not found\n",
+                        &[],
+                        keep_alive,
+                        head_only,
+                    )
+                    .await?
+                }
+            }
+            Ok(keep_alive)
         }
         "/redirect" => {
             let location = if let Some(to) = request.query.get("to") {

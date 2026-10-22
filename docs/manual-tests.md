@@ -72,6 +72,23 @@ Format: **what to run** → **what should happen**.
 - [ ] A big file with `-c 4`: check it comes in pieces and the checksum matches (some WebDAV servers do not support ranges: then it must still download as one piece).
 - [ ] `webdav://` (plain, no encryption) on a home network server.
 
+## Streams (HLS and DASH)
+
+Automated tests use a local test server. These need real streams from the internet, so run them on your own PC. Use only streams you are allowed to download.
+
+- [ ] **Public HLS test stream.** Pick a public sample stream (for example the Apple or Bitmovin sample streams) and run `mohona stream <master.m3u8> --list`. Expected: the qualities, sound-only variants and audio languages are listed and look right.
+- [ ] **Download a short HLS video.** Run `mohona stream <url> -q 360 -o test`. Expected: `test\NAME.ts` (or `.mp4`), plays in VLC with sound (if the audio is separate, `NAME.audio.*` plays too).
+- [ ] **Stop and resume.** Start a longer stream, press Ctrl-C halfway, run the same command. Expected: it says how many segments were kept (progress continues, not from 0) and the final file plays from start to end.
+- [ ] **AES-128 stream.** Download a stream whose playlist has `#EXT-X-KEY:METHOD=AES-128` (many public samples). Expected: the video plays; no garbled picture or sound.
+- [ ] **Joining with ffmpeg.** Install ffmpeg (`winget install ffmpeg`, then open a new terminal), download a stream with separate audio (most DASH ones, or HLS with an `AUDIO` group). Expected: `Joining video and audio with ffmpeg ...`, one `NAME.mp4` with picture and sound, and the two partial files gone. Repeat with `--container mkv`.
+- [ ] **No ffmpeg.** Without ffmpeg on the PATH: the same download ends with "saved as two files because ffmpeg was not found" and both files play on their own. Then `--ffmpeg C:\\path\\to\\ffmpeg.exe` (or the folder) works.
+- [ ] **A join that fails.** If a stream's codecs do not fit MP4, the message starts with "ffmpeg could not join" and both files are kept; `--container mkv` then works.
+- [ ] **Public DASH stream.** Run `mohona stream <manifest.mpd> --list` and then download the lowest quality. Expected: video and audio files that play.
+- [ ] **Stream behind a login or cookie.** If you have one, try `--cookie` or `-H`. Expected: works like `get` does; a wrong or missing cookie gives the "key is N bytes, not 16" or 403 message, not a crash.
+- [ ] **DRM stream.** Try any Widevine or FairPlay protected sample. Expected: "this stream is protected ... not supported" before anything is downloaded.
+- [ ] **Speed limit.** `mohona stream <url> -l 200K`. Expected: total speed stays near 200 KiB/s.
+- [ ] **Many segments.** A 1 to 2 hour stream (thousands of segments) with `-c 16`. Expected: it finishes, memory stays low, and the `.parts` folder is gone afterwards. Note the free disk space needed: the pieces plus the final file.
+
 ## Logins and cookies against a real site
 
 - [ ] A real HTTP Basic site: `get URL -u user:password` → downloads; wrong password → `refused the user name or password`.

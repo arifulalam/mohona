@@ -9,6 +9,8 @@ pub mod dash;
 mod error;
 pub mod hls;
 mod model;
+pub mod mux;
+pub mod quality;
 
 pub use error::MediaError;
 pub use model::{

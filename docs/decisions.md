@@ -330,3 +330,25 @@ A `401` now becomes its own error (`NetError::Unauthorized`) that names the kind
 **Keys.** A key is fetched once per address (guarded by a lock so parallel segments do not all fetch it) through the same client, so cookies, logins and proxies apply. A key that is not 16 bytes is almost always a login page; the message says so.
 
 **Output.** The result is the pieces joined as they are: right for `.ts` and for fragmented MP4 of one track. Separate video and audio renditions are joined into one file by the muxing step (ffmpeg, next).
+
+## ADR-0033: `mohona stream` is its own command, and quality is picked by simple rules
+
+**Decision.** Streams have their own command (`mohona stream`) instead of `get` guessing from the address, because stream addresses often have no `.m3u8` or `.mpd` ending and because the options differ (quality, audio, listing). The command reads the document and tells HLS from DASH by its first characters.
+
+**Quality rules** (in `mohona-media::quality`): `best` is the highest bit rate; `worst` the lowest that still has video; a number means "the best one not taller than this", and if all are taller the smallest, so a request is never refused for lack of an exact match; `audio` is the best sound-only stream. A stream that has no video at all gets its best audio for any quality. Audio language matching accepts the language code (`en`, also `en-US`) or the track name, in any letter case.
+
+**Why.** People think in "720p", not in bit rates, and "not taller than" is what players do. Never failing for a missing exact height keeps scripts working when a site changes its ladder.
+
+**For now** video and audio that are separate end up as two files; the ffmpeg step joins them. Remembering the choice per site comes with the settings work.
+
+## ADR-0033: Joining video and audio runs ffmpeg as a separate program, copying only
+
+**Decision.** When a stream has separate video and audio, `mohona stream` downloads both and then runs `ffmpeg -c copy` (video stream 0, audio stream 0) to make one MP4 (or MKV with `--container mkv`). MP4 gets `+faststart`. The result is written under a temporary name and renamed, and the two downloaded files are deleted only after ffmpeg succeeded (and never if one of them has the result's own name).
+
+**Finding ffmpeg.** `--ffmpeg` (a file or a folder), else the `MOHONA_FFMPEG` variable, else next to the `mohona` program, else the `PATH`. An explicit choice that does not exist is an error for that choice, not a reason to search elsewhere.
+
+**Failure is not fatal.** No ffmpeg, or ffmpeg refusing the files, never fails the command: the downloads are good, so they are kept, with a message that says what to do. `--no-join` skips the step on purpose.
+
+**Why copy only.** Re-encoding is slow, loses quality and needs far more of ffmpeg than most builds guarantee; copying is what people expect from a download manager. Codec/container mismatches are reported with ffmpeg's own words and fixed by choosing MKV.
+
+**Licence.** ffmpeg is never linked or bundled by this step, so Mohona's licence is unaffected (see the Phase 8 packaging note for how a bundled build will treat it).

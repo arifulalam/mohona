@@ -1673,12 +1673,14 @@ dependencies = [
  "clap",
  "mohona-core",
  "mohona-manager",
+ "mohona-media",
  "mohona-net",
  "mohona-store",
  "mohona-testserver",
  "sha2 0.10.9",
  "tempfile",
  "tokio",
+ "url",
 ]
 
 [[package]]
@@ -1721,6 +1723,7 @@ version = "0.0.1"
 dependencies = [
  "roxmltree",
  "serde",
+ "tempfile",
  "thiserror",
  "url",
 ]
