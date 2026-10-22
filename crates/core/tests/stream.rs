@@ -332,18 +332,18 @@ async fn a_failed_run_keeps_finished_segments_and_resumes() {
     assert!(!dir.path().join("o.ts").exists());
     let parts = dir.path().join("o.ts.parts");
     assert!(parts.is_dir());
-    let kept = std::fs::read_dir(&parts)
+    // A piece being written when the run stopped may still land a moment
+    // later (the write finishes on its own thread), so let things settle.
+    tokio::time::sleep(Duration::from_millis(500)).await;
+    let is_piece = |n: &str| n.len() == 6 && n.chars().all(|c| c.is_ascii_digit());
+    let kept_pieces: Vec<usize> = std::fs::read_dir(&parts)
         .unwrap()
-        .filter(|e| {
-            let n = e
-                .as_ref()
-                .unwrap()
-                .file_name()
-                .to_string_lossy()
-                .to_string();
-            n.len() == 6 && n.chars().all(|c| c.is_ascii_digit())
+        .filter_map(|e| {
+            let n = e.unwrap().file_name().to_string_lossy().to_string();
+            is_piece(&n).then(|| n.parse().unwrap())
         })
-        .count();
+        .collect();
+    let kept = kept_pieces.len();
     assert!(kept >= 1, "some segments should have been kept");
 
     state.fail.lock().unwrap().clear();
@@ -363,11 +363,11 @@ async fn a_failed_run_keeps_finished_segments_and_resumes() {
         panic!("expected a Started event")
     };
     assert_eq!(already, kept);
-    // Segments that were kept were not fetched again.
-    let fetched_again = (0..10)
-        .filter(|i| state.hits(&format!("/v/seg{i}.ts")) > hits_before[*i])
-        .count();
-    assert_eq!(fetched_again, 10 - kept);
+    // Segments that were kept were not fetched again; all others were.
+    for (i, before) in hits_before.iter().enumerate() {
+        let again = state.hits(&format!("/v/seg{i}.ts")) > *before;
+        assert_eq!(again, !kept_pieces.contains(&i), "segment {i}");
+    }
     assert!(!parts.exists());
 }
 
