@@ -223,7 +223,7 @@ Many connections can make some servers time out (some limit one address to a few
 ## `stream` — download an HLS (.m3u8) or DASH (.mpd) stream
 
 ```
-mohona stream <URL> [-q best|worst|audio|720] [--audio en] [--list] [--no-join] [--container mp4|mkv] [--ffmpeg PATH] [-o FOLDER] [-n NAME] [-c N] [-l SPEED] [request options]
+mohona stream <URL> [-q best|worst|audio|720] [--audio en] [--list] [--no-join] [--subs LANGS] [--embed-subs] [--container mp4|mkv] [--ffmpeg PATH] [-o FOLDER] [-n NAME] [-c N] [-l SPEED] [request options]
 ```
 
 The address can be a playlist or manifest; Mohona tells HLS and DASH apart by reading it. The request options are the same as for `get` (`-H`, `--cookie`, `--referer`, `--user-agent`, `-u`, `--proxy`, `--no-proxy`, `--ca-file`, `--insecure`), so a stream behind a login, cookie or proxy works the same way. `--checksum`, `--mirror` and the SFTP options are accepted but do nothing for streams.
@@ -234,6 +234,8 @@ The address can be a playlist or manifest; Mohona tells HLS and DASH apart by re
 | `--audio` | Audio language or name (like `en` or `Bangla`) when the stream has several. Default: the one marked default, else the first. |
 | `--list` | Show what the stream offers and exit without downloading. |
 | `--no-join` | Keep video and audio as two files; do not run ffmpeg. |
+| `--subs` | Also download subtitles: a language like `en`, several like `en,bn`, or `all`. Each is saved as `NAME.LANG.srt`. |
+| `--embed-subs` | Also put the subtitles into the finished video as tracks (needs `--subs` and ffmpeg). The `.srt` files stay. |
 | `--container` | File type to join into: `mp4` (default) or `mkv`. |
 | `--ffmpeg` | Where ffmpeg is (the program, or the folder holding it). Default: the `MOHONA_FFMPEG` variable, next to `mohona`, then the `PATH`. |
 | `-o`, `--output` | Folder to save in (default: the current folder). |
@@ -273,6 +275,24 @@ When the audio is separate from the video (most DASH streams, many HLS ones) bot
 
 If ffmpeg is not installed, nothing fails: you keep `NAME.EXT` (video) and `NAME.audio.EXT` (audio), and Mohona says how to install ffmpeg or point to it. To join them later without downloading again: `ffmpeg -i NAME.mp4 -i NAME.audio.m4a -map 0:v:0 -map 1:a:0 -c copy joined.mp4` (use the real file names). `--no-join` keeps two files on purpose. The extension of the unjoined files is `.ts` for MPEG-TS segments and `.mp4` / `.m4a` for fragmented MP4.
 
+### Subtitles
+
+```
+$ mohona stream https://example.com/video/master.m3u8 --subs en,bn --embed-subs
+...
+Saved videos/master.mp4 (2.4 KiB)
+Downloading subtitles en ...
+Saved videos/master.en.srt
+Downloading subtitles bn ...
+Saved videos/master.bn.srt
+Adding the subtitles to the video with ffmpeg ...
+Saved videos/master.mp4 (with subtitles)
+```
+
+Subtitles in WebVTT (the usual HLS kind, even when split over many small files) and TTML are converted to SRT, which every player understands. `--list` shows which languages a stream has. With `--embed-subs` they also become selectable tracks inside the MP4 (or MKV) with the right language tag. Embedding only works on one joined video file: with `--no-join`, or if ffmpeg is missing, you keep the `.srt` files and a message says so.
+
+Not supported yet: subtitles stored *inside* MP4 segments (`stpp` or `wvtt` in DASH, rare) give the message "these subtitles are neither WebVTT nor TTML text".
+
 ### Stop and resume
 
 Press Ctrl-C at any time. Finished segments are kept in a `NAME.EXT.parts` folder beside the result. Run the same command again and only the missing segments are fetched. When everything is there the pieces are joined and the folder is removed.
@@ -288,6 +308,8 @@ Press Ctrl-C at any time. Finished segments are kept in a `NAME.EXT.parts` folde
 | `this is a live DASH stream; live streams are not supported yet` | Live recording comes later in Phase 4. |
 | `the encryption key at ... is N bytes, not 16 (the server may require a login or cookie)` | The key address returned a page instead of a key. Add `--cookie`, `-H` or `-u` the way the site needs. |
 | `segment N could not be decrypted (wrong key or damaged data)` | The key does not match. Try again later; if it repeats the stream may be using a scheme Mohona does not support. |
+| `no subtitles in \"fr\" (this stream has: en, bn)` | Use one of the listed languages, or `--subs all`. |
+| `ffmpeg could not add the subtitles: ...` | The video is unchanged and the `.srt` files are kept. Try `--container mkv`. |
 | `ffmpeg could not join the files: ...` | ffmpeg refused the two files (often a codec the chosen container cannot hold). The two files are kept; try `--container mkv`, or join by hand. |
 | `Video and audio are saved as two files because ffmpeg was not found.` | Not an error. Install ffmpeg (Windows: `winget install ffmpeg`) or use `--ffmpeg PATH`. |
 | `the playlist lists no segments` | Nothing to download (for example an empty or ended live playlist). |

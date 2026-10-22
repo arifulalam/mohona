@@ -94,6 +94,14 @@ enum Command {
         #[arg(long)]
         no_join: bool,
 
+        /// Also download subtitles: a language like en, several like en,bn, or all (saved as NAME.LANG.srt)
+        #[arg(long)]
+        subs: Option<String>,
+
+        /// Put the downloaded subtitles into the video file as tracks (needs ffmpeg; the .srt files stay)
+        #[arg(long, requires = "subs")]
+        embed_subs: bool,
+
         /// File type to join into: mp4 (default) or mkv
         #[arg(long, default_value = "mp4")]
         container: String,
@@ -356,6 +364,8 @@ async fn main() -> ExitCode {
             audio,
             list,
             no_join,
+            subs,
+            embed_subs,
             container,
             ffmpeg,
             connections,
@@ -370,6 +380,8 @@ async fn main() -> ExitCode {
                 audio,
                 list,
                 no_join,
+                subs,
+                embed_subs,
                 container,
                 ffmpeg,
                 connections: usize::from(connections),

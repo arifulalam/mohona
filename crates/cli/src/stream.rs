@@ -28,11 +28,31 @@ pub(crate) struct StreamArgs {
     pub audio: Option<String>,
     pub list: bool,
     pub no_join: bool,
+    pub subs: Option<String>,
+    pub embed_subs: bool,
     pub container: String,
     pub ffmpeg: Option<PathBuf>,
     pub connections: usize,
     pub max_speed: Option<u64>,
     pub request: RequestArgs,
+}
+
+/// One subtitle track to download and convert.
+struct SubTrack {
+    label: String,
+    segments: SegmentList,
+}
+
+/// Whether `--subs` asks for a track with these names.
+fn wanted(subs: &str, names: &[Option<&str>]) -> bool {
+    subs.split(',').map(str::trim).any(|w| {
+        w.eq_ignore_ascii_case("all")
+            || names.iter().flatten().any(|n| {
+                n.eq_ignore_ascii_case(w)
+                    || n.to_ascii_lowercase()
+                        .starts_with(&format!("{}-", w.to_ascii_lowercase()))
+            })
+    })
 }
 
 /// One file to make.
@@ -79,6 +99,7 @@ pub(crate) async fn run(args: StreamArgs) -> Result<(), String> {
         Kind::Hls => hls_jobs(&client, &base, &text, quality, &args).await?,
         Kind::Dash => dash_jobs(&base, &text, quality, &args)?,
     };
+    let (jobs, subtitle_tracks) = jobs;
     if args.list {
         return Ok(());
     }
@@ -150,10 +171,106 @@ pub(crate) async fn run(args: StreamArgs) -> Result<(), String> {
             }
         }
     }
+    let mut main = saved.first().cloned();
     if several && saved.len() == 2 {
-        join_files(&args, &name, container, &saved[0], &saved[1]).await;
+        main = join_files(&args, &name, container, &saved[0], &saved[1]).await;
+    }
+    if !subtitle_tracks.is_empty() {
+        let files =
+            download_subtitles(&client, &args, &name, subtitle_tracks, &cancel, &limits).await?;
+        if args.embed_subs && !files.is_empty() {
+            match main {
+                Some(main) => embed(&args, &name, container, &main, &files).await,
+                None => println!(
+                    "The subtitles stay as .srt files: they can only be put into one joined video file."
+                ),
+            }
+        }
     }
     Ok(())
+}
+
+/// Downloads each subtitle track and saves it as `NAME.LANG.srt`. A track
+/// that cannot be converted is reported and skipped.
+async fn download_subtitles(
+    client: &HttpClient,
+    args: &StreamArgs,
+    name: &str,
+    tracks: Vec<SubTrack>,
+    cancel: &CancelToken,
+    limits: &[std::sync::Arc<RateLimit>],
+) -> Result<Vec<(PathBuf, Option<String>)>, String> {
+    let mut files = Vec::new();
+    for track in tracks {
+        let language = sanitize_filename(&track.label);
+        let raw = args.output.join(format!("{name}.{language}.subtitles"));
+        let srt = args.output.join(format!("{name}.{language}.srt"));
+        println!("Downloading subtitles {} ...", track.label);
+        let mut request = StreamRequest::new(track.segments, &raw);
+        request.connections = args.connections;
+        request.cancel = cancel.clone();
+        request.limits = limits.to_vec();
+        match download_stream(client, &request, None).await {
+            Ok(_) => {}
+            Err(CoreError::Cancelled) => {
+                return Err("stopped. Run the same command again to resume.".into())
+            }
+            Err(error) => {
+                println!(
+                    "Could not download the subtitles {}: {}",
+                    track.label,
+                    describe(&error)
+                );
+                continue;
+            }
+        }
+        let text = std::fs::read(&raw).map_err(|e| e.to_string())?;
+        let _ = std::fs::remove_file(&raw);
+        match mohona_media::subtitles::to_srt(&String::from_utf8_lossy(&text)) {
+            Ok(converted) => {
+                std::fs::write(&srt, converted)
+                    .map_err(|e| format!("cannot save {}: {e}", srt.display()))?;
+                println!("Saved {}", srt.display());
+                files.push((srt, Some(track.label.clone())));
+            }
+            Err(error) => println!("Could not use the subtitles {}: {error}", track.label),
+        }
+    }
+    Ok(files)
+}
+
+/// Puts the subtitle files into the finished video as tracks (the `.srt`
+/// files stay too). Trouble is reported but never fails the command.
+async fn embed(
+    args: &StreamArgs,
+    name: &str,
+    container: Container,
+    main: &std::path::Path,
+    files: &[(PathBuf, Option<String>)],
+) {
+    let Some(ffmpeg) = mux::find_ffmpeg(args.ffmpeg.as_deref()) else {
+        println!("The subtitles stay as .srt files because ffmpeg was not found (see --ffmpeg).");
+        return;
+    };
+    let output = args
+        .output
+        .join(format!("{name}.{}", container.extension()));
+    println!("Adding the subtitles to the video with ffmpeg ...");
+    let (m, f, o) = (main.to_path_buf(), files.to_vec(), output.clone());
+    let result =
+        tokio::task::spawn_blocking(move || mux::embed_subtitles(&ffmpeg, &m, &f, &o, container))
+            .await
+            .map_err(|e| e.to_string())
+            .and_then(|r| r);
+    match result {
+        Ok(()) => {
+            if main != output {
+                let _ = std::fs::remove_file(main);
+            }
+            println!("Saved {} (with subtitles)", output.display());
+        }
+        Err(message) => println!("{message}\nThe video is unchanged and the .srt files are kept."),
+    }
 }
 
 /// Joins video and audio into one file. Trouble here is reported but never
@@ -164,10 +281,10 @@ async fn join_files(
     container: Container,
     video: &std::path::Path,
     audio: &std::path::Path,
-) {
+) -> Option<PathBuf> {
     if args.no_join {
         println!("Video and audio are kept as two files (--no-join).");
-        return;
+        return None;
     }
     let Some(ffmpeg) = mux::find_ffmpeg(args.ffmpeg.as_deref()) else {
         println!(
@@ -175,7 +292,7 @@ async fn join_files(
              Install ffmpeg and run the same command again (it will not download anything twice),\n\
              or say where it is with --ffmpeg PATH (or the MOHONA_FFMPEG variable)."
         );
-        return;
+        return None;
     };
     let output = args
         .output
@@ -196,12 +313,16 @@ async fn join_files(
             }
             let size = std::fs::metadata(&output).map_or(0, |m| m.len());
             println!("Saved {} ({})", output.display(), format_bytes(size));
+            Some(output)
         }
-        Err(message) => println!(
-            "{message}\nThe two files are kept: {} and {}.",
-            video.display(),
-            audio.display()
-        ),
+        Err(message) => {
+            println!(
+                "{message}\nThe two files are kept: {} and {}.",
+                video.display(),
+                audio.display()
+            );
+            None
+        }
     }
 }
 
@@ -259,7 +380,7 @@ async fn hls_jobs(
     text: &str,
     quality: Quality,
     args: &StreamArgs,
-) -> Result<Vec<Job>, String> {
+) -> Result<(Vec<Job>, Vec<SubTrack>), String> {
     match hls::parse(text, base).map_err(|e| e.to_string())? {
         Playlist::Media(list) => {
             if args.list {
@@ -269,7 +390,7 @@ async fn hls_jobs(
                     list.total_duration()
                 );
             }
-            Ok(vec![job("the stream", list, "ts")?])
+            Ok((vec![job("the stream", list, "ts")?], Vec::new()))
         }
         Playlist::Master { variants, tracks } => {
             if args.list {
@@ -299,7 +420,7 @@ async fn hls_jobs(
                         println!("{title}: {}", found.join(", "));
                     }
                 }
-                return Ok(Vec::new());
+                return Ok((Vec::new(), Vec::new()));
             }
             let index =
                 pick_variant(&variants, quality).ok_or("the stream has no quality that fits")?;
@@ -331,7 +452,48 @@ async fn hls_jobs(
                     None => {}
                 }
             }
-            Ok(jobs)
+            let mut subs = Vec::new();
+            if let Some(asked) = &args.subs {
+                let group = variant.subtitle_group.as_deref();
+                let offered: Vec<&mohona_media::Track> = tracks
+                    .iter()
+                    .filter(|t| {
+                        t.kind == MediaKind::Subtitles
+                            && Some(t.group.as_str()) == group
+                            && t.url.is_some()
+                    })
+                    .collect();
+                if offered.is_empty() {
+                    return Err("this quality has no subtitles".into());
+                }
+                let mut found = false;
+                for t in &offered {
+                    if !wanted(asked, &[t.language.as_deref(), Some(&t.name)]) {
+                        continue;
+                    }
+                    found = true;
+                    let label = t.language.clone().unwrap_or_else(|| t.name.clone());
+                    let url = t.url.clone().expect("filtered above");
+                    let text = fetch_text(client, url.as_str()).await?;
+                    match hls::parse(&text, &url).map_err(|e| e.to_string())? {
+                        Playlist::Media(segments) => subs.push(SubTrack { label, segments }),
+                        Playlist::Master { .. } => {
+                            return Err(format!("{url} is another master playlist"))
+                        }
+                    }
+                }
+                if !found {
+                    let known: Vec<String> = offered
+                        .iter()
+                        .map(|t| t.language.clone().unwrap_or_else(|| t.name.clone()))
+                        .collect();
+                    return Err(format!(
+                        "no subtitles in \"{asked}\" (this stream has: {})",
+                        known.join(", ")
+                    ));
+                }
+            }
+            Ok((jobs, subs))
         }
     }
 }
@@ -375,7 +537,7 @@ fn dash_jobs(
     text: &str,
     quality: Quality,
     args: &StreamArgs,
-) -> Result<Vec<Job>, String> {
+) -> Result<(Vec<Job>, Vec<SubTrack>), String> {
     let renditions = dash::parse(text, base).map_err(|e| e.to_string())?;
     if args.list {
         println!("DASH stream:");
@@ -399,7 +561,7 @@ fn dash_jobs(
                 );
             }
         }
-        return Ok(Vec::new());
+        return Ok((Vec::new(), Vec::new()));
     }
     let index =
         pick_rendition(&renditions, quality).ok_or("the stream has no quality that fits")?;
@@ -427,12 +589,30 @@ fn dash_jobs(
             None => {}
         }
     }
-    let subtitles = pick_subtitles(&renditions, None);
-    if !subtitles.is_empty() {
-        println!(
-            "Note: this stream has {} subtitle track(s); downloading them comes in a later step.",
-            subtitles.len()
-        );
+    let mut subs = Vec::new();
+    if let Some(asked) = &args.subs {
+        let offered = pick_subtitles(&renditions, None);
+        if offered.is_empty() {
+            return Err("this stream has no subtitles".into());
+        }
+        for r in &offered {
+            if wanted(asked, &[r.language.as_deref(), Some(&r.id)]) {
+                subs.push(SubTrack {
+                    label: r.language.clone().unwrap_or_else(|| r.id.clone()),
+                    segments: r.segments.clone(),
+                });
+            }
+        }
+        if subs.is_empty() {
+            let known: Vec<String> = offered
+                .iter()
+                .map(|r| r.language.clone().unwrap_or_else(|| r.id.clone()))
+                .collect();
+            return Err(format!(
+                "no subtitles in \"{asked}\" (this stream has: {})",
+                known.join(", ")
+            ));
+        }
     }
-    Ok(jobs)
+    Ok((jobs, subs))
 }

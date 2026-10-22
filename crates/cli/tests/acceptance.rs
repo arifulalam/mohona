@@ -973,6 +973,67 @@ fn stream_joining_with_a_broken_ffmpeg_result_keeps_the_files() {
 }
 
 #[test]
+fn stream_downloads_hls_subtitles_as_srt() {
+    let (_rt, server) = start_media_server();
+    let dir = tempfile::tempdir().unwrap();
+    let url = format!("http://{server}/hls/master.m3u8");
+    let out = stream(
+        dir.path(),
+        &[&url, "-o", "out", "--no-join", "--subs", "en,bn"],
+    );
+    let shown = text(&out);
+    assert!(out.status.success(), "{shown}");
+    let en = std::fs::read_to_string(dir.path().join("out/hls.en.srt")).unwrap();
+    // Two glued segments; the cue that crosses the cut is there once.
+    assert_eq!(
+        en,
+        "1\n00:00:01,000 --> 00:00:03,000\nHello <i>world</i>\n\n\
+         2\n00:00:08,000 --> 00:00:12,000\nAcross the cut\n\n\
+         3\n00:00:15,000 --> 00:00:16,500\nThe end & more\n\n"
+    );
+    let bn = std::fs::read_to_string(dir.path().join("out/hls.bn.srt")).unwrap();
+    assert_eq!(bn, "1\n00:00:02,000 --> 00:00:04,000\nহ্যালো\n\n");
+    // Video, audio and the two subtitle files; no leftovers.
+    assert_eq!(
+        std::fs::read_dir(dir.path().join("out")).unwrap().count(),
+        4,
+        "{shown}"
+    );
+
+    // A language the stream does not have says what it has.
+    let out = stream(dir.path(), &[&url, "-o", "x", "--subs", "fr"]);
+    assert!(!out.status.success());
+    assert!(
+        text(&out).contains("this stream has: en, bn"),
+        "{}",
+        text(&out)
+    );
+    // --embed-subs needs --subs.
+    let out = stream(dir.path(), &[&url, "-o", "x", "--embed-subs"]);
+    assert!(!out.status.success());
+}
+
+#[test]
+fn stream_downloads_dash_subtitles_in_vtt_and_ttml() {
+    let (_rt, server) = start_media_server();
+    let dir = tempfile::tempdir().unwrap();
+    let url = format!("http://{server}/dash/manifest.mpd");
+    let out = stream(
+        dir.path(),
+        &[&url, "-o", "out", "--no-join", "--subs", "all"],
+    );
+    assert!(out.status.success(), "{}", text(&out));
+    assert_eq!(
+        std::fs::read_to_string(dir.path().join("out/dash.bn.srt")).unwrap(),
+        "1\n00:00:01,000 --> 00:00:02,000\nদাশ\n\n"
+    );
+    assert_eq!(
+        std::fs::read_to_string(dir.path().join("out/dash.fr.srt")).unwrap(),
+        "1\n00:00:03,000 --> 00:00:04,000\nBonjour\nle monde\n\n"
+    );
+}
+
+#[test]
 fn stream_explains_problems() {
     let (_rt, server) = start_media_server();
     let dir = tempfile::tempdir().unwrap();

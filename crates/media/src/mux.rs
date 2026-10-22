@@ -145,3 +145,121 @@ pub fn join(
     std::fs::rename(&temporary, output)
         .map_err(|e| format!("cannot save {}: {e}", output.display()))
 }
+
+/// ISO 639-2 code for ffmpeg's `language` tag: two-letter codes of common
+/// languages are widened, three-letter ones pass through, others are left
+/// untagged.
+pub fn language_tag(code: &str) -> Option<String> {
+    let c = code.trim().to_ascii_lowercase();
+    let c = c.split(['-', '_']).next().unwrap_or("");
+    let wide = match c {
+        "en" => "eng",
+        "bn" => "ben",
+        "ar" => "ara",
+        "de" => "deu",
+        "es" => "spa",
+        "fr" => "fra",
+        "hi" => "hin",
+        "id" => "ind",
+        "it" => "ita",
+        "ja" => "jpn",
+        "ko" => "kor",
+        "nl" => "nld",
+        "pt" => "por",
+        "ru" => "rus",
+        "tr" => "tur",
+        "ur" => "urd",
+        "zh" => "zho",
+        other if other.len() == 3 && other.chars().all(|ch| ch.is_ascii_alphabetic()) => other,
+        _ => return None,
+    };
+    Some(wide.to_string())
+}
+
+/// The arguments for adding SRT files to `input` as subtitle tracks.
+pub fn embed_arguments(
+    input: &Path,
+    subtitles: &[(PathBuf, Option<String>)],
+    output: &Path,
+    container: Container,
+) -> Vec<std::ffi::OsString> {
+    let mut args: Vec<std::ffi::OsString> =
+        ["-hide_banner", "-loglevel", "error", "-nostdin", "-y", "-i"]
+            .iter()
+            .map(Into::into)
+            .collect();
+    args.push(input.into());
+    for (file, _) in subtitles {
+        args.push("-i".into());
+        args.push(file.into());
+    }
+    args.push("-map".into());
+    args.push("0".into());
+    for i in 0..subtitles.len() {
+        args.push("-map".into());
+        args.push(format!("{}:0", i + 1).into());
+    }
+    let codec = if container == Container::Mp4 {
+        "mov_text"
+    } else {
+        "srt"
+    };
+    for a in ["-c", "copy", "-c:s", codec] {
+        args.push(a.into());
+    }
+    for (i, (_, language)) in subtitles.iter().enumerate() {
+        if let Some(language) = language.as_deref().and_then(language_tag) {
+            args.push(format!("-metadata:s:s:{i}").into());
+            args.push(format!("language={language}").into());
+        }
+    }
+    if container == Container::Mp4 {
+        args.push("-movflags".into());
+        args.push("+faststart".into());
+    }
+    args.push(output.into());
+    args
+}
+
+/// Adds subtitle files to `input` as tracks, writing `output` (which may be
+/// the same path as `input`). Nothing is changed when ffmpeg fails.
+pub fn embed_subtitles(
+    ffmpeg: &Path,
+    input: &Path,
+    subtitles: &[(PathBuf, Option<String>)],
+    output: &Path,
+    container: Container,
+) -> Result<(), String> {
+    let stem = output.file_stem().unwrap_or_default().to_string_lossy();
+    let temporary = output.with_file_name(format!("{stem}.embedding.{}", container.extension()));
+    let result = Command::new(ffmpeg)
+        .args(embed_arguments(input, subtitles, &temporary, container))
+        .stdin(Stdio::null())
+        .stdout(Stdio::null())
+        .stderr(Stdio::piped())
+        .output()
+        .map_err(|e| format!("could not run ffmpeg ({}): {e}", ffmpeg.display()))?;
+    if !result.status.success() {
+        let _ = std::fs::remove_file(&temporary);
+        let said = String::from_utf8_lossy(&result.stderr);
+        let tail: Vec<&str> = said
+            .trim()
+            .lines()
+            .rev()
+            .take(6)
+            .collect::<Vec<_>>()
+            .into_iter()
+            .rev()
+            .collect();
+        return Err(format!(
+            "ffmpeg could not add the subtitles: {}",
+            tail.join(" | ")
+        ));
+    }
+    if output.exists() {
+        std::fs::remove_file(output)
+            .map_err(|e| format!("cannot replace {}: {e}", output.display()))?;
+    }
+    std::fs::rename(&temporary, output)
+        .map_err(|e| format!("cannot save {}: {e}", output.display()))
+}

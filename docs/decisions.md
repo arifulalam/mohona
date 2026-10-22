@@ -352,3 +352,13 @@ A `401` now becomes its own error (`NetError::Unauthorized`) that names the kind
 **Why copy only.** Re-encoding is slow, loses quality and needs far more of ffmpeg than most builds guarantee; copying is what people expect from a download manager. Codec/container mismatches are reported with ffmpeg's own words and fixed by choosing MKV.
 
 **Licence.** ffmpeg is never linked or bundled by this step, so Mohona's licence is unaffected (see the Phase 8 packaging note for how a bundled build will treat it).
+
+## ADR-0034: Subtitles are converted to SRT; embedding is optional and uses ffmpeg
+
+**Decision.** `--subs` downloads the chosen subtitle tracks with the same segment downloader as video, converts WebVTT or TTML to SRT in Mohona (`mohona_media::subtitles`), and saves `NAME.LANG.srt`. `--embed-subs` then adds them to the finished video as tracks with ffmpeg (`mov_text` for MP4, `srt` for MKV, language tags widened to ISO 639-2), keeping the `.srt` files.
+
+**Why SRT, and why in Rust.** SRT is the one format every player, editor and ffmpeg takes. Converting by hand keeps the common case (no embedding) free of ffmpeg, and lets the converter deal with how streams really look: segmented WebVTT is joined as it comes, a new `WEBVTT` header starts a new block even when the previous file ended without a blank line (found by a test), cues crossing a segment cut appear in both files and are listed once, tags other than `<i>`, `<b>`, `<u>` are removed, and HTML entities are decoded.
+
+**Limits (stated, not hidden).** `X-TIMESTAMP-MAP` offsets are ignored, so a stream whose video does not start at 0 may need a shift (listed in the manual tests). TTML supports clock times, offsets (`s`, `ms`, `h`, `m`, `f`, `t`) and `<br/>`, not styling or regions. Subtitles inside MP4 segments are refused with a clear message.
+
+**Failure is not fatal.** A subtitle track that cannot be fetched or converted is reported and skipped; the video is never touched unless embedding succeeded, and embedding writes a temporary file first.

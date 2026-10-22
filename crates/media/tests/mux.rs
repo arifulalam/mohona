@@ -108,3 +108,49 @@ fn an_explicit_path_is_not_second_guessed() {
         assert_eq!(find_ffmpeg(Some(real.parent().unwrap())), Some(real));
     }
 }
+
+#[test]
+fn language_tags() {
+    use mohona_media::mux::language_tag;
+    assert_eq!(language_tag("en").as_deref(), Some("eng"));
+    assert_eq!(language_tag("bn-BD").as_deref(), Some("ben"));
+    assert_eq!(language_tag("fil").as_deref(), Some("fil"));
+    assert_eq!(language_tag("English"), None);
+    assert_eq!(language_tag("x"), None);
+}
+
+#[test]
+fn embeds_srt_files_as_tracks() {
+    use mohona_media::mux::embed_subtitles;
+    let Some(ffmpeg) = find_ffmpeg(None) else {
+        eprintln!("skipped: ffmpeg is not installed");
+        return;
+    };
+    let dir = tempfile::tempdir().unwrap();
+    let (video, audio) = make_inputs(&ffmpeg, dir.path());
+    let joined = dir.path().join("j.mp4");
+    join(&ffmpeg, &video, &audio, &joined, Container::Mp4).unwrap();
+    let en = dir.path().join("en.srt");
+    let bn = dir.path().join("bn.srt");
+    std::fs::write(&en, "1\n00:00:00,100 --> 00:00:00,900\nHello\n\n").unwrap();
+    std::fs::write(&bn, "1\n00:00:00,100 --> 00:00:00,900\nHalo\n\n").unwrap();
+    let subs = vec![(en, Some("en".to_string())), (bn, Some("bn".to_string()))];
+    for container in [Container::Mp4, Container::Mkv] {
+        let out = dir
+            .path()
+            .join(format!("with-subs.{}", container.extension()));
+        embed_subtitles(&ffmpeg, &joined, &subs, &out, container).unwrap();
+        let info = streams(&ffmpeg, &out);
+        assert_eq!(info.matches("Subtitle:").count(), 2, "{info}");
+        assert!(info.contains("(eng)") && info.contains("(ben)"), "{info}");
+        assert!(info.contains("Video:") && info.contains("Audio:"), "{info}");
+    }
+    // Replacing the input itself works, and a bad subtitle file changes nothing.
+    embed_subtitles(&ffmpeg, &joined, &subs, &joined, Container::Mp4).unwrap();
+    assert_eq!(streams(&ffmpeg, &joined).matches("Subtitle:").count(), 2);
+    let before = std::fs::read(&joined).unwrap();
+    let bad = vec![(dir.path().join("missing.srt"), None)];
+    let error = embed_subtitles(&ffmpeg, &joined, &bad, &joined, Container::Mp4).unwrap_err();
+    assert!(error.contains("could not add the subtitles"), "{error}");
+    assert_eq!(std::fs::read(&joined).unwrap(), before);
+}

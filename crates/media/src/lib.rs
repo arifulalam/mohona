@@ -11,6 +11,7 @@ pub mod hls;
 mod model;
 pub mod mux;
 pub mod quality;
+pub mod subtitles;
 
 pub use error::MediaError;
 pub use model::{
