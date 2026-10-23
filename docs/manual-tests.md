@@ -96,6 +96,14 @@ Automated tests use a local test server. These need real streams from the intern
 - [ ] **Speed limit.** `mohona stream <url> -l 200K`. Expected: total speed stays near 200 KiB/s.
 - [ ] **Many segments.** A 1 to 2 hour stream (thousands of segments) with `-c 16`. Expected: it finishes, memory stays low, and the `.parts` folder is gone afterwards. Note the free disk space needed: the pieces plus the final file.
 
+## Preview and convert
+
+- [ ] **Preview an unfinished download.** Start `mohona get <big video URL> -o test`, press Ctrl-C after a while, then `mohona preview <same URL> -o test`. Expected: your default player (on Windows) opens the video and plays until the end of what was downloaded; the download still resumes and finishes afterwards.
+- [ ] **Preview with several connections.** Same with `-c 8` (the file is filled in pieces): the preview must still play from the start (it only uses the unbroken start).
+- [ ] **Convert to MP3 / M4A.** `mohona convert video.mp4 -p mp3` and `-p m4a`. Expected: files that play in any music player, with the right length.
+- [ ] **Convert to a small MP4.** `mohona convert video.mkv -p mp4-small`. Expected: noticeably smaller file, not taller than 720 lines, plays with sound everywhere (also on a phone).
+- [ ] **Windows paths.** Convert a file in a folder whose name has spaces and non-English letters (for example a Bangla folder name). Expected: it works and the result is next to the file.
+
 ## Logins and cookies against a real site
 
 - [ ] A real HTTP Basic site: `get URL -u user:password` → downloads; wrong password → `refused the user name or password`.

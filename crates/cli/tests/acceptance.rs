@@ -1123,3 +1123,143 @@ fn stream_explains_problems() {
     assert!(!out.status.success());
     assert!(text(&out).contains("404"), "{}", text(&out));
 }
+
+#[test]
+fn preview_copies_the_complete_start_of_an_unfinished_download() {
+    let dir = tempfile::tempdir().unwrap();
+    let temp = tempfile::tempdir().unwrap();
+    let url = "http://example.com/movies/clip.mp4";
+    let data: Vec<u8> = (0..100u8).collect();
+    std::fs::write(dir.path().join("clip.mp4.part"), &data).unwrap();
+    // Two pieces: the first has 40 of its 50 bytes, so only 40 are usable.
+    let progress = mohona_core::Progress {
+        version: 1,
+        url: url.into(),
+        final_url: url.into(),
+        filename: "clip.mp4".into(),
+        total: 100,
+        etag: None,
+        last_modified: None,
+        segments: vec![(0, 40, 50), (50, 100, 100)],
+    };
+    progress
+        .save(&dir.path().join("clip.mp4.part.mohona"))
+        .unwrap();
+    let out = Command::new(MOHONA)
+        .env("TMPDIR", temp.path())
+        .env("TEMP", temp.path())
+        .env("TMP", temp.path())
+        .args(["preview", url, "-o"])
+        .arg(dir.path())
+        .arg("--no-open")
+        .output()
+        .unwrap();
+    let shown = text(&out);
+    assert!(out.status.success(), "{shown}");
+    assert!(shown.contains("first 40 B"), "{shown}");
+    assert_eq!(
+        std::fs::read(temp.path().join("mohona-preview/clip.mp4")).unwrap(),
+        data[..40]
+    );
+    // The download itself is untouched.
+    assert_eq!(
+        std::fs::read(dir.path().join("clip.mp4.part")).unwrap(),
+        data
+    );
+
+    // An address nobody is downloading, and a file that is just a file.
+    let out = Command::new(MOHONA)
+        .args(["preview", "http://example.com/other.bin", "--no-open", "-o"])
+        .arg(dir.path())
+        .output()
+        .unwrap();
+    assert!(!out.status.success());
+    assert!(text(&out).contains("nothing to preview"), "{}", text(&out));
+    let plain = dir.path().join("plain.txt");
+    std::fs::write(&plain, "x").unwrap();
+    let out = Command::new(MOHONA)
+        .arg("preview")
+        .arg(&plain)
+        .arg("--no-open")
+        .output()
+        .unwrap();
+    assert!(out.status.success(), "{}", text(&out));
+}
+
+#[test]
+fn convert_lists_presets_and_explains_problems() {
+    let dir = tempfile::tempdir().unwrap();
+    let out = Command::new(MOHONA)
+        .args(["convert", "--list"])
+        .output()
+        .unwrap();
+    let shown = text(&out);
+    assert!(out.status.success(), "{shown}");
+    for name in ["mp3", "m4a", "mp4", "mp4-small"] {
+        assert!(shown.contains(name), "{shown}");
+    }
+    let out = Command::new(MOHONA).arg("convert").output().unwrap();
+    assert!(!out.status.success());
+    let out = Command::new(MOHONA)
+        .args(["convert", "nothing.mp4"])
+        .output()
+        .unwrap();
+    assert!(text(&out).contains("is not a file"), "{}", text(&out));
+    let file = dir.path().join("a.mp4");
+    std::fs::write(&file, "x").unwrap();
+    let out = Command::new(MOHONA)
+        .arg("convert")
+        .arg(&file)
+        .args(["--preset", "gif"])
+        .output()
+        .unwrap();
+    assert!(text(&out).contains("not a preset"), "{}", text(&out));
+    let out = Command::new(MOHONA)
+        .arg("convert")
+        .arg(&file)
+        .args(["--ffmpeg", "no-such-place"])
+        .output()
+        .unwrap();
+    assert!(!out.status.success());
+    assert!(
+        text(&out).contains("ffmpeg was not found"),
+        "{}",
+        text(&out)
+    );
+}
+
+#[test]
+fn convert_makes_an_mp3_and_never_replaces_a_file() {
+    let Some(ffmpeg) = mohona_media::mux::find_ffmpeg(None) else {
+        eprintln!("skipped: ffmpeg is not installed");
+        return;
+    };
+    let dir = tempfile::tempdir().unwrap();
+    let source = dir.path().join("song.mkv");
+    let made = Command::new(&ffmpeg)
+        .args([
+            "-hide_banner",
+            "-loglevel",
+            "error",
+            "-y",
+            "-f",
+            "lavfi",
+            "-i",
+        ])
+        .arg("sine=frequency=440:duration=1")
+        .args(["-c:a", "aac"])
+        .arg(&source)
+        .output()
+        .unwrap();
+    assert!(made.status.success());
+    for expected in ["song.mp3", "song (1).mp3"] {
+        let out = Command::new(MOHONA)
+            .arg("convert")
+            .arg(&source)
+            .args(["--preset", "mp3"])
+            .output()
+            .unwrap();
+        assert!(out.status.success(), "{}", text(&out));
+        assert!(dir.path().join(expected).is_file(), "{}", text(&out));
+    }
+}

@@ -103,6 +103,24 @@ impl Ledger {
             .sum()
     }
 
+    /// How many bytes from the start of the file are complete, with nothing
+    /// missing before them: what a player can use of a partial file.
+    pub fn contiguous_bytes(&self) -> u64 {
+        let mut sorted = self.segments.clone();
+        sorted.sort_unstable();
+        let mut prefix = 0;
+        for (start, committed, end) in sorted {
+            if start != prefix {
+                break;
+            }
+            prefix = committed;
+            if committed < end {
+                break;
+            }
+        }
+        prefix
+    }
+
     /// Whether the segments make sense: they tile `0..total` exactly and
     /// no segment has progress outside itself.
     pub fn is_consistent(&self) -> bool {
@@ -229,6 +247,23 @@ mod tests {
         // Order does not matter.
         sample(vec![(50, 60, 100), (0, 0, 50)]).save(&path).unwrap();
         assert!(Ledger::load(&path).is_some());
+    }
+
+    #[test]
+    fn contiguous_bytes_stop_at_the_first_gap() {
+        assert_eq!(sample(vec![(0, 100, 100)]).contiguous_bytes(), 100);
+        assert_eq!(
+            sample(vec![(0, 40, 50), (50, 100, 100)]).contiguous_bytes(),
+            40
+        );
+        assert_eq!(
+            sample(vec![(50, 100, 100), (0, 50, 50)]).contiguous_bytes(),
+            100
+        );
+        assert_eq!(
+            sample(vec![(0, 0, 50), (50, 100, 100)]).contiguous_bytes(),
+            0
+        );
     }
 
     #[test]

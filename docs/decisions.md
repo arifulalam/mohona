@@ -374,3 +374,9 @@ A `401` now becomes its own error (`NetError::Unauthorized`) that names the kind
 **Naming.** Because a recording starts a new file each time, and so that finding the stream already ended must not destroy an earlier recording, `mohona stream` now picks a free name (`show (1).ts`) for every stream download, like `get` does. This replaces the earlier behaviour of silently overwriting a finished file of the same name.
 
 **Not supported yet:** live DASH, subtitles for live streams (`--subs` is refused with a message), and live streams that only partly end.
+
+## ADR-0037: Preview copies the complete start of a partial file; convert is a handful of fixed ffmpeg presets
+
+**Preview.** A `.part` file is preallocated: the end is zeros and the middle may be missing while several connections work. Players cope badly with that, and the `.part` name hides the file type. So `mohona preview` asks the progress ledger how many bytes from the start are complete with nothing missing before them (`Ledger::contiguous_bytes`), copies exactly that part into a temporary file with the final name, and opens it with the system's own opener (`start`, `open`, `xdg-open`). The download is never touched. Copying costs time for very large partial files, accepted for being correct on every platform and player (a hard link would show the zero-filled tail). Downloads kept in the queue database are not found yet, because their progress is not in a sidecar file.
+
+**Convert.** Four presets (`mp3`, `m4a`, `mp4`, `mp4-small`) with fixed, boring ffmpeg settings (libmp3lame quality 2; AAC 192k; H.264 CRF 23 and 28, `yuv420p`, `+faststart`, small one scaled to at most 720 lines). Presets, not free-form options, because the point is "make it play everywhere" without learning ffmpeg; anyone who needs more runs ffmpeg directly. The result is written under a temporary name and renamed, and never replaces an existing file.

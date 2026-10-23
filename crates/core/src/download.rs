@@ -359,6 +359,14 @@ pub fn partial_progress(dest_dir: &Path, url: &str) -> Option<(u64, u64)> {
     Ledger::find(dest_dir, url.trim()).map(|(_, ledger)| (ledger.committed_bytes(), ledger.total))
 }
 
+/// What a player can use of an interrupted download of `url` in `dest_dir`:
+/// the `.part` file, how many bytes from its start are complete, and the
+/// name the finished file will get.
+pub fn previewable_part(dest_dir: &Path, url: &str) -> Option<(PathBuf, u64, String)> {
+    let (part, ledger) = Ledger::find(dest_dir, url.trim())?;
+    Some((part, ledger.contiguous_bytes(), ledger.filename))
+}
+
 /// An unfinished download of `url`: its `.part` file and saved progress.
 /// The request's progress store is asked first; the sidecar file is the
 /// fallback (and how downloads started by older versions are found).

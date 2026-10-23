@@ -220,6 +220,55 @@ Many connections can make some servers time out (some limit one address to a few
 
 ---
 
+## `preview` — look at an unfinished download
+
+```
+mohona preview <URL or FILE> [-o FOLDER] [--no-open]
+```
+
+Opens the part of an unfinished download that is already complete, in the program your system uses for that file type (so you can check a video before it has finished). Give the same address and `-o` folder as the download. Mohona copies the complete *start* of the file (the end of a partial file is still empty, which confuses players) into a temporary folder and opens the copy; the download itself is not touched. Playback stops where the copy ends.
+
+```
+$ mohona preview https://example.com/movies/clip.mp4 -o videos
+Preview of the first 412.5 MiB of the download (it is not finished: playback stops there).
+C:\Users\you\AppData\Local\Temp\mohona-preview\clip.mp4
+```
+
+If you give a file name instead of an address, that file is simply opened. `--no-open` only prepares the file and prints where it is.
+
+| Message | What it means and what to do |
+|---|---|
+| `nothing to preview: ... no unfinished download of it was found in ...` | Use the same address as in the download and the folder you gave to `get -o`. Downloads in the queue keep their progress in the list database and cannot be previewed this way yet. |
+| `nothing is complete yet at the start of the file; try again in a moment` | The first piece has not been written yet. |
+
+## `convert` — simple conversions with ffmpeg
+
+```
+mohona convert <FILE> [-p mp3|m4a|mp4|mp4-small] [-o FOLDER] [--ffmpeg PATH]
+mohona convert --list
+```
+
+| Preset | Result |
+|---|---|
+| `mp3` | Sound only, MP3 (`NAME.mp3`) |
+| `m4a` | Sound only, AAC in M4A (`NAME.m4a`) |
+| `mp4` (default) | Video that plays everywhere: H.264 + AAC (`NAME.converted.mp4`) |
+| `mp4-small` | At most 720 lines tall, stronger compression (`NAME.small.mp4`) |
+
+```
+$ mohona convert lecture.mkv -p mp3
+Converting lecture.mkv (sound only, MP3) ...
+Saved lecture.mp3 (8.4 MiB)
+```
+
+The result goes next to the file (or into `-o`). An existing file is never replaced: the result becomes `NAME (1).mp3`. Re-encoding takes time, unlike the copy-only joining in `stream`. ffmpeg is found the same way as for `stream` (`--ffmpeg`, `MOHONA_FFMPEG`, next to `mohona`, the `PATH`).
+
+| Message | What it means and what to do |
+|---|---|
+| `ffmpeg was not found. Install it ...` | Install ffmpeg (`winget install ffmpeg`) or use `--ffmpeg PATH`. |
+| `"gif" is not a preset (use mp3, m4a, mp4 or mp4-small)` | Fix `--preset`; `--list` shows them. |
+| `ffmpeg could not convert the file: ...` | ffmpeg's own reason. A common one: an audio preset on a file with no sound. Nothing is left behind. |
+
 ## `stream` — download an HLS (.m3u8) or DASH (.mpd) stream
 
 ```

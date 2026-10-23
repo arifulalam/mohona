@@ -15,6 +15,7 @@ use tokio::sync::mpsc;
 mod history;
 mod queue;
 mod stream;
+mod tools;
 
 #[derive(Parser)]
 #[command(
@@ -64,6 +65,40 @@ enum Command {
     Log {
         /// The number shown by `queue list`
         id: i64,
+    },
+    /// Open the finished start of an unfinished download (or any file) in your player
+    Preview {
+        /// The address of the unfinished download, or a file
+        target: String,
+
+        /// Folder the download is saved in (as given to `get`)
+        #[arg(short, long, default_value = ".")]
+        output: PathBuf,
+
+        /// Only make the preview file and print where it is
+        #[arg(long)]
+        no_open: bool,
+    },
+    /// Convert a file with ffmpeg: get the sound, make it smaller, make it play everywhere
+    Convert {
+        /// The file to convert
+        file: Option<PathBuf>,
+
+        /// mp3, m4a, mp4 or mp4-small
+        #[arg(short, long, default_value = "mp4")]
+        preset: String,
+
+        /// Show the presets and exit
+        #[arg(long)]
+        list: bool,
+
+        /// Folder for the result (default: next to the file)
+        #[arg(short, long)]
+        output: Option<PathBuf>,
+
+        /// Where ffmpeg is (the program, or the folder holding it)
+        #[arg(long)]
+        ffmpeg: Option<PathBuf>,
     },
     /// Download an HLS (.m3u8) or DASH (.mpd) stream
     Stream {
@@ -360,6 +395,26 @@ async fn main() -> ExitCode {
                 ExitCode::FAILURE
             }
         },
+        Some(Command::Preview {
+            target,
+            output,
+            no_open,
+        }) => finish(tools::preview(&target, &output, no_open)),
+        Some(Command::Convert {
+            file,
+            preset,
+            list,
+            output,
+            ffmpeg,
+        }) => finish(if list {
+            tools::list_presets();
+            Ok(())
+        } else {
+            match file {
+                Some(file) => tools::convert(&file, &preset, output.as_deref(), ffmpeg.as_deref()),
+                None => Err("give the file to convert (or --list to see the presets)".to_string()),
+            }
+        }),
         Some(Command::Stream {
             url,
             output,

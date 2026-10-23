@@ -5,6 +5,7 @@
 //! Fetching the manifest and its segments is done by the callers, with the
 //! normal Mohona transports.
 
+pub mod convert;
 pub mod dash;
 mod error;
 pub mod hls;
