@@ -341,7 +341,7 @@ A `401` now becomes its own error (`NetError::Unauthorized`) that names the kind
 
 **For now** video and audio that are separate end up as two files; the ffmpeg step joins them. Remembering the choice per site comes with the settings work.
 
-## ADR-0033: Joining video and audio runs ffmpeg as a separate program, copying only
+## ADR-0034: Joining video and audio runs ffmpeg as a separate program, copying only
 
 **Decision.** When a stream has separate video and audio, `mohona stream` downloads both and then runs `ffmpeg -c copy` (video stream 0, audio stream 0) to make one MP4 (or MKV with `--container mkv`). MP4 gets `+faststart`. The result is written under a temporary name and renamed, and the two downloaded files are deleted only after ffmpeg succeeded (and never if one of them has the result's own name).
 
@@ -353,7 +353,7 @@ A `401` now becomes its own error (`NetError::Unauthorized`) that names the kind
 
 **Licence.** ffmpeg is never linked or bundled by this step, so Mohona's licence is unaffected (see the Phase 8 packaging note for how a bundled build will treat it).
 
-## ADR-0034: Subtitles are converted to SRT; embedding is optional and uses ffmpeg
+## ADR-0035: Subtitles are converted to SRT; embedding is optional and uses ffmpeg
 
 **Decision.** `--subs` downloads the chosen subtitle tracks with the same segment downloader as video, converts WebVTT or TTML to SRT in Mohona (`mohona_media::subtitles`), and saves `NAME.LANG.srt`. `--embed-subs` then adds them to the finished video as tracks with ffmpeg (`mov_text` for MP4, `srt` for MKV, language tags widened to ISO 639-2), keeping the `.srt` files.
 
@@ -362,3 +362,15 @@ A `401` now becomes its own error (`NetError::Unauthorized`) that names the kind
 **Limits (stated, not hidden).** `X-TIMESTAMP-MAP` offsets are ignored, so a stream whose video does not start at 0 may need a shift (listed in the manual tests). TTML supports clock times, offsets (`s`, `ms`, `h`, `m`, `f`, `t`) and `<br/>`, not styling or regions. Subtitles inside MP4 segments are refused with a clear message.
 
 **Failure is not fatal.** A subtitle track that cannot be fetched or converted is reported and skipped; the video is never touched unless embedding succeeded, and embedding writes a temporary file first.
+
+## ADR-0036: Live HLS is recorded straight into one file; a finished file is never replaced
+
+**Decision.** When a playlist has no end (`#EXT-X-ENDLIST` missing), `mohona stream` records it: it reloads the playlist (about every half segment length, 0.5 to 5 s), fetches each new segment once, a few at a time, and appends them in order to one file. It stops when the stream ends, at `--record-for` (seconds of *recorded video*, like `30m`), at Ctrl-C, or when the playlist disappears (usually a stream that ended without saying so; what was recorded is kept). Separate audio is recorded alongside and joined afterwards like for any stream.
+
+**Why not the `.parts` folder.** A recording has no known size and nothing to resume (the segments that slipped out of the window are gone), but it must survive being stopped at any moment. Appending finished segments in order gives a file that plays at every moment, and stopping or crashing loses at most the segment in flight. The cost is that a recording cannot be resumed; a second run records a new file.
+
+**Gaps are reported, not hidden.** When the server's window moves faster than we fetch, the missing segment count is shown as a warning.
+
+**Naming.** Because a recording starts a new file each time, and so that finding the stream already ended must not destroy an earlier recording, `mohona stream` now picks a free name (`show (1).ts`) for every stream download, like `get` does. This replaces the earlier behaviour of silently overwriting a finished file of the same name.
+
+**Not supported yet:** live DASH, subtitles for live streams (`--subs` is refused with a message), and live streams that only partly end.

@@ -1034,6 +1034,57 @@ fn stream_downloads_dash_subtitles_in_vtt_and_ttml() {
 }
 
 #[test]
+fn stream_records_a_live_stream_until_it_ends() {
+    let (_rt, server) = start_media_server();
+    let dir = tempfile::tempdir().unwrap();
+    let url = format!("http://{server}/live/index.m3u8");
+    let out = stream(dir.path(), &[&url, "-o", "rec", "--name", "show"]);
+    let shown = text(&out);
+    assert!(out.status.success(), "{shown}");
+    assert!(shown.contains("Live stream: recording"), "{shown}");
+    assert!(shown.contains("the stream ended"), "{shown}");
+    // Six segments of 100, 110, ... bytes, each once and in order.
+    assert_eq!(
+        std::fs::read(dir.path().join("rec/show.ts")).unwrap(),
+        content(&[100, 110, 120, 130, 140, 150])
+    );
+
+    // Recording again never replaces the first file.
+    let out = stream(dir.path(), &[&url, "-o", "rec", "--name", "show"]);
+    assert!(out.status.success(), "{}", text(&out));
+    assert!(dir.path().join("rec/show (1).ts").is_file());
+    assert_eq!(
+        std::fs::read(dir.path().join("rec/show.ts")).unwrap().len(),
+        content(&[100, 110, 120, 130, 140, 150]).len()
+    );
+}
+
+#[test]
+fn stream_stops_a_live_recording_at_the_time_limit() {
+    let (_rt, server) = start_media_server();
+    let dir = tempfile::tempdir().unwrap();
+    // A stream that never ends; 3 seconds of video are asked for.
+    let url = format!("http://{server}/live/index.m3u8?noend=1");
+    let out = stream(
+        dir.path(),
+        &[&url, "-o", "rec", "--name", "x", "--record-for", "3s"],
+    );
+    let shown = text(&out);
+    assert!(out.status.success(), "{shown}");
+    assert!(shown.contains("time limit reached"), "{shown}");
+    assert_eq!(
+        std::fs::read(dir.path().join("rec/x.ts")).unwrap(),
+        content(&[100, 110, 120])
+    );
+    let out = stream(dir.path(), &[&url, "--record-for", "soon"]);
+    assert!(!out.status.success());
+    assert!(text(&out).contains("is not a time"), "{}", text(&out));
+    let out = stream(dir.path(), &[&url, "--subs", "en", "--record-for", "1s"]);
+    assert!(!out.status.success());
+    assert!(text(&out).contains("live streams"), "{}", text(&out));
+}
+
+#[test]
 fn stream_explains_problems() {
     let (_rt, server) = start_media_server();
     let dir = tempfile::tempdir().unwrap();

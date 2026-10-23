@@ -4,8 +4,8 @@ use std::io::{IsTerminal, Write};
 use std::path::PathBuf;
 
 use mohona_core::{
-    download_stream, sanitize_filename, CancelToken, Error as CoreError, RateLimit, StreamEvent,
-    StreamRequest,
+    download_stream, record_live, sanitize_filename, CancelToken, Error as CoreError, LiveEnd,
+    LiveEvent, LiveRequest, RateLimit, StreamEvent, StreamRequest,
 };
 use mohona_media::dash;
 use mohona_media::hls::{self, Playlist};
@@ -28,6 +28,7 @@ pub(crate) struct StreamArgs {
     pub audio: Option<String>,
     pub list: bool,
     pub no_join: bool,
+    pub record_for: Option<f64>,
     pub subs: Option<String>,
     pub embed_subs: bool,
     pub container: String,
@@ -60,6 +61,8 @@ struct Job {
     label: String,
     segments: SegmentList,
     extension: &'static str,
+    /// The playlist's address when the stream is live (it has no end yet).
+    live: Option<Url>,
 }
 
 enum Kind {
@@ -123,6 +126,18 @@ pub(crate) async fn run(args: StreamArgs) -> Result<(), String> {
 
     let several = jobs.len() > 1;
     let mut saved = Vec::new();
+    let live = jobs.iter().any(|j| j.live.is_some());
+    if live && (args.subs.is_some() || !subtitle_tracks.is_empty()) {
+        return Err("subtitles are not supported for live streams yet (leave out --subs)".into());
+    }
+    // A finished file of the same name is never replaced.
+    let name = free_name(&args.output, &name, &jobs);
+    let jobs = if live {
+        saved = record_jobs(&client, &args, &name, jobs, &cancel, &limits).await?;
+        Vec::new()
+    } else {
+        jobs
+    };
     for (index, job) in jobs.into_iter().enumerate() {
         let file = if index == 0 {
             format!("{name}.{}", job.extension)
@@ -188,6 +203,180 @@ pub(crate) async fn run(args: StreamArgs) -> Result<(), String> {
         }
     }
     Ok(())
+}
+
+/// A name whose result files do not exist yet: a recording never replaces an
+/// earlier one.
+fn free_name(dir: &std::path::Path, name: &str, jobs: &[Job]) -> String {
+    let taken = |candidate: &str| {
+        jobs.iter().enumerate().any(|(i, j)| {
+            let file = if i == 0 {
+                format!("{candidate}.{}", j.extension)
+            } else {
+                format!("{candidate}.audio.{}", j.extension)
+            };
+            dir.join(file).exists()
+        }) || dir.join(format!("{candidate}.mp4")).exists()
+            || dir.join(format!("{candidate}.mkv")).exists()
+    };
+    if !taken(name) {
+        return name.to_string();
+    }
+    (1..)
+        .map(|n| format!("{name} ({n})"))
+        .find(|c| !taken(c))
+        .expect("an unused name exists")
+}
+
+/// `90`, `90s`, `30m`, `2h`, `1h30m`, `1h30m15s`: seconds.
+pub(crate) fn parse_duration(text: &str) -> Result<f64, String> {
+    let bad = || format!("\"{text}\" is not a time (use 90s, 30m, 2h or 1h30m)");
+    let t = text.trim().to_ascii_lowercase();
+    if let Ok(n) = t.parse::<f64>() {
+        return if n > 0.0 { Ok(n) } else { Err(bad()) };
+    }
+    let (mut total, mut number) = (0.0, String::new());
+    for c in t.chars() {
+        if c.is_ascii_digit() || c == '.' {
+            number.push(c);
+        } else {
+            let unit = match c {
+                'h' => 3600.0,
+                'm' => 60.0,
+                's' => 1.0,
+                _ => return Err(bad()),
+            };
+            total += number.parse::<f64>().map_err(|_| bad())? * unit;
+            number.clear();
+        }
+    }
+    if !number.is_empty() || total <= 0.0 {
+        return Err(bad());
+    }
+    Ok(total)
+}
+
+fn clock(seconds: f64) -> String {
+    let s = seconds as u64;
+    format!("{:02}:{:02}:{:02}", s / 3600, s / 60 % 60, s % 60)
+}
+
+/// Records live jobs (video, and audio when it is separate) side by side,
+/// until the streams end, the limit is reached or Ctrl-C is pressed.
+async fn record_jobs(
+    client: &HttpClient,
+    args: &StreamArgs,
+    name: &str,
+    jobs: Vec<Job>,
+    cancel: &CancelToken,
+    limits: &[std::sync::Arc<RateLimit>],
+) -> Result<Vec<PathBuf>, String> {
+    println!("Live stream: recording. Press Ctrl-C to stop; what is recorded is kept.");
+    let interactive = std::io::stdout().is_terminal();
+    let mut workers = Vec::new();
+    let mut display = None;
+    for (index, job) in jobs.into_iter().enumerate() {
+        let Some(playlist) = job.live else {
+            return Err(
+                "this stream is live for one part and finished for another; that is not supported"
+                    .into(),
+            );
+        };
+        let file = if index == 0 {
+            format!("{name}.{}", job.extension)
+        } else {
+            format!("{name}.audio.{}", job.extension)
+        };
+        let mut request = LiveRequest::new(playlist, args.output.join(file));
+        request.cancel = cancel.clone();
+        request.limits = limits.to_vec();
+        request.max_seconds = args.record_for;
+        let (sender, receiver) = mpsc::channel(64);
+        if index == 0 {
+            display = Some(receiver);
+        } else {
+            // Only the first track is shown; the others still need a reader.
+            tokio::spawn(async move {
+                let mut receiver = receiver;
+                while receiver.recv().await.is_some() {}
+            });
+        }
+        let client = client.clone();
+        workers.push(tokio::spawn(async move {
+            record_live(&client, &request, Some(&sender)).await
+        }));
+    }
+    if let Some(mut receiver) = display {
+        let mut last_report = 0usize;
+        while let Some(event) = receiver.recv().await {
+            match event {
+                LiveEvent::Segment {
+                    count,
+                    seconds,
+                    bytes,
+                } => {
+                    if interactive {
+                        print!(
+                            "\r  Recording {} of video, {count} segments, {}   ",
+                            clock(seconds),
+                            format_bytes(bytes)
+                        );
+                        let _ = std::io::stdout().flush();
+                    } else if count >= last_report + 10 {
+                        last_report = count;
+                        println!(
+                            "  Recorded {} ({count} segments, {})",
+                            clock(seconds),
+                            format_bytes(bytes)
+                        );
+                    }
+                }
+                LiveEvent::Missed { count } => {
+                    if interactive {
+                        println!();
+                    }
+                    println!(
+                        "  Warning: {count} segment(s) were gone before they could be fetched."
+                    );
+                }
+                LiveEvent::Started => {}
+            }
+        }
+        if interactive {
+            println!();
+        }
+    }
+    let mut saved = Vec::new();
+    for worker in workers {
+        match worker.await.map_err(|e| e.to_string())? {
+            Ok(outcome) => {
+                let why = match outcome.ended {
+                    LiveEnd::StreamEnded => "the stream ended",
+                    LiveEnd::Stopped => "stopped",
+                    LiveEnd::TimeLimit => "time limit reached",
+                    LiveEnd::PlaylistGone => {
+                        "the stream's playlist is gone (it has probably ended)"
+                    }
+                };
+                println!(
+                    "Saved {} ({}, {}; {why})",
+                    outcome.path.display(),
+                    clock(outcome.seconds),
+                    format_bytes(outcome.bytes)
+                );
+                if outcome.segments > 0 {
+                    saved.push(outcome.path);
+                } else {
+                    let _ = std::fs::remove_file(&outcome.path);
+                }
+            }
+            Err(error) => return Err(describe(&error)),
+        }
+    }
+    if saved.is_empty() {
+        return Err("nothing was recorded".into());
+    }
+    Ok(saved)
 }
 
 /// Downloads each subtitle track and saves it as `NAME.LANG.srt`. A track
@@ -390,7 +579,7 @@ async fn hls_jobs(
                     list.total_duration()
                 );
             }
-            Ok((vec![job("the stream", list, "ts")?], Vec::new()))
+            Ok((vec![job("the stream", list, "ts", Some(base))?], Vec::new()))
         }
         Playlist::Master { variants, tracks } => {
             if args.list {
@@ -513,7 +702,7 @@ async fn media_job(
                 (true, false) => "m4a",
                 _ => "ts",
             };
-            job(label, list, extension)
+            job(label, list, extension, Some(url))
         }
         Playlist::Master { .. } => Err(format!(
             "{url} is another master playlist, not a list of segments"
@@ -521,14 +710,18 @@ async fn media_job(
     }
 }
 
-fn job(label: &str, list: SegmentList, extension: &'static str) -> Result<Job, String> {
-    if !list.ended {
-        return Err("this is a live stream; recording live streams is not supported yet".into());
-    }
+fn job(
+    label: &str,
+    list: SegmentList,
+    extension: &'static str,
+    address: Option<&Url>,
+) -> Result<Job, String> {
+    let live = if list.ended { None } else { address.cloned() };
     Ok(Job {
         label: label.to_string(),
         segments: list,
         extension,
+        live,
     })
 }
 
@@ -567,7 +760,7 @@ fn dash_jobs(
         pick_rendition(&renditions, quality).ok_or("the stream has no quality that fits")?;
     let main = &renditions[index];
     println!("Quality: {:.1} Mbit/s", main.bandwidth as f64 / 1_000_000.0);
-    let mut jobs = vec![job("video", main.segments.clone(), "mp4")?];
+    let mut jobs = vec![job("video", main.segments.clone(), "mp4", None)?];
     if main.kind == MediaKind::Video {
         match pick_audio_rendition(&renditions, args.audio.as_deref()) {
             Some(i) => {
@@ -578,7 +771,7 @@ fn dash_jobs(
                         .clone()
                         .unwrap_or_else(|| "default".into())
                 );
-                jobs.push(job("audio", renditions[i].segments.clone(), "m4a")?);
+                jobs.push(job("audio", renditions[i].segments.clone(), "m4a", None)?);
             }
             None if args.audio.is_some() => {
                 return Err(format!(

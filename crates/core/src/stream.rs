@@ -73,15 +73,36 @@ pub struct StreamOutcome {
     pub segments: usize,
 }
 
-struct Shared {
-    client: HttpClient,
-    retry: RetryPolicy,
-    cancel: CancelToken,
-    limits: Limits,
-    keys: Mutex<HashMap<String, Vec<u8>>>,
-    parts: PathBuf,
-    done: AtomicUsize,
-    bytes: AtomicU64,
+pub(crate) struct Shared {
+    pub(crate) client: HttpClient,
+    pub(crate) retry: RetryPolicy,
+    pub(crate) cancel: CancelToken,
+    pub(crate) limits: Limits,
+    pub(crate) keys: Mutex<HashMap<String, Vec<u8>>>,
+    pub(crate) parts: PathBuf,
+    pub(crate) done: AtomicUsize,
+    pub(crate) bytes: AtomicU64,
+}
+
+impl Shared {
+    /// The state the live recorder needs (it keeps no `.parts` folder).
+    pub(crate) fn for_live(
+        client: &HttpClient,
+        retry: &RetryPolicy,
+        cancel: &CancelToken,
+        limits: &[Arc<RateLimit>],
+    ) -> Arc<Self> {
+        Arc::new(Self {
+            client: client.clone(),
+            retry: retry.clone(),
+            cancel: cancel.clone(),
+            limits: Limits(limits.to_vec()),
+            keys: Mutex::new(HashMap::new()),
+            parts: PathBuf::new(),
+            done: AtomicUsize::new(0),
+            bytes: AtomicU64::new(0),
+        })
+    }
 }
 
 /// Fetches all segments and joins them into `request.dest`.
@@ -261,17 +282,17 @@ async fn send(events: Option<&Sender<StreamEvent>>, event: StreamEvent) {
 }
 
 /// `movie.ts` -> `movie.ts.parts`.
-pub fn parts_dir(dest: &Path) -> PathBuf {
+pub(crate) fn parts_dir(dest: &Path) -> PathBuf {
     let mut name = dest.file_name().unwrap_or_default().to_os_string();
     name.push(".parts");
     dest.with_file_name(name)
 }
 
-fn part_name(i: usize) -> String {
+pub(crate) fn part_name(i: usize) -> String {
     format!("{i:06}")
 }
 
-fn init_name(i: usize) -> String {
+pub(crate) fn init_name(i: usize) -> String {
     format!("init-{i}")
 }
 
@@ -290,7 +311,7 @@ fn fingerprint(list: &SegmentList) -> String {
     )
 }
 
-fn prepare_parts(parts: &Path, fingerprint: &str) -> Result<(), Error> {
+pub(crate) fn prepare_parts(parts: &Path, fingerprint: &str) -> Result<(), Error> {
     let marker = parts.join("plan");
     if parts.is_dir() && std::fs::read_to_string(&marker).ok().as_deref() != Some(fingerprint) {
         std::fs::remove_dir_all(parts)?;
@@ -303,7 +324,7 @@ fn prepare_parts(parts: &Path, fingerprint: &str) -> Result<(), Error> {
 }
 
 /// Writes a piece so that it either exists completely or not at all.
-async fn store(parts: &Path, name: &str, data: &[u8]) -> Result<(), Error> {
+pub(crate) async fn store(parts: &Path, name: &str, data: &[u8]) -> Result<(), Error> {
     let tmp = parts.join(format!("{name}.tmp"));
     let target = parts.join(name);
     let data = data.to_vec();
@@ -316,7 +337,11 @@ async fn store(parts: &Path, name: &str, data: &[u8]) -> Result<(), Error> {
     Ok(())
 }
 
-fn assemble(dest: &Path, parts: &Path, layout: &[(Option<usize>, usize)]) -> Result<u64, Error> {
+pub(crate) fn assemble(
+    dest: &Path,
+    parts: &Path,
+    layout: &[(Option<usize>, usize)],
+) -> Result<u64, Error> {
     use std::io::Write;
     let tmp = {
         let mut name = dest.file_name().unwrap_or_default().to_os_string();
@@ -352,7 +377,11 @@ fn assemble(dest: &Path, parts: &Path, layout: &[(Option<usize>, usize)]) -> Res
 }
 
 /// One piece, with retries.
-async fn fetch(shared: &Shared, url: &str, range: Option<ByteRange>) -> Result<Vec<u8>, Error> {
+pub(crate) async fn fetch(
+    shared: &Shared,
+    url: &str,
+    range: Option<ByteRange>,
+) -> Result<Vec<u8>, Error> {
     let mut failures = 0u32;
     let mut throttles = 0u32;
     loop {
@@ -409,7 +438,7 @@ async fn fetch_once(
     Ok(data)
 }
 
-async fn key_for(shared: &Shared, url: &str) -> Result<Vec<u8>, Error> {
+pub(crate) async fn key_for(shared: &Shared, url: &str) -> Result<Vec<u8>, Error> {
     // One at a time, so a key shared by many segments is fetched once.
     let mut keys = shared.keys.lock().await;
     if let Some(key) = keys.get(url) {
@@ -426,7 +455,12 @@ async fn key_for(shared: &Shared, url: &str) -> Result<Vec<u8>, Error> {
     Ok(key)
 }
 
-fn decrypt(key: &[u8], iv: &[u8; 16], data: &[u8], index: usize) -> Result<Vec<u8>, Error> {
+pub(crate) fn decrypt(
+    key: &[u8],
+    iv: &[u8; 16],
+    data: &[u8],
+    index: usize,
+) -> Result<Vec<u8>, Error> {
     cbc::Decryptor::<aes::Aes128>::new_from_slices(key, iv)
         .map_err(|_| Error::Stream("the encryption key has the wrong size".into()))?
         .decrypt_padded_vec_mut::<Pkcs7>(data)

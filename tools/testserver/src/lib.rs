@@ -158,6 +158,7 @@ pub(crate) async fn serve_with(
         config,
         active: AtomicUsize::new(0),
         digest: digest::State::default(),
+        live_requests: AtomicU64::new(0),
     });
     loop {
         let (stream, _) = listener.accept().await?;
@@ -185,6 +186,8 @@ struct Shared {
     /// Responses with a body being sent right now (for `max_conns`).
     active: AtomicUsize,
     digest: digest::State,
+    /// Playlist requests so far at `/live/index.m3u8`.
+    live_requests: AtomicU64,
 }
 
 /// Counts one active response, and stops counting when dropped.
@@ -350,6 +353,33 @@ async fn route<W: AsyncWrite + Unpin>(
         "/file" => serve_file(request, writer, config, keep_alive, head_only).await,
         path if path.starts_with("/sums/") => {
             serve_sums(request, writer, config, keep_alive, head_only).await
+        }
+        "/live/index.m3u8" => {
+            // A live stream: every request shows a window of three segments
+            // that slides by one. Segment `i` is `/file?size=100+10*i`.
+            // `?len=N` (default 6) segments, then ENDLIST, unless `?noend`.
+            let total: u64 = request
+                .query
+                .get("len")
+                .and_then(|v| v.parse().ok())
+                .unwrap_or(6);
+            let k = config.live_requests.fetch_add(1, Ordering::SeqCst);
+            let newest = if request.query.contains_key("noend") {
+                k + 1
+            } else {
+                (k + 1).min(total - 1)
+            };
+            let first = newest.saturating_sub(2);
+            let mut text =
+                format!("#EXTM3U\n#EXT-X-TARGETDURATION:1\n#EXT-X-MEDIA-SEQUENCE:{first}\n");
+            for i in first..=newest {
+                text.push_str(&format!("#EXTINF:1,\n/file?size={}\n", 100 + 10 * i));
+            }
+            if newest >= total - 1 && !request.query.contains_key("noend") {
+                text.push_str("#EXT-X-ENDLIST\n");
+            }
+            simple(writer, "200 OK", &text, &[], keep_alive, head_only).await?;
+            Ok(keep_alive)
         }
         path if path.starts_with("/hls/") || path.starts_with("/dash/") => {
             match media::body(path) {

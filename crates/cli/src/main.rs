@@ -94,6 +94,10 @@ enum Command {
         #[arg(long)]
         no_join: bool,
 
+        /// For a live stream: stop after this much video, like 90s, 30m or 1h30m (default: until it ends or Ctrl-C)
+        #[arg(long, value_parser = stream::parse_duration)]
+        record_for: Option<f64>,
+
         /// Also download subtitles: a language like en, several like en,bn, or all (saved as NAME.LANG.srt)
         #[arg(long)]
         subs: Option<String>,
@@ -364,6 +368,7 @@ async fn main() -> ExitCode {
             audio,
             list,
             no_join,
+            record_for,
             subs,
             embed_subs,
             container,
@@ -380,6 +385,7 @@ async fn main() -> ExitCode {
                 audio,
                 list,
                 no_join,
+                record_for,
                 subs,
                 embed_subs,
                 container,

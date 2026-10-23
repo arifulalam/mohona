@@ -223,7 +223,7 @@ Many connections can make some servers time out (some limit one address to a few
 ## `stream` — download an HLS (.m3u8) or DASH (.mpd) stream
 
 ```
-mohona stream <URL> [-q best|worst|audio|720] [--audio en] [--list] [--no-join] [--subs LANGS] [--embed-subs] [--container mp4|mkv] [--ffmpeg PATH] [-o FOLDER] [-n NAME] [-c N] [-l SPEED] [request options]
+mohona stream <URL> [-q best|worst|audio|720] [--audio en] [--list] [--no-join] [--record-for 30m] [--subs LANGS] [--embed-subs] [--container mp4|mkv] [--ffmpeg PATH] [-o FOLDER] [-n NAME] [-c N] [-l SPEED] [request options]
 ```
 
 The address can be a playlist or manifest; Mohona tells HLS and DASH apart by reading it. The request options are the same as for `get` (`-H`, `--cookie`, `--referer`, `--user-agent`, `-u`, `--proxy`, `--no-proxy`, `--ca-file`, `--insecure`), so a stream behind a login, cookie or proxy works the same way. `--checksum`, `--mirror` and the SFTP options are accepted but do nothing for streams.
@@ -234,6 +234,7 @@ The address can be a playlist or manifest; Mohona tells HLS and DASH apart by re
 | `--audio` | Audio language or name (like `en` or `Bangla`) when the stream has several. Default: the one marked default, else the first. |
 | `--list` | Show what the stream offers and exit without downloading. |
 | `--no-join` | Keep video and audio as two files; do not run ffmpeg. |
+| `--record-for` | For a live stream: stop after this much *video*, like `90s`, `30m`, `1h30m`. Default: until the stream ends or you press Ctrl-C. |
 | `--subs` | Also download subtitles: a language like `en`, several like `en,bn`, or `all`. Each is saved as `NAME.LANG.srt`. |
 | `--embed-subs` | Also put the subtitles into the finished video as tracks (needs `--subs` and ffmpeg). The `.srt` files stay. |
 | `--container` | File type to join into: `mp4` (default) or `mkv`. |
@@ -293,6 +294,21 @@ Subtitles in WebVTT (the usual HLS kind, even when split over many small files) 
 
 Not supported yet: subtitles stored *inside* MP4 segments (`stpp` or `wvtt` in DASH, rare) give the message "these subtitles are neither WebVTT nor TTML text".
 
+### Live streams
+
+An HLS playlist that has no end is a live stream. Mohona notices and records it:
+
+```
+$ mohona stream https://example.com/live/index.m3u8 -o rec --name match --record-for 30m
+Live stream: recording. Press Ctrl-C to stop; what is recorded is kept.
+  Recording 00:12:41 of video, 380 segments, 112.4 MiB
+Saved rec/match.ts (00:30:00, 212.9 MiB; time limit reached)
+```
+
+The file plays at every moment, so stopping with Ctrl-C (or a crash) never loses what was recorded. If the server drops segments before Mohona can fetch them (a slow connection) it warns with how many. When the stream's playlist disappears, the recording ends and is kept. A recording cannot be resumed: running the command again records a new file (`match (1).ts`). Mohona never replaces a finished file of the same name, for any stream download.
+
+Not supported yet: live DASH streams, and `--subs` with a live stream.
+
 ### Stop and resume
 
 Press Ctrl-C at any time. Finished segments are kept in a `NAME.EXT.parts` folder beside the result. Run the same command again and only the missing segments are fetched. When everything is there the pieces are joined and the folder is removed.
@@ -305,7 +321,9 @@ Press Ctrl-C at any time. Finished segments are kept in a `NAME.EXT.parts` folde
 | `the server answered 404 for ...` | The playlist address is wrong or expired (many sites give out short-lived addresses). Get a fresh one. |
 | `... is not a stream: it is neither an HLS playlist nor a DASH manifest` | The address gave a web page or something else. Look for the real `.m3u8` or `.mpd` address (browser developer tools, Network tab). |
 | `this stream is protected (...); DRM-protected streams are not supported` | The stream uses DRM (Widevine, PlayReady, FairPlay, SAMPLE-AES). Mohona cannot and will not download it. |
-| `this is a live DASH stream; live streams are not supported yet` | Live recording comes later in Phase 4. |
+| `this is a live DASH stream; live streams are not supported yet` | Only live HLS can be recorded for now. |
+| `... was gone before they could be fetched` (warning) | Your connection was too slow for the live stream; the recording has a gap. Try `-c 4` or a lower quality. |
+| `could not be parsed: the time ...` / `\"soon\" is not a time` | Fix `--record-for` (90s, 30m, 2h, 1h30m). |
 | `the encryption key at ... is N bytes, not 16 (the server may require a login or cookie)` | The key address returned a page instead of a key. Add `--cookie`, `-H` or `-u` the way the site needs. |
 | `segment N could not be decrypted (wrong key or damaged data)` | The key does not match. Try again later; if it repeats the stream may be using a scheme Mohona does not support. |
 | `no subtitles in \"fr\" (this stream has: en, bn)` | Use one of the listed languages, or `--subs all`. |
