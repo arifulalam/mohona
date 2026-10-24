@@ -400,3 +400,13 @@ A `401` now becomes its own error (`NetError::Unauthorized`) that names the kind
 **Chromium ids.** An extension id comes from its key; the extension will pin its key so the id is the same on every machine, and the installer takes it with `--extension-id` (checked: 32 letters a to p) or `MOHONA_EXTENSION_ID`. Without it, Chromium browsers are skipped with a message rather than registered for everyone.
 
 **One database.** A browser starts the host with no useful working folder, so the host and `mohona daemon` share a default database, `mohona.db` in the Mohona data folder (`%LOCALAPPDATA%\Mohona` on Windows). `mohona daemon` uses it unless `--db` is given; `mohona-host` uses `--db`, `MOHONA_DB`, or it.
+
+## ADR-0040: The extension is TypeScript built by Vite into two plain folders
+
+**Decision.** `extension/` holds a Manifest V3 extension written in TypeScript. `npm run build` produces `dist/chromium` (Chrome, Edge, Chromium) and `dist/firefox`, each with `manifest.json`, `background.js`, `popup.html` and `popup.js`. The two scripts are built as self-contained classic scripts (IIFE) so every browser loads them the same way; the only differences between the browsers are in the manifest (a service worker for Chromium, `scripts` plus a Gecko id for Firefox, Firefox 128 or newer).
+
+**Permissions.** Only `nativeMessaging` for now. No host permissions, no content scripts. Later steps add what they need one at a time (`downloads` for interception, `contextMenus`, `webRequest`...) so that each addition is visible in review and in the store listing.
+
+**Stable id.** The Chromium manifest carries a public `key`, so an unpacked or sideloaded extension always has the id `iflnmaneimjgoibmpcmlkllhjccebbhj`. `mohona-host install` registers that id by default (`register::CHROMIUM_ID`); a test in the extension checks that the id really is derived from the key and appears in the Rust source. The private key was thrown away: it is only needed to sign a `.crx` yourself, and the Chrome Web Store assigns its own id when the extension is published (then `--extension-id` is used, or the default changes).
+
+**Talking to the host.** One long-lived `connectNative` port per browser session, questions carry a `requestId`, each has a timeout, and a lost port fails the questions waiting on it and reconnects on the next one. `addDownload` starts the engine once when the host says `engine_not_running`, then tries again. This logic does not touch browser APIs (the port is passed in), so it is unit-tested with a fake host; a Playwright script (`extension/e2e/chromium.cjs`) checks the whole chain in a real Chromium.

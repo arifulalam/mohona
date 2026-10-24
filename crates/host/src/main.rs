@@ -27,7 +27,7 @@ fn engine_program(args: &[String]) -> Option<PathBuf> {
 }
 
 const USAGE: &str = "Usage:
-  mohona-host install   [--browser chrome|chromium|edge|firefox|all] [--extension-id ID]
+  mohona-host install   [--browser chrome|chromium|edge|firefox|all] [--extension-id ID]  (default: the Mohona extension)
   mohona-host uninstall [--browser ...]
   mohona-host status
 (Started by a browser, it speaks the native messaging protocol instead.)";
@@ -51,22 +51,18 @@ fn manage(command: &str, args: &[String]) -> Result<(), String> {
             let host = std::env::current_exe().map_err(|e| e.to_string())?;
             let chromium_id = option(args, "--extension-id")
                 .and_then(|p| p.to_str().map(str::to_string))
-                .or_else(|| std::env::var("MOHONA_EXTENSION_ID").ok());
-            if let Some(id) = &chromium_id {
-                if !register::valid_chromium_id(id) {
-                    return Err(format!(
-                        "\"{id}\" is not an extension id (32 letters, a to p; see chrome://extensions)"
-                    ));
-                }
+                .or_else(|| std::env::var("MOHONA_EXTENSION_ID").ok())
+                .unwrap_or_else(|| register::CHROMIUM_ID.to_string());
+            if !register::valid_chromium_id(&chromium_id) {
+                return Err(format!(
+                    "\"{chromium_id}\" is not an extension id (32 letters, a to p; see chrome://extensions)"
+                ));
             }
             for browser in browsers {
                 let allowed = if browser == Browser::Firefox {
                     register::FIREFOX_ID.to_string()
-                } else if let Some(id) = &chromium_id {
-                    id.clone()
                 } else {
-                    println!("{}: skipped (give --extension-id)", browser.name());
-                    continue;
+                    chromium_id.clone()
                 };
                 let done = register::install(&places, browser, &host, &[allowed])
                     .map_err(|e| format!("{}: {e}", browser.name()))?;

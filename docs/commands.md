@@ -433,7 +433,7 @@ firefox: registered (...)
 
 `status` lists each browser as `registered for <extension> -> <program>` (with `PROGRAM NOT FOUND` when the file moved) or `not registered`. `uninstall` prints `removed` or `was not registered` per browser.
 
-Errors: `"x" is not an extension id (32 letters, a to p; see chrome://extensions)`; `unknown browser "opera": use chrome, chromium, edge, firefox or all`. Without `--extension-id`, Chrome, Chromium and Edge print `skipped (give --extension-id)`; Firefox uses the fixed add-on id `mohona@mohona.local`.
+Errors: `"x" is not an extension id (32 letters, a to p)`; `unknown browser "opera": use chrome, chromium, edge, firefox or all`. Without `--extension-id`, Chrome, Chromium and Edge are registered for the Mohona extension (`iflnmaneimjgoibmpcmlkllhjccebbhj`, the id of `extension/dist/chromium`); Firefox always uses the add-on id `mohona@mohona.local`.
 
 The default database for `mohona daemon` and `mohona-host` is `mohona.db` in `%LOCALAPPDATA%\Mohona` (`~/.local/share/Mohona` elsewhere); `mohona daemon` uses it unless you pass `--db`.
 

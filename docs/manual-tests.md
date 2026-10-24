@@ -118,6 +118,16 @@ Automated tests use a local test server. These need real streams from the intern
 3. `mohona-host uninstall`; the keys and files must be gone. Run it twice: the second time says `was not registered`.
 4. Paths with spaces or non-English letters (for example a user folder with Bengali letters) must work in step 1 and in the browser later.
 
+## Browser extension
+
+1. `cd extension`, `npm install`, `npm run build`. In Chrome or Edge open `chrome://extensions`, switch on Developer mode, "Load unpacked", pick `extension\dist\chromium`. The extension's id must be `iflnmaneimjgoibmpcmlkllhjccebbhj`.
+2. `target\debug\mohona-host install` (registers that id for Chrome, Chromium and Edge, and Firefox's id for Firefox).
+3. Click the Mohona toolbar button. With nothing running it must say "Mohona is not running." and show "Start Mohona". Click it: the text must change to "Mohona 0.0.1 is running." and no console window may flash.
+4. Paste a real download link and press the button: "Added to Mohona." and the file must appear in your Downloads folder. Press it again: "Not added: already in the list ...".
+5. Before `mohona-host install` (or after `uninstall`) the popup must say it is not connected and tell you to run `mohona-host install`.
+6. Firefox: `about:debugging` > This Firefox > Load Temporary Add-on > `extension\dist\firefox\manifest.json`; repeat 3 to 5.
+7. Edge: repeat 1 to 4 (Edge reads the same Chromium build).
+
 ## Logins and cookies against a real site
 
 - [ ] A real HTTP Basic site: `get URL -u user:password` → downloads; wrong password → `refused the user name or password`.

@@ -1,0 +1,13 @@
+{
+  "manifest_version": 3,
+  "name": "Mohona",
+  "version": "0.0.1",
+  "description": "Send downloads from your browser to the Mohona download manager.",
+  "permissions": [
+    "nativeMessaging"
+  ],
+  "action": {
+    "default_title": "Mohona",
+    "default_popup": "popup.html"
+  }
+}

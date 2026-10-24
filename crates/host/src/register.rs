@@ -14,6 +14,11 @@ use serde_json::{json, Value};
 /// The name browsers know the host by.
 pub const HOST_NAME: &str = "org.mohona.host";
 
+/// The id of the extension built from the `extension` folder: it pins its
+/// key (`extension/identity.json`), so the id is the same everywhere. A test
+/// in the extension checks that the two agree.
+pub const CHROMIUM_ID: &str = "iflnmaneimjgoibmpcmlkllhjccebbhj";
+
 /// The Firefox add-on id the extension will carry (Firefox identifies
 /// extensions by this id, Chromium browsers by a key-derived one).
 pub const FIREFOX_ID: &str = "mohona@mohona.local";

@@ -174,3 +174,7 @@ mohona get webdavs://cloud.example.com/remote.php/dav/files/alice/report.pdf -u 
 ```
 
 `webdav://` and `webdavs://` (or `dav://`, `davs://`) are HTTP and HTTPS with another name, so logins, certificates, proxies, pieces and resume all work.
+
+## Browser extension (early)
+
+`extension/` holds the browser extension (TypeScript, Manifest V3, Chrome/Edge/Firefox). Build it with `cd extension && npm install && npm run build`, load `dist/chromium` or `dist/firefox`, and register the host with `mohona-host install`. For now the toolbar popup can send a pasted address to Mohona; link interception and the rest follow. See `docs/manual-tests.md`.

@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Mohona</title>
+    <style>
+      body { font: 14px system-ui, sans-serif; width: 320px; margin: 12px; }
+      h1 { font-size: 16px; margin: 0 0 8px; }
+      input[type="url"] { width: 100%; box-sizing: border-box; padding: 6px; }
+      button { margin-top: 8px; padding: 6px 10px; }
+      p { margin: 8px 0 0; }
+    </style>
+  </head>
+  <body>
+    <h1>Mohona</h1>
+    <p id="status">Checking…</p>
+    <button id="start" hidden>Start Mohona</button>
+    <form id="form">
+      <input id="url" type="url" placeholder="Paste a download address" required />
+      <button id="add" type="submit">Download with Mohona</button>
+    </form>
+    <p id="result" role="status"></p>
+    <script src="popup.js"></script>
+  </body>
+</html>
