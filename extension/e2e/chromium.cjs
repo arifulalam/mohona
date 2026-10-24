@@ -26,5 +26,19 @@ const { chromium } = require('playwright');
   await page.fill('#url', 'https://example.com/a.zip'); await page.click('#add');
   await page.waitForFunction(() => /Not added/.test(document.getElementById('result').textContent), null, {timeout: 15000});
   console.log('4:', await page.textContent('#result'));
+  // 5: a link the browser would download itself is taken over by Mohona.
+  const link = `http://127.0.0.1:18080/file?size=70000&seed=7`;
+  const web = await ctx.newPage();
+  await web.goto('http://127.0.0.1:18080/');
+  await web.evaluate((u) => { const a = document.createElement('a'); a.href = u; a.download = ''; document.body.append(a); a.click(); }, link);
+  const started = Date.now();
+  let got = '';
+  while (Date.now() - started < 20000) {
+    const text = await (async () => { await page.reload(); await new Promise(r => setTimeout(r, 700)); return page.textContent('#last'); })();
+    if (text) { got = text; break; }
+  }
+  console.log('5:', got);
+  const left = await sw.evaluate(() => chrome.downloads.search({}).then(d => d.length));
+  console.log('6: downloads left in the browser:', left);
   await ctx.close();
 })().catch(e => { console.error('FAIL', e.message); process.exit(1); });

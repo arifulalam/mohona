@@ -128,6 +128,16 @@ Automated tests use a local test server. These need real streams from the intern
 6. Firefox: `about:debugging` > This Firefox > Load Temporary Add-on > `extension\dist\firefox\manifest.json`; repeat 3 to 5.
 7. Edge: repeat 1 to 4 (Edge reads the same Chromium build).
 
+## Download interception
+
+1. With the extension loaded, the host registered and "Take over browser downloads" ticked, click a normal download link (a zip or exe). The browser must not show its own download, and the file must appear in your Downloads folder through Mohona. The popup shows "Sent to Mohona: ...".
+2. Log in to a site that needs a login for downloads (a forum attachment, Google Drive, your own server) and download from there: the file must arrive complete, not as a login page.
+3. Fail open: close Mohona (stop `mohona daemon`) and rename `mohona.exe` so that it cannot start. Click a download link: the browser must download it normally, and the popup says "Left to the browser (...)".
+4. Untick "Take over browser downloads": the browser handles downloads again. A download in an Incognito or private window is never taken.
+5. Links that must stay in the browser: a `blob:` download (save an image from a web app), "Save as" of a data URL.
+6. Click the same link twice: the second time the browser downloads it itself and the popup says Mohona already has it.
+7. The store version will list "read and change all your data on all websites" because of the cookie access; check that you are comfortable with that wording before store submission.
+
 ## Logins and cookies against a real site
 
 - [ ] A real HTTP Basic site: `get URL -u user:password` → downloads; wrong password → `refused the user name or password`.

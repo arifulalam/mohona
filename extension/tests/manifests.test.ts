@@ -6,12 +6,12 @@ import { manifestFor } from "../scripts/manifests.mjs";
 const identity = JSON.parse(readFileSync(new URL("../identity.json", import.meta.url), "utf8"));
 
 describe("manifests", () => {
-  it("ask only for what the extension uses", () => {
+  it("ask only for what the extension uses (and nothing runs inside web pages)", () => {
     for (const target of ["chromium", "firefox"] as const) {
       const m = manifestFor(target) as any;
       expect(m.manifest_version).toBe(3);
-      expect(m.permissions).toEqual(["nativeMessaging"]);
-      expect(m.host_permissions).toBeUndefined();
+      expect([...m.permissions].sort()).toEqual(["cookies", "downloads", "nativeMessaging", "storage"]);
+      expect(m.host_permissions).toEqual(["<all_urls>"]);
       expect(m.content_scripts).toBeUndefined();
     }
   });

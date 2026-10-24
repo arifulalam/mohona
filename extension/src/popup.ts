@@ -22,6 +22,7 @@ function describe(outcome: Outcome | null): string {
 async function refresh(): Promise<void> {
   const reply = await ask({ kind: "status" });
   if (reply.kind !== "status") return;
+  $("last").textContent = reply.last ?? "";
   const s = reply.status;
   const text = $("status");
   const start = $<HTMLButtonElement>("start");
@@ -58,4 +59,12 @@ $<HTMLFormElement>("form").addEventListener("submit", async (event) => {
   await refresh();
 });
 
-void refresh();
+$<HTMLInputElement>("intercept").addEventListener("change", async (event) => {
+  await ask({ kind: "setSettings", settings: { intercept: (event.target as HTMLInputElement).checked } });
+});
+
+void (async () => {
+  const reply = await ask({ kind: "getSettings" });
+  if (reply.kind === "settings") $<HTMLInputElement>("intercept").checked = reply.settings.intercept;
+  await refresh();
+})();

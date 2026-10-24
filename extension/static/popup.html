@@ -14,12 +14,14 @@
   <body>
     <h1>Mohona</h1>
     <p id="status">Checking…</p>
+    <label><input id="intercept" type="checkbox" /> Take over browser downloads</label>
     <button id="start" hidden>Start Mohona</button>
     <form id="form">
       <input id="url" type="url" placeholder="Paste a download address" required />
       <button id="add" type="submit">Download with Mohona</button>
     </form>
     <p id="result" role="status"></p>
+    <p id="last"></p>
     <script src="popup.js"></script>
   </body>
 </html>
