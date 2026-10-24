@@ -25,6 +25,9 @@ pub async fn run(
     info: Option<PathBuf>,
     folder: Option<PathBuf>,
 ) -> Result<(), String> {
+    if let Some(folder) = db.parent().filter(|p| !p.as_os_str().is_empty()) {
+        let _ = std::fs::create_dir_all(folder);
+    }
     let store = Store::open(&db).map_err(|e| format!("cannot open {}: {e}", db.display()))?;
     let client = HttpClient::new(&ClientConfig::default()).map_err(|e| describe(&e))?;
     let manager =

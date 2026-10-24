@@ -308,3 +308,96 @@ fn the_program_talks_over_stdin_and_stdout() {
     assert!(child.wait().unwrap().success());
     let _ = std::io::stderr().flush();
 }
+
+mod registration {
+    use mohona_host::register::*;
+    use std::path::{Path, PathBuf};
+
+    fn places(dir: &Path, mac: bool) -> Places {
+        Places {
+            home: dir.join("home"),
+            data: dir.join("data"),
+            windows: false,
+            mac,
+        }
+    }
+
+    const ID: &str = "abcdefghijklmnopabcdefghijklmnop";
+
+    #[test]
+    fn chromium_manifests_name_the_origin_and_firefox_the_addon() {
+        let host = Path::new("/opt/mohona/mohona-host");
+        let chrome = manifest(Browser::Chrome, host, &[ID.to_string()]);
+        assert_eq!(chrome["name"], "org.mohona.host");
+        assert_eq!(chrome["type"], "stdio");
+        assert_eq!(chrome["path"], "/opt/mohona/mohona-host");
+        assert_eq!(
+            chrome["allowed_origins"],
+            serde_json::json!([format!("chrome-extension://{ID}/")])
+        );
+        assert!(chrome.get("allowed_extensions").is_none());
+        let firefox = manifest(Browser::Firefox, host, &[FIREFOX_ID.to_string()]);
+        assert_eq!(
+            firefox["allowed_extensions"],
+            serde_json::json!([FIREFOX_ID])
+        );
+        assert!(firefox.get("allowed_origins").is_none());
+    }
+
+    #[test]
+    fn ids_are_checked() {
+        assert!(valid_chromium_id(ID));
+        assert!(!valid_chromium_id("short"));
+        assert!(!valid_chromium_id(&ID.replace('a', "z")));
+        assert!(valid_firefox_id("mohona@mohona.local"));
+        assert!(!valid_firefox_id("bad id\"}"));
+        assert!(!valid_firefox_id(""));
+    }
+
+    #[test]
+    fn install_status_and_uninstall_use_each_browsers_folder() {
+        let dir = tempfile::tempdir().unwrap();
+        let host = PathBuf::from("/opt/mohona/mohona-host");
+        for mac in [false, true] {
+            let places = places(dir.path(), mac);
+            for browser in BROWSERS {
+                assert!(status(&places, browser).is_none());
+                let allowed = if browser == Browser::Firefox {
+                    FIREFOX_ID.to_string()
+                } else {
+                    ID.to_string()
+                };
+                let done =
+                    install(&places, browser, &host, std::slice::from_ref(&allowed)).unwrap();
+                assert!(done.manifest.starts_with(dir.path().join("home")));
+                assert!(done.manifest.ends_with("org.mohona.host.json"));
+                assert!(done.registry_key.is_none());
+                let (program, ids) = status(&places, browser).unwrap();
+                assert_eq!(program, host);
+                assert_eq!(ids.len(), 1);
+                assert!(ids[0].contains(&allowed));
+            }
+            assert!(places
+                .manifest_path(Browser::Firefox)
+                .to_string_lossy()
+                .contains(if mac {
+                    "Mozilla/NativeMessagingHosts"
+                } else {
+                    ".mozilla"
+                }));
+            for browser in BROWSERS {
+                assert!(uninstall(&places, browser).unwrap());
+                assert!(!uninstall(&places, browser).unwrap());
+            }
+        }
+    }
+
+    #[test]
+    fn on_windows_the_manifest_lives_in_the_data_folder() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut places = places(dir.path(), false);
+        places.windows = true;
+        let path = places.manifest_path(Browser::Edge);
+        assert_eq!(path, dir.path().join("data/native-messaging/edge.json"));
+    }
+}

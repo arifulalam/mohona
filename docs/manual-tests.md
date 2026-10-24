@@ -111,6 +111,13 @@ Automated tests use a local test server. These need real streams from the intern
 3. Start the daemon again, then `target\debug\mohona-host --db test.db --engine target\debug\mohona.exe` with no input and stop it with Ctrl-Z, Enter; it must exit quietly (exit code 0, nothing on stdout).
 4. With the daemon stopped, the host's `startEngine` message must start `mohona daemon` without a console window flashing, and it must keep running after the host exits. (Needs a real browser or a small script to send a message; the real browser check comes with host registration in the next step.)
 
+## Host registration (Windows)
+
+1. `target\debug\mohona-host install --extension-id abcdefghijklmnopabcdefghijklmnop`. Then `reg query HKCU\Software\Google\Chrome\NativeMessagingHosts\org.mohona.host` must show the manifest path, and `reg query HKCU\Software\Mozilla\NativeMessagingHosts\org.mohona.host` the Firefox one. Open the JSON files: `path` must be the full path of `mohona-host.exe`, and the origin must match.
+2. `mohona-host status` lists the browsers; move the exe and `status` must say `PROGRAM NOT FOUND`.
+3. `mohona-host uninstall`; the keys and files must be gone. Run it twice: the second time says `was not registered`.
+4. Paths with spaces or non-English letters (for example a user folder with Bengali letters) must work in step 1 and in the browser later.
+
 ## Logins and cookies against a real site
 
 - [ ] A real HTTP Basic site: `get URL -u user:password` → downloads; wrong password → `refused the user name or password`.

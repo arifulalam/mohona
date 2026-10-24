@@ -501,7 +501,18 @@ async fn main() -> ExitCode {
         Some(Command::Log { id }) => {
             finish(open(&cli.db).and_then(|store| history::log(&store, id)))
         }
-        Some(Command::Daemon { info, folder }) => match daemon::run(cli.db, info, folder).await {
+        Some(Command::Daemon { info, folder }) => match daemon::run(
+            // Without `--db`, use the database the browser host also uses.
+            if cli.db == std::path::Path::new("mohona.db") {
+                mohona_daemon::default_db_path()
+            } else {
+                cli.db
+            },
+            info,
+            folder,
+        )
+        .await
+        {
             Ok(()) => ExitCode::SUCCESS,
             Err(message) => {
                 eprintln!("error: {message}");

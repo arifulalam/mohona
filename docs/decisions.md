@@ -390,3 +390,13 @@ A `401` now becomes its own error (`NetError::Unauthorized`) that names the kind
 **Safety at the edge.** The host is the one place where web-controlled text arrives. It accepts only http, https, ftp, ftps and sftp addresses, refuses control characters in every field, caps messages at 1 MiB, and forwards only cookies, referrer, user agent and plain headers (never proxy, certificate or key settings; the daemon enforces this again). Duplicates are sent with policy `skip`, so the extension is told about them instead of silently creating a second copy. Standard output carries only protocol frames.
 
 **Info file.** Default: `%LOCALAPPDATA%\Mohona\daemon.json` on Windows, `$XDG_DATA_HOME` or `~/.local/share/Mohona/daemon.json` elsewhere; `--info` overrides it for `mohona daemon` and `mohona-host`. It is removed when the daemon exits normally; a leftover file from a crash is detected (nobody answers) and replaced.
+
+## ADR-0039: Host registration is per user, done by the host program itself
+
+**Decision.** `mohona-host install [--browser chrome|chromium|edge|firefox|all] [--extension-id ID]`, `uninstall` and `status` register the host for the current user only; no administrator rights. The host name is `org.mohona.host`. The manifest names the host program by absolute path (the running executable) and the one extension allowed to use it: `allowed_origins: ["chrome-extension://<id>/"]` for Chrome, Chromium and Edge, `allowed_extensions: ["mohona@mohona.local"]` for Firefox. Never a wildcard: any other extension (or web page through one) is refused by the browser itself.
+
+**Where.** Windows: the manifest is kept in `%LOCALAPPDATA%\Mohona\native-messaging\<browser>.json` and a key `HKCU\Software\<vendor>\NativeMessagingHosts\org.mohona.host` points at it (set with the built-in `reg` command, no extra dependency). macOS and Linux: the manifest goes into the browser's own `NativeMessagingHosts` folder (`~/.config/google-chrome/...`, `~/.mozilla/native-messaging-hosts`, `~/Library/Application Support/...`).
+
+**Chromium ids.** An extension id comes from its key; the extension will pin its key so the id is the same on every machine, and the installer takes it with `--extension-id` (checked: 32 letters a to p) or `MOHONA_EXTENSION_ID`. Without it, Chromium browsers are skipped with a message rather than registered for everyone.
+
+**One database.** A browser starts the host with no useful working folder, so the host and `mohona daemon` share a default database, `mohona.db` in the Mohona data folder (`%LOCALAPPDATA%\Mohona` on Windows). `mohona daemon` uses it unless `--db` is given; `mohona-host` uses `--db`, `MOHONA_DB`, or it.

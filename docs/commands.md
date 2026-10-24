@@ -412,6 +412,31 @@ Started by the browser, not by you. It reads and writes length-prefixed JSON mes
 
 Every answer repeats the `requestId` of the question. Errors look like `{"type":"error","code":"...","message":"..."}` with codes `bad_json`, `bad_request`, `bad_url`, `unknown_type`, `engine_not_running` (send `startEngine`, then retry), `no_engine` (the `mohona` program was not found or did not start) and `engine`. A repeated address answers `{"type":"duplicate","message":"already in the list as #1 (...)"}`.
 
+### Registering the host with browsers
+
+```
+mohona-host install   [--browser chrome|chromium|edge|firefox|all] [--extension-id <id>]
+mohona-host uninstall [--browser ...]
+mohona-host status
+```
+
+Run by you, once, from the folder that holds `mohona-host` (the manifest records its location, so re-run `install` after moving it). Per user; no administrator rights.
+
+Example: `mohona-host install --extension-id abcdefghijklmnopabcdefghijklmnop`
+
+```
+chrome: registered (C:\Users\you\AppData\Local\Mohona\native-messaging\chrome.json)
+chromium: registered (...)
+edge: registered (...)
+firefox: registered (...)
+```
+
+`status` lists each browser as `registered for <extension> -> <program>` (with `PROGRAM NOT FOUND` when the file moved) or `not registered`. `uninstall` prints `removed` or `was not registered` per browser.
+
+Errors: `"x" is not an extension id (32 letters, a to p; see chrome://extensions)`; `unknown browser "opera": use chrome, chromium, edge, firefox or all`. Without `--extension-id`, Chrome, Chromium and Edge print `skipped (give --extension-id)`; Firefox uses the fixed add-on id `mohona@mohona.local`.
+
+The default database for `mohona daemon` and `mohona-host` is `mohona.db` in `%LOCALAPPDATA%\Mohona` (`~/.local/share/Mohona` elsewhere); `mohona daemon` uses it unless you pass `--db`.
+
 ## `queue` — a saved list of downloads
 
 The list lives in the `--db` file, so it survives closing the window, a crash, or a restart. Downloads continue where they stopped.

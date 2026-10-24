@@ -12,6 +12,6 @@ mod protocol;
 mod server;
 
 pub use client::{Client, ClientError};
-pub use info::{default_info_path, DaemonInfo};
+pub use info::{default_db_path, default_info_path, DaemonInfo};
 pub use protocol::{Call, DownloadInfo, Request, Response};
 pub use server::{serve, ServerConfig};

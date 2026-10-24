@@ -11,6 +11,8 @@
 //! Mohona engine (`mohona daemon`) through its local API and tells the
 //! extension what happened. See [`Host::handle`] for the messages.
 
+pub mod register;
+
 use std::io::{self, Read, Write};
 use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};

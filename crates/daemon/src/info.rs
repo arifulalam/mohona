@@ -31,6 +31,12 @@ pub fn default_info_path() -> std::path::PathBuf {
         .join("daemon.json")
 }
 
+/// The database shared by the engine and everything that starts it for the
+/// browser: next to the info file.
+pub fn default_db_path() -> std::path::PathBuf {
+    default_info_path().with_file_name("mohona.db")
+}
+
 impl DaemonInfo {
     /// A new random token, 32 bytes in hex.
     pub fn new_token() -> String {
