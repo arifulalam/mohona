@@ -157,6 +157,16 @@ Automated tests use a local test server. These need real streams from the intern
 7. Stop Mohona and make it unable to start: pressing the button shows an error; nothing breaks in the page.
 8. Page titles with odd characters (quotes, slashes, Bengali): the saved file name must be valid on Windows.
 
+## Files only the browser has (blob: and data:)
+
+1. On a page with an image that is a `data:` image (a web app preview, a screenshot tool), right-click it, "Download with Mohona". A file appears in Downloads with the right extension (`.png`, not no extension), and the toolbar shows a check.
+2. A web app that creates a file in the page (an online editor's "export" link, an image editor's preview, a PDF viewer built into a site): right-click the link or image, "Download with Mohona". The file arrives complete; compare its size and open it.
+3. A file over 10 MB (several pieces): it arrives with the same size and opens. Do the same with a file near 500 MB if you can; memory use of the browser must not jump by that size.
+4. Save the same thing twice: the second file is `name (1).ext`, never a replacement.
+5. Right-click a `blob:` video from a streaming site: it saves the small piece the page holds or fails with a clear message; it is not a way around protected video.
+6. Stop Mohona and make it unable to start: the red "!" appears and the popup says "Not saved: ...".
+7. A page title with odd characters (`:`, `?`, quotes, a very long title, only dots): the file name is valid on Windows.
+
 ## Logins and cookies against a real site
 
 - [ ] A real HTTP Basic site: `get URL -u user:password` → downloads; wrong password → `refused the user name or password`.

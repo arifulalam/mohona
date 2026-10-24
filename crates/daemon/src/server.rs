@@ -33,6 +33,7 @@ struct State {
     default_dir: PathBuf,
     shutdown: Arc<Notify>,
     streams: crate::streams::Streams,
+    receiver: crate::receive::Receiver,
 }
 
 /// Runs the API until shutdown, then stops the manager and removes the info
@@ -62,6 +63,7 @@ pub async fn serve(manager: Manager, config: ServerConfig) -> std::io::Result<()
         default_dir: config.default_dir,
         shutdown: config.shutdown.clone(),
         streams: crate::streams::Streams::new(config.stream_program),
+        receiver: crate::receive::Receiver::default(),
     });
     loop {
         tokio::select! {
@@ -201,6 +203,39 @@ async fn handle(state: &State, call: Call) -> Response {
                 Ok(job) => Response::Started { job, folder: shown },
                 Err(message) => Response::Error { message },
             }
+        }
+        Call::ReceiveStart {
+            name,
+            mime,
+            dest_dir,
+        } => {
+            let folder = dest_dir.map_or_else(|| state.default_dir.clone(), PathBuf::from);
+            match state.receiver.start(&folder, &name, mime) {
+                Ok(transfer) => Response::Receiving { transfer },
+                Err(message) => Response::Error { message },
+            }
+        }
+        Call::ReceivePiece {
+            transfer,
+            index,
+            data,
+        } => match state.receiver.piece(transfer, index, &data) {
+            Ok(()) => Response::Done,
+            Err(message) => Response::Error { message },
+        },
+        Call::ReceiveEnd { transfer } => match state.receiver.finish(transfer) {
+            Ok(path) => Response::Saved {
+                name: path
+                    .file_name()
+                    .map(|n| n.to_string_lossy().into_owned())
+                    .unwrap_or_default(),
+                path: path.display().to_string(),
+            },
+            Err(message) => Response::Error { message },
+        },
+        Call::ReceiveAbort { transfer } => {
+            state.receiver.abort(transfer);
+            Response::Done
         }
         Call::Jobs => Response::Jobs {
             jobs: state.streams.list(),

@@ -123,6 +123,7 @@ impl Host {
     /// | `hello` | who is there: `protocol`, `version`, `engineRunning`, `engineVersion` |
     /// | `add` | put `url` in the list, with optional `referrer`, `cookies`, `userAgent`, `headers` |
     /// | `stream` | download the HLS/DASH stream at `url` (same optional fields, and `name`) |
+    /// | `saveStart`, `savePiece`, `saveEnd`, `saveAbort` | save a file the browser holds (`blob:`, `data:`): `name`, `mime`; then pieces `transfer`, `index`, `data` (base64, up to 512 KiB each); then `saveEnd` answers `saved` with `path` |
     /// | `startEngine` | start `mohona daemon` if it is not answering, and wait for it |
     pub fn handle(&self, message: &[u8]) -> Value {
         let mut value: Value = match serde_json::from_slice(message) {
@@ -138,6 +139,10 @@ impl Host {
             Some("hello") => self.hello(),
             Some("add") => self.add(&mut value),
             Some("stream") => self.stream(&mut value),
+            Some("saveStart") => self.save_start(&value),
+            Some("savePiece") => self.save_piece(&value),
+            Some("saveEnd") => self.save_end(&value),
+            Some("saveAbort") => self.save_abort(&value),
             Some("startEngine") => self.start_engine(),
             Some(other) => error("unknown_type", format!("unknown message type \"{other}\"")),
             None => error("bad_request", "the message has no \"type\""),
@@ -251,6 +256,85 @@ impl Host {
             Ok(Response::Skipped { reason }) => json!({"type": "duplicate", "message": reason}),
             Ok(Response::Error { message }) => error("engine", message),
             Ok(_) => error("engine", "the engine gave an unexpected answer"),
+            Err(e) => e,
+        }
+    }
+
+    fn number(value: &Value, key: &str) -> Result<u64, Value> {
+        value
+            .get(key)
+            .and_then(Value::as_u64)
+            .ok_or_else(|| error("bad_request", format!("\"{key}\" must be a number")))
+    }
+
+    fn save_start(&self, value: &Value) -> Value {
+        let text = |key: &str| value.get(key).and_then(Value::as_str);
+        let name = text("name").unwrap_or("download");
+        let mime = text("mime");
+        if [Some(name), mime]
+            .into_iter()
+            .flatten()
+            .any(|t| t.chars().any(char::is_control))
+        {
+            return error("bad_request", "a field contains control characters");
+        }
+        match self.call(Call::ReceiveStart {
+            name: name.to_string(),
+            mime: mime.map(str::to_string),
+            dest_dir: None,
+        }) {
+            Ok(Response::Receiving { transfer }) => json!({"type": "saving", "transfer": transfer}),
+            Ok(Response::Error { message }) => error("engine", message),
+            Ok(_) => error("engine", "the engine gave an unexpected answer"),
+            Err(e) => e,
+        }
+    }
+
+    fn save_piece(&self, value: &Value) -> Value {
+        let (transfer, index) = match (
+            Self::number(value, "transfer"),
+            Self::number(value, "index"),
+        ) {
+            (Ok(t), Ok(i)) => (t, i),
+            (Err(e), _) | (_, Err(e)) => return e,
+        };
+        let Some(data) = value.get("data").and_then(Value::as_str) else {
+            return error("bad_request", "\"data\" must be text");
+        };
+        match self.call(Call::ReceivePiece {
+            transfer,
+            index,
+            data: data.to_string(),
+        }) {
+            Ok(Response::Done) => json!({"type": "piece", "index": index}),
+            Ok(Response::Error { message }) => error("engine", message),
+            Ok(_) => error("engine", "the engine gave an unexpected answer"),
+            Err(e) => e,
+        }
+    }
+
+    fn save_end(&self, value: &Value) -> Value {
+        let transfer = match Self::number(value, "transfer") {
+            Ok(t) => t,
+            Err(e) => return e,
+        };
+        match self.call(Call::ReceiveEnd { transfer }) {
+            Ok(Response::Saved { path, name }) => {
+                json!({"type": "saved", "path": path, "name": name})
+            }
+            Ok(Response::Error { message }) => error("engine", message),
+            Ok(_) => error("engine", "the engine gave an unexpected answer"),
+            Err(e) => e,
+        }
+    }
+
+    fn save_abort(&self, value: &Value) -> Value {
+        let transfer = match Self::number(value, "transfer") {
+            Ok(t) => t,
+            Err(e) => return e,
+        };
+        match self.call(Call::ReceiveAbort { transfer }) {
+            Ok(_) => json!({"type": "aborted"}),
             Err(e) => e,
         }
     }

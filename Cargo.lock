@@ -1706,6 +1706,7 @@ dependencies = [
 name = "mohona-daemon"
 version = "0.0.1"
 dependencies = [
+ "base64 0.22.1",
  "getrandom 0.4.3",
  "mohona-core",
  "mohona-manager",

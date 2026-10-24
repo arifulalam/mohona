@@ -9,6 +9,7 @@
 mod client;
 mod info;
 mod protocol;
+pub mod receive;
 mod server;
 mod streams;
 

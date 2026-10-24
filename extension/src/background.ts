@@ -3,7 +3,8 @@ import { addDownload, NativeClient, startEngine, startStream, status } from "./n
 import { addMedia, classify, nameFromUrl, totalFromRange, type Media } from "./sniffer";
 import type { Reply, Request } from "./messages";
 import { HOST_NAME } from "./protocol";
-import { downloadFromMenu, MENU_ID, type ClickInfo } from "./menu";
+import { downloadFromMenu, localTarget, MENU_ID, type ClickInfo } from "./menu";
+import { saveLocal, sliceInPage, sourceFromBlob, sourceFromData, type SaveResult } from "./local";
 import { loadSettings, saveSettings } from "./settings";
 
 const client = new NativeClient(() => chrome.runtime.connectNative(HOST_NAME));
@@ -46,8 +47,45 @@ chrome.runtime.onInstalled.addListener(() => {
   });
 });
 
-chrome.contextMenus.onClicked.addListener((info) => {
+/** Saves a `data:` or `blob:` file the clicked page holds. */
+async function saveFromPage(url: string, tab: chrome.tabs.Tab | undefined, frameId: number | undefined): Promise<SaveResult> {
+  try {
+    let source;
+    if (/^data:/i.test(url)) {
+      source = await sourceFromData(url);
+    } else {
+      if (tab?.id === undefined) return { kind: "failed", message: "no page to read the file from" };
+      const tabId = tab.id;
+      source = await sourceFromBlob(url, async (start, end) => {
+        const [run] = await chrome.scripting.executeScript({
+          target: { tabId, frameIds: [frameId ?? 0] },
+          func: sliceInPage,
+          args: [url, start, end],
+        });
+        return run?.result;
+      });
+    }
+    return await saveLocal(client, source, tab?.title || "download");
+  } catch (e) {
+    return { kind: "failed", message: e instanceof Error ? e.message : String(e) };
+  }
+}
+
+chrome.contextMenus.onClicked.addListener((info, tab) => {
   if (info.menuItemId !== MENU_ID) return;
+  const local = localTarget(info as ClickInfo);
+  if (local) {
+    void saveFromPage(local, tab, info.frameId).then((result) => {
+      if (result.kind === "saved") {
+        last = `Saved by Mohona: ${result.path}`;
+        badge("✓", "#2e7d32");
+      } else {
+        last = `Not saved: ${result.message}`;
+        badge("!", "#c62828");
+      }
+    });
+    return;
+  }
   void (async () => {
     const result = await downloadFromMenu(info as ClickInfo, {
       userAgent: navigator.userAgent,
@@ -173,6 +211,10 @@ async function handle(request: Request): Promise<Reply> {
       const outcome = await downloadMedia(request.media);
       last = outcome.kind === "error" ? `Not sent: ${outcome.message}` : `Sent to Mohona: ${request.media.url}`;
       return { kind: "outcome", outcome };
+    }
+    case "saveLocal": {
+      const tab = await chrome.tabs.get(request.tabId);
+      return { kind: "saved", result: await saveFromPage(request.url, tab, 0) };
     }
     case "getSettings":
       return { kind: "settings", settings: await loadSettings() };

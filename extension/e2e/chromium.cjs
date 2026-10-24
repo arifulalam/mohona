@@ -52,5 +52,12 @@ const { chromium } = require('playwright');
   const outcome = (await page.evaluate((m) => chrome.runtime.sendMessage({ kind: 'downloadMedia', media: m }), media[0])).outcome;
   console.log('8:', JSON.stringify(outcome));
   await new Promise((r) => setTimeout(r, 6000));
+  // 9: files only the browser has: a data: image and a blob: PDF-like file.
+  const dataUrl = 'data:image/png;base64,' + Buffer.from(Buffer.concat([Buffer.from('89504e470d0a1a0a', 'hex'), Buffer.alloc(3000, 7)])).toString('base64');
+  const r1 = await page.evaluate((a) => chrome.runtime.sendMessage(a), { kind: 'saveLocal', url: dataUrl, tabId });
+  console.log('9:', JSON.stringify(r1.result));
+  const blobUrl = await web.evaluate(() => URL.createObjectURL(new Blob(['%PDF-1.4\n' + 'x'.repeat(1200000)], { type: 'application/octet-stream' })));
+  const r2 = await page.evaluate((a) => chrome.runtime.sendMessage(a), { kind: 'saveLocal', url: blobUrl, tabId });
+  console.log('10:', JSON.stringify(r2.result));
   await ctx.close();
 })().catch(e => { console.error('FAIL', e.message); process.exit(1); });

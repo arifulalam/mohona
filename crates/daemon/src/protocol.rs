@@ -52,6 +52,29 @@ pub enum Call {
         #[serde(default)]
         name: Option<String>,
     },
+    /// Start receiving a file the browser holds (a `blob:` or `data:` address).
+    ReceiveStart {
+        /// A suggested name; the extension is corrected from the bytes.
+        name: String,
+        #[serde(default)]
+        mime: Option<String>,
+        #[serde(default)]
+        dest_dir: Option<String>,
+    },
+    /// The next piece (at most 768 KiB before base64), numbered from 0.
+    ReceivePiece {
+        transfer: u64,
+        index: u64,
+        data: String,
+    },
+    /// The file is complete.
+    ReceiveEnd {
+        transfer: u64,
+    },
+    /// Give up; what was received is deleted.
+    ReceiveAbort {
+        transfer: u64,
+    },
     /// The stream downloads started since the daemon began.
     Jobs,
     /// Every download, oldest first.
@@ -101,6 +124,13 @@ pub struct JobInfo {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum Response {
+    Receiving {
+        transfer: u64,
+    },
+    Saved {
+        path: String,
+        name: String,
+    },
     Started {
         job: u64,
         /// Where the file will be saved.

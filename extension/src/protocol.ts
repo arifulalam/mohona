@@ -18,7 +18,11 @@ export type Question =
   | { type: "hello" }
   | { type: "startEngine" }
   | ({ type: "add" } & AddDetails)
-  | ({ type: "stream" } & AddDetails);
+  | ({ type: "stream" } & AddDetails)
+  | { type: "saveStart"; name: string; mime?: string }
+  | { type: "savePiece"; transfer: number; index: number; data: string }
+  | { type: "saveEnd"; transfer: number }
+  | { type: "saveAbort"; transfer: number };
 
 export type Answer =
   | {
@@ -31,6 +35,10 @@ export type Answer =
   | { type: "added"; id: number }
   | { type: "duplicate"; message: string }
   | { type: "streamStarted"; job: number; folder: string }
+  | { type: "saving"; transfer: number }
+  | { type: "piece"; index: number }
+  | { type: "saved"; path: string; name: string }
+  | { type: "aborted" }
   | { type: "engine"; running: boolean; started: boolean }
   | { type: "error"; code: string; message: string };
 

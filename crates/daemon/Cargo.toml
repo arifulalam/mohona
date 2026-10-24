@@ -7,6 +7,7 @@ license.workspace = true
 rust-version.workspace = true
 
 [dependencies]
+base64 = "0.22"
 getrandom = "0.4"
 mohona-manager = { path = "../manager" }
 mohona-net = { version = "0.0.1", path = "../net" }

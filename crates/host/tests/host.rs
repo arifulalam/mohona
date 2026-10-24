@@ -246,6 +246,79 @@ fn bad_requests_get_specific_errors_and_add_nothing() {
 }
 
 #[test]
+fn a_file_the_browser_holds_is_saved_in_pieces() {
+    use std::io::Write as _;
+    let dir = tempfile::tempdir().unwrap();
+    let engine = Engine::start(dir.path());
+    let host = host_for(&engine.info);
+    let b64 = |bytes: &[u8]| {
+        // A tiny encoder, so the test needs no extra crate.
+        const T: &[u8] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+        let mut out = String::new();
+        for chunk in bytes.chunks(3) {
+            let n = chunk
+                .iter()
+                .enumerate()
+                .fold(0u32, |n, (i, b)| n | (u32::from(*b) << (16 - 8 * i)));
+            for i in 0..4 {
+                if i <= chunk.len() {
+                    out.push(T[((n >> (18 - 6 * i)) & 63) as usize] as char);
+                } else {
+                    out.push('=');
+                }
+            }
+        }
+        out
+    };
+    let started = ask(
+        &host,
+        json!({"type": "saveStart", "name": "scan", "mime": "image/png", "requestId": 1}),
+    );
+    assert_eq!(started["type"], "saving", "{started}");
+    let transfer = started["transfer"].as_u64().unwrap();
+    let png: &[u8] = b"\x89PNG\r\n\x1a\nIHDR....";
+    let (a, b) = png.split_at(5);
+    for (i, part) in [a, b].into_iter().enumerate() {
+        let r = ask(
+            &host,
+            json!({"type": "savePiece", "transfer": transfer, "index": i, "data": b64(part)}),
+        );
+        assert_eq!(r["type"], "piece", "{r}");
+    }
+    let done = ask(&host, json!({"type": "saveEnd", "transfer": transfer}));
+    assert_eq!(done["type"], "saved", "{done}");
+    assert_eq!(done["name"], "scan.png");
+    assert_eq!(std::fs::read(done["path"].as_str().unwrap()).unwrap(), png);
+    assert!(Path::new(done["path"].as_str().unwrap()).starts_with(&engine.downloads));
+    let _ = std::io::stdout().flush();
+
+    // Mistakes are reported and nothing is left behind.
+    assert_eq!(
+        ask(&host, json!({"type": "savePiece", "index": 0, "data": ""}))["code"],
+        "bad_request"
+    );
+    assert_eq!(
+        ask(&host, json!({"type": "saveStart", "name": "a\nb"}))["code"],
+        "bad_request"
+    );
+    let t = ask(&host, json!({"type": "saveStart", "name": "x"}))["transfer"]
+        .as_u64()
+        .unwrap();
+    assert_eq!(
+        ask(
+            &host,
+            json!({"type": "savePiece", "transfer": t, "index": 3, "data": "AAAA"})
+        )["code"],
+        "engine"
+    );
+    assert_eq!(
+        ask(&host, json!({"type": "saveEnd", "transfer": t}))["code"],
+        "engine"
+    );
+    assert_eq!(std::fs::read_dir(&engine.downloads).unwrap().count(), 1);
+}
+
+#[test]
 fn a_login_in_the_address_is_accepted() {
     let dir = tempfile::tempdir().unwrap();
     let engine = Engine::start(dir.path());

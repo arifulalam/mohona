@@ -38,6 +38,12 @@ export function targetOf(info: ClickInfo): string | null {
   }
 }
 
+/** A `data:` or `blob:` address on the clicked item (the link first), for files only the browser has. */
+export function localTarget(info: ClickInfo): string | null {
+  const url = info.linkUrl || info.srcUrl;
+  return url && /^(data|blob):/i.test(url) ? url : null;
+}
+
 export async function downloadFromMenu(info: ClickInfo, deps: MenuDeps): Promise<MenuResult> {
   const url = targetOf(info);
   if (!url) return { kind: "ignored", reason: "that is not a downloadable address" };
