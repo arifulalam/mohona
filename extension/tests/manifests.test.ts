@@ -10,7 +10,7 @@ describe("manifests", () => {
     for (const target of ["chromium", "firefox"] as const) {
       const m = manifestFor(target) as any;
       expect(m.manifest_version).toBe(3);
-      expect([...m.permissions].sort()).toEqual(["cookies", "downloads", "nativeMessaging", "storage"]);
+      expect([...m.permissions].sort()).toEqual(["contextMenus", "cookies", "downloads", "nativeMessaging", "storage"]);
       expect(m.host_permissions).toEqual(["<all_urls>"]);
       expect(m.content_scripts).toBeUndefined();
     }

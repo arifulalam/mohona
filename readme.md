@@ -177,4 +177,4 @@ mohona get webdavs://cloud.example.com/remote.php/dav/files/alice/report.pdf -u 
 
 ## Browser extension (early)
 
-`extension/` holds the browser extension (TypeScript, Manifest V3, Chrome/Edge/Firefox). Build it with `cd extension && npm install && npm run build`, load `dist/chromium` or `dist/firefox`, and register the host with `mohona-host install`. The extension takes over the browser's downloads (and falls back to the browser whenever Mohona cannot take them) and its popup can send a pasted address; the context menu, media detection and the rest follow. See `docs/manual-tests.md`.
+`extension/` holds the browser extension (TypeScript, Manifest V3, Chrome/Edge/Firefox). Build it with `cd extension && npm install && npm run build`, load `dist/chromium` or `dist/firefox`, and register the host with `mohona-host install`. The extension takes over the browser's downloads (and falls back to the browser whenever Mohona cannot take them) and its popup can send a pasted address; it adds a "Download with Mohona" right-click entry; media detection and the rest follow. See `docs/manual-tests.md`.

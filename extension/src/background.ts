@@ -2,6 +2,7 @@ import { cookieHeaderOf, intercept, type Item, type Result } from "./intercept";
 import { addDownload, NativeClient, startEngine, status } from "./native";
 import type { Reply, Request } from "./messages";
 import { HOST_NAME } from "./protocol";
+import { downloadFromMenu, MENU_ID, type ClickInfo } from "./menu";
 import { loadSettings, saveSettings } from "./settings";
 
 const client = new NativeClient(() => chrome.runtime.connectNative(HOST_NAME));
@@ -25,6 +26,42 @@ function remember(result: Result): void {
 async function cookieHeader(url: string): Promise<string> {
   return cookieHeaderOf(await chrome.cookies.getAll({ url }));
 }
+
+/** A short mark on the toolbar button: the person sees the result without opening anything. */
+function badge(text: string, color: string): void {
+  void chrome.action.setBadgeBackgroundColor({ color });
+  void chrome.action.setBadgeText({ text });
+  setTimeout(() => void chrome.action.setBadgeText({ text: "" }), 4000);
+}
+
+chrome.runtime.onInstalled.addListener(() => {
+  // Menus are created once per install or update; the browser keeps them.
+  chrome.contextMenus.removeAll(() => {
+    chrome.contextMenus.create({
+      id: MENU_ID,
+      title: "Download with Mohona",
+      contexts: ["link", "image", "video", "audio"],
+    });
+  });
+});
+
+chrome.contextMenus.onClicked.addListener((info) => {
+  if (info.menuItemId !== MENU_ID) return;
+  void (async () => {
+    const result = await downloadFromMenu(info as ClickInfo, {
+      userAgent: navigator.userAgent,
+      cookieHeader,
+      add: (details) => addDownload(client, details),
+    });
+    if (result.kind === "sent") {
+      last = `Sent to Mohona: ${result.url}`;
+      badge("✓", "#2e7d32");
+    } else if (result.kind === "failed") {
+      last = `Not sent: ${result.message}`;
+      badge("!", "#c62828");
+    }
+  })();
+});
 
 chrome.downloads.onCreated.addListener((item) => {
   void (async () => {

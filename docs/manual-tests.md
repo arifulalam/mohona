@@ -138,6 +138,14 @@ Automated tests use a local test server. These need real streams from the intern
 6. Click the same link twice: the second time the browser downloads it itself and the popup says Mohona already has it.
 7. The store version will list "read and change all your data on all websites" because of the cookie access; check that you are comfortable with that wording before store submission.
 
+## Context menu
+
+1. Right-click a link to a file, then "Download with Mohona": the file arrives in Downloads through Mohona; the toolbar button shows a green check for a few seconds; the popup says "Sent to Mohona: ...".
+2. Right-click an image and a video (or audio) player: the entry is there, and the media file is downloaded. A video from a streaming site that uses `blob:` does nothing (that is for the media sniffer, a later step).
+3. Right-click ordinary text or the page background: no Mohona entry.
+4. Stop Mohona and make it unable to start: the entry shows a red "!" and the popup says "Not sent: ...".
+5. Use the entry on a link already in Mohona's list: red "!" and "Mohona already has it".
+
 ## Logins and cookies against a real site
 
 - [ ] A real HTTP Basic site: `get URL -u user:password` → downloads; wrong password → `refused the user name or password`.

@@ -422,3 +422,13 @@ A `401` now becomes its own error (`NetError::Unauthorized`) that names the kind
 **Known limit.** The browser starts a download before the extension hears of it, so a very small file may finish before the pause; then the file is in the browser and Mohona also gets it (a duplicate, harmless). A later step will use `onDeterminingFilename` where it helps.
 
 **Settings** (`storage.sync`, so they follow the person between browsers): `intercept` (on by default; the popup has the switch), `minSizeBytes`, `excludedHosts`. Stored values are re-validated on every read.
+
+## ADR-0042: A right-click entry for links and media
+
+**Decision.** One context-menu entry, "Download with Mohona", on links, images, video and audio. The address is the link when the click was on one (even around an image), otherwise the media's own source. Only http, https and ftp addresses are sent; `blob:`, `data:`, `javascript:` and `mailto:` entries do nothing. The referrer is the frame the link was in (or the page), and the site's cookies are sent as for intercepted downloads.
+
+**Feedback.** The menu has no window to show a result in, so the toolbar button shows a green check for a few seconds when Mohona took the address and a red "!" when it did not; the popup then says why ("Not sent: ..."). Unlike interception, a failure here is not silent and not retried by the browser: the person asked Mohona explicitly, so a duplicate ("Mohona already has it") is reported as a failure rather than hidden.
+
+**Not done.** "Download all links on this page" and "download selected links" are a separate, larger feature (a list to pick from) and are left for the settings/options step.
+
+**Permission.** `contextMenus`. The menu is created in `runtime.onInstalled` (the browser keeps it between worker restarts).
