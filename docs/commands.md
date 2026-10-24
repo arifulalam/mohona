@@ -381,6 +381,37 @@ Press Ctrl-C at any time. Finished segments are kept in a `NAME.EXT.parts` folde
 | `Video and audio are saved as two files because ffmpeg was not found.` | Not an error. Install ffmpeg (Windows: `winget install ffmpeg`) or use `--ffmpeg PATH`. |
 | `the playlist lists no segments` | Nothing to download (for example an empty or ended live playlist). |
 
+## `daemon` — run Mohona in the background
+
+```
+mohona daemon [--info <file>] [--folder <dir>]
+```
+
+Starts the engine that the browser extension (through `mohona-host`) talks to. It keeps running until you press Ctrl-C (running downloads are paused and continue next time). It uses the database given by `--db` (default `mohona.db` in the current folder, so for everyday use pass the same `--db` every time).
+
+| Option | Meaning |
+|---|---|
+| `--info` | Where to write the connection details (address and secret token). Default: `%LOCALAPPDATA%\Mohona\daemon.json` (Windows), `~/.local/share/Mohona/daemon.json` (others). |
+| `--folder` | Where downloads go when the client names no folder. Default: your `Downloads` folder. |
+
+Expected: `Mohona is running. Press Ctrl-C to stop it. (Details for other programs: ...)`.
+
+Errors:
+- `error: a Mohona daemon is already running (process 1234)` — one is enough; use that one.
+- `error: cannot open <db>: ...` — the database file cannot be opened.
+
+## `mohona-host` — the browser extension's connector
+
+Started by the browser, not by you. It reads and writes length-prefixed JSON messages on standard input and output. Options: `--info <file>` (same file as the daemon's), `--db <file>` and `--engine <path to mohona>` (used only when it has to start the daemon). The browser's own extra arguments are ignored.
+
+| Message | Example | Answer |
+|---|---|---|
+| `hello` | `{"type":"hello","requestId":1}` | `{"type":"hello","protocol":1,"version":"0.0.1","engineRunning":true,"engineVersion":"0.0.1","requestId":1}` |
+| `add` | `{"type":"add","url":"https://example.com/a.zip","cookies":"a=b","referrer":"https://example.com/","userAgent":"...","headers":[{"name":"X","value":"y"}]}` | `{"type":"added","id":3}` |
+| `startEngine` | `{"type":"startEngine"}` | `{"type":"engine","running":false,"started":true}` (`running:true,started:false` if it was already there) |
+
+Every answer repeats the `requestId` of the question. Errors look like `{"type":"error","code":"...","message":"..."}` with codes `bad_json`, `bad_request`, `bad_url`, `unknown_type`, `engine_not_running` (send `startEngine`, then retry), `no_engine` (the `mohona` program was not found or did not start) and `engine`. A repeated address answers `{"type":"duplicate","message":"already in the list as #1 (...)"}`.
+
 ## `queue` — a saved list of downloads
 
 The list lives in the `--db` file, so it survives closing the window, a crash, or a restart. Downloads continue where they stopped.

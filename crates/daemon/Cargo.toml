@@ -1,0 +1,22 @@
+[package]
+name = "mohona-daemon"
+description = "Mohona background engine: a local API for the CLI, the browser extension and the app"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+getrandom = "0.4"
+mohona-manager = { path = "../manager" }
+mohona-net = { version = "0.0.1", path = "../net" }
+mohona-store = { path = "../store" }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+thiserror = "2"
+tokio.workspace = true
+
+[dev-dependencies]
+mohona-core = { path = "../core" }
+mohona-testserver = { path = "../../tools/testserver" }
+tempfile = "3"

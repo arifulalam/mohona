@@ -4,6 +4,8 @@ members = [
     "crates/core",
     "crates/net",
     "crates/media",
+    "crates/host",
+    "crates/daemon",
     "crates/store",
     "crates/manager",
     "crates/cli",

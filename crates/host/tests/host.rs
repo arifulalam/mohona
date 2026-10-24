@@ -1,0 +1,310 @@
+use std::io::{Read, Write};
+use std::path::{Path, PathBuf};
+use std::process::{Command, Stdio};
+use std::sync::Arc;
+use std::time::{Duration, Instant};
+
+use mohona_daemon::{serve, ServerConfig};
+use mohona_host::{read_message, write_message, Host, MAX_MESSAGE};
+use mohona_manager::{Manager, ManagerConfig};
+use mohona_net::{ClientConfig, HttpClient};
+use mohona_store::Store;
+use serde_json::{json, Value};
+use tokio::sync::Notify;
+
+/// A real engine on its own thread, as `mohona daemon` would run it.
+struct Engine {
+    info: PathBuf,
+    downloads: PathBuf,
+    shutdown: Arc<Notify>,
+    thread: Option<std::thread::JoinHandle<()>>,
+}
+
+impl Engine {
+    fn start(dir: &Path) -> Self {
+        let info = dir.join("daemon.json");
+        let downloads = dir.join("dl");
+        std::fs::create_dir_all(&downloads).unwrap();
+        let shutdown = Arc::new(Notify::new());
+        let (db, info2, dl2, stop) = (
+            dir.join("mohona.db"),
+            info.clone(),
+            downloads.clone(),
+            shutdown.clone(),
+        );
+        let thread = std::thread::spawn(move || {
+            let runtime = tokio::runtime::Runtime::new().unwrap();
+            runtime.block_on(async move {
+                let client = HttpClient::new(&ClientConfig {
+                    use_system_proxy: false,
+                    ..ClientConfig::default()
+                })
+                .unwrap();
+                let manager = Manager::start(
+                    Store::open(&db).unwrap(),
+                    client,
+                    ManagerConfig {
+                        adaptive: false,
+                        ..ManagerConfig::default()
+                    },
+                )
+                .unwrap();
+                let _ = serve(
+                    manager,
+                    ServerConfig {
+                        info_path: info2,
+                        default_dir: dl2,
+                        shutdown: stop,
+                    },
+                )
+                .await;
+            });
+        });
+        let started = Instant::now();
+        while !info.exists() {
+            assert!(
+                started.elapsed() < Duration::from_secs(5),
+                "engine did not start"
+            );
+            std::thread::sleep(Duration::from_millis(20));
+        }
+        Self {
+            info,
+            downloads,
+            shutdown,
+            thread: Some(thread),
+        }
+    }
+}
+
+impl Drop for Engine {
+    fn drop(&mut self) {
+        self.shutdown.notify_one();
+        if let Some(thread) = self.thread.take() {
+            let _ = thread.join();
+        }
+    }
+}
+
+fn host_for(info: &Path) -> Host {
+    Host::new(info.to_path_buf(), None, None)
+}
+
+fn ask(host: &Host, message: Value) -> Value {
+    host.handle(message.to_string().as_bytes())
+}
+
+/// A file server on its own thread; returns its address.
+fn file_server() -> std::net::SocketAddr {
+    let (tx, rx) = std::sync::mpsc::channel();
+    std::thread::spawn(move || {
+        tokio::runtime::Runtime::new()
+            .unwrap()
+            .block_on(async move {
+                let listener = mohona_testserver::bind("127.0.0.1:0".parse().unwrap())
+                    .await
+                    .unwrap();
+                tx.send(listener.local_addr().unwrap()).unwrap();
+                let _ = mohona_testserver::serve(
+                    listener,
+                    mohona_testserver::Config {
+                        default_size: 100_000,
+                    },
+                )
+                .await;
+            });
+    });
+    rx.recv().unwrap()
+}
+
+#[test]
+fn hello_says_who_is_there() {
+    let dir = tempfile::tempdir().unwrap();
+    let engine = Engine::start(dir.path());
+    let answer = ask(
+        &host_for(&engine.info),
+        json!({"type": "hello", "requestId": 7}),
+    );
+    assert_eq!(answer["type"], "hello");
+    assert_eq!(answer["requestId"], 7);
+    assert_eq!(answer["protocol"], 1);
+    assert_eq!(answer["engineRunning"], true);
+    assert_eq!(answer["engineVersion"], env!("CARGO_PKG_VERSION"));
+}
+
+#[test]
+fn without_an_engine_hello_still_answers_and_add_says_what_to_do() {
+    let dir = tempfile::tempdir().unwrap();
+    let host = host_for(&dir.path().join("nothing.json"));
+    let hello = ask(&host, json!({"type": "hello"}));
+    assert_eq!(hello["engineRunning"], false);
+    assert_eq!(hello["engineVersion"], Value::Null);
+    let add = ask(
+        &host,
+        json!({"type": "add", "url": "https://example.com/a.zip"}),
+    );
+    assert_eq!(add["code"], "engine_not_running", "{add}");
+    // The host was given no mohona program to start.
+    assert_eq!(
+        ask(&host, json!({"type": "startEngine"}))["code"],
+        "no_engine"
+    );
+}
+
+#[test]
+fn an_added_download_with_the_browsers_context_is_downloaded() {
+    let dir = tempfile::tempdir().unwrap();
+    let engine = Engine::start(dir.path());
+    let server = file_server();
+    let host = host_for(&engine.info);
+    // The /cookie path only serves requests that carry the cookie.
+    let answer = ask(
+        &host,
+        json!({
+            "type": "add", "requestId": "a1",
+            "url": format!("http://{server}/cookie?size=30000"),
+            "referrer": "https://example.com/downloads",
+            "cookies": "session=ok",
+            "userAgent": "Mozilla/5.0 Test",
+            "headers": [{"name": "Accept-Language", "value": "bn"}],
+        }),
+    );
+    assert_eq!(answer["type"], "added", "{answer}");
+    assert_eq!(answer["requestId"], "a1");
+    let started = Instant::now();
+    loop {
+        let files: Vec<_> = std::fs::read_dir(&engine.downloads)
+            .unwrap()
+            .flatten()
+            .collect();
+        if files.len() == 1 && files[0].metadata().unwrap().len() == 30_000 {
+            break;
+        }
+        assert!(
+            started.elapsed() < Duration::from_secs(20),
+            "not downloaded"
+        );
+        std::thread::sleep(Duration::from_millis(50));
+    }
+}
+
+#[test]
+fn the_same_address_twice_is_reported_not_added() {
+    let dir = tempfile::tempdir().unwrap();
+    let engine = Engine::start(dir.path());
+    let host = host_for(&engine.info);
+    let url = json!({"type": "add", "url": "https://example.com/a.iso"});
+    assert_eq!(ask(&host, url.clone())["type"], "added");
+    let second = ask(&host, url);
+    assert_eq!(second["type"], "duplicate", "{second}");
+    assert!(second["message"].as_str().unwrap().contains("already"));
+}
+
+#[test]
+fn bad_requests_get_specific_errors_and_add_nothing() {
+    let dir = tempfile::tempdir().unwrap();
+    let engine = Engine::start(dir.path());
+    let host = host_for(&engine.info);
+    let code = |message: Value| ask(&host, message)["code"].as_str().unwrap().to_string();
+    assert_eq!(code(json!({"type": "add"})), "bad_request");
+    assert_eq!(
+        code(json!({"type": "add", "url": "file:///etc/passwd"})),
+        "bad_url"
+    );
+    assert_eq!(
+        code(json!({"type": "add", "url": "javascript:alert(1)"})),
+        "bad_url"
+    );
+    assert_eq!(
+        code(json!({"type": "add", "url": "https://a.com/x", "cookies": "a=b\r\nX: y"})),
+        "bad_request"
+    );
+    assert_eq!(
+        code(json!({"type": "add", "url": "https://a.com/x", "cookies": 5})),
+        "bad_request"
+    );
+    assert_eq!(
+        code(json!({"type": "add", "url": "https://a.com/x", "headers": [{"name": "X"}]})),
+        "bad_request"
+    );
+    assert_eq!(code(json!({"type": "nope"})), "unknown_type");
+    assert_eq!(code(json!({"no": "type"})), "bad_request");
+    assert_eq!(host.handle(b"not json")["code"], "bad_json");
+    // Nothing reached the engine: a valid add is the first download.
+    let id = ask(
+        &host,
+        json!({"type": "add", "url": "https://example.com/ok.bin"}),
+    )["id"]
+        .as_i64()
+        .unwrap();
+    assert_eq!(id, 1);
+}
+
+#[test]
+fn a_login_in_the_address_is_accepted() {
+    let dir = tempfile::tempdir().unwrap();
+    let engine = Engine::start(dir.path());
+    let answer = ask(
+        &host_for(&engine.info),
+        json!({"type": "add", "url": "https://me:secret@example.com/p.zip"}),
+    );
+    assert_eq!(answer["type"], "added", "{answer}");
+}
+
+#[test]
+fn framing_round_trips_and_refuses_huge_messages() {
+    let mut buffer = Vec::new();
+    write_message(&mut buffer, &json!({"hello": "বাংলা"})).unwrap();
+    let mut input = &buffer[..];
+    let body = read_message(&mut input).unwrap().unwrap();
+    assert_eq!(
+        serde_json::from_slice::<Value>(&body).unwrap()["hello"],
+        "বাংলা"
+    );
+    assert!(read_message(&mut input).unwrap().is_none());
+
+    let huge = ((MAX_MESSAGE + 1) as u32).to_ne_bytes();
+    let error = read_message(&mut &huge[..]).unwrap_err();
+    assert!(error.to_string().contains("limit"), "{error}");
+    // A message cut short is an error, not a clean end.
+    let mut cut = 10u32.to_ne_bytes().to_vec();
+    cut.extend_from_slice(b"{\"a\"");
+    assert!(read_message(&mut &cut[..]).is_err());
+}
+
+#[test]
+fn the_program_talks_over_stdin_and_stdout() {
+    let dir = tempfile::tempdir().unwrap();
+    let engine = Engine::start(dir.path());
+    let mut child = Command::new(env!("CARGO_BIN_EXE_mohona-host"))
+        // The arguments a browser adds (Chrome: the extension's origin).
+        .args(["chrome-extension://abcdefgh/", "--info"])
+        .arg(&engine.info)
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .unwrap();
+    let mut stdin = child.stdin.take().unwrap();
+    let mut stdout = child.stdout.take().unwrap();
+    write_message(&mut stdin, &json!({"type": "hello", "requestId": 1})).unwrap();
+    let hello: Value =
+        serde_json::from_slice(&read_message(&mut stdout).unwrap().unwrap()).unwrap();
+    assert_eq!(hello["type"], "hello");
+    write_message(
+        &mut stdin,
+        &json!({"type": "add", "url": "https://example.com/z.bin", "requestId": 2}),
+    )
+    .unwrap();
+    let added: Value =
+        serde_json::from_slice(&read_message(&mut stdout).unwrap().unwrap()).unwrap();
+    assert_eq!(added["type"], "added");
+    assert_eq!(added["requestId"], 2);
+    // Closing the pipe ends the program, and it said nothing else on stdout.
+    drop(stdin);
+    let mut rest = Vec::new();
+    stdout.read_to_end(&mut rest).unwrap();
+    assert!(rest.is_empty());
+    assert!(child.wait().unwrap().success());
+    let _ = std::io::stderr().flush();
+}

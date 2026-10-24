@@ -104,6 +104,13 @@ Automated tests use a local test server. These need real streams from the intern
 - [ ] **Convert to a small MP4.** `mohona convert video.mkv -p mp4-small`. Expected: noticeably smaller file, not taller than 720 lines, plays with sound everywhere (also on a phone).
 - [ ] **Windows paths.** Convert a file in a folder whose name has spaces and non-English letters (for example a Bangla folder name). Expected: it works and the result is next to the file.
 
+## Browser host and daemon
+
+1. Build: `cargo build -p mohona-cli -p mohona-host`. In one terminal: `target\debug\mohona --db test.db daemon` (expect "Mohona is running"). A second `mohona daemon` must say "already running".
+2. Press Ctrl-C in the first terminal; `%LOCALAPPDATA%\Mohona\daemon.json` must disappear. Kill the process from Task Manager instead; the file stays, and the next `mohona daemon` must still start (stale file replaced).
+3. Start the daemon again, then `target\debug\mohona-host --db test.db --engine target\debug\mohona.exe` with no input and stop it with Ctrl-Z, Enter; it must exit quietly (exit code 0, nothing on stdout).
+4. With the daemon stopped, the host's `startEngine` message must start `mohona daemon` without a console window flashing, and it must keep running after the host exits. (Needs a real browser or a small script to send a message; the real browser check comes with host registration in the next step.)
+
 ## Logins and cookies against a real site
 
 - [ ] A real HTTP Basic site: `get URL -u user:password` → downloads; wrong password → `refused the user name or password`.

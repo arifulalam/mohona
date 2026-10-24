@@ -1,0 +1,23 @@
+[package]
+name = "mohona-host"
+description = "Mohona native messaging host: lets the browser extension hand downloads to Mohona"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+
+[[bin]]
+name = "mohona-host"
+path = "src/main.rs"
+
+[dependencies]
+mohona-daemon = { path = "../daemon" }
+mohona-net = { version = "0.0.1", path = "../net" }
+serde_json = "1"
+tokio.workspace = true
+
+[dev-dependencies]
+mohona-manager = { path = "../manager" }
+mohona-store = { path = "../store" }
+mohona-testserver = { path = "../../tools/testserver" }
+tempfile = "3"

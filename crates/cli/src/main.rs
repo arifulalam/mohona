@@ -12,6 +12,7 @@ use mohona_core::{
 use mohona_net::{ClientConfig, HttpClient};
 use tokio::sync::mpsc;
 
+mod daemon;
 mod history;
 mod queue;
 mod stream;
@@ -34,6 +35,15 @@ struct Cli {
 
 #[derive(Subcommand)]
 enum Command {
+    /// Run Mohona in the background so the browser extension can add downloads
+    Daemon {
+        /// Where to write the connection details (default: your application-data folder)
+        #[arg(long)]
+        info: Option<PathBuf>,
+        /// Folder for downloads that do not name one (default: Downloads)
+        #[arg(long)]
+        folder: Option<PathBuf>,
+    },
     /// Keep a list of downloads and run it with limits on how many go at once
     Queue {
         #[command(subcommand)]
@@ -491,6 +501,13 @@ async fn main() -> ExitCode {
         Some(Command::Log { id }) => {
             finish(open(&cli.db).and_then(|store| history::log(&store, id)))
         }
+        Some(Command::Daemon { info, folder }) => match daemon::run(cli.db, info, folder).await {
+            Ok(()) => ExitCode::SUCCESS,
+            Err(message) => {
+                eprintln!("error: {message}");
+                ExitCode::FAILURE
+            }
+        },
         Some(Command::Queue { command }) => match queue::run(command, cli.db).await {
             Ok(()) => ExitCode::SUCCESS,
             Err(message) => {

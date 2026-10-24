@@ -1672,6 +1672,7 @@ dependencies = [
  "chrono",
  "clap",
  "mohona-core",
+ "mohona-daemon",
  "mohona-manager",
  "mohona-media",
  "mohona-net",
@@ -1699,6 +1700,37 @@ dependencies = [
  "thiserror",
  "tokio",
  "url",
+]
+
+[[package]]
+name = "mohona-daemon"
+version = "0.0.1"
+dependencies = [
+ "getrandom 0.4.3",
+ "mohona-core",
+ "mohona-manager",
+ "mohona-net",
+ "mohona-store",
+ "mohona-testserver",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "thiserror",
+ "tokio",
+]
+
+[[package]]
+name = "mohona-host"
+version = "0.0.1"
+dependencies = [
+ "mohona-daemon",
+ "mohona-manager",
+ "mohona-net",
+ "mohona-store",
+ "mohona-testserver",
+ "serde_json",
+ "tempfile",
+ "tokio",
 ]
 
 [[package]]
