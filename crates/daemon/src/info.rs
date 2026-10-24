@@ -37,6 +37,14 @@ pub fn default_db_path() -> std::path::PathBuf {
     default_info_path().with_file_name("mohona.db")
 }
 
+/// Where downloads go when nobody names a folder: the person's Downloads.
+pub fn default_download_dir() -> std::path::PathBuf {
+    std::env::var_os("USERPROFILE")
+        .or_else(|| std::env::var_os("HOME"))
+        .map_or_else(|| std::path::PathBuf::from("."), std::path::PathBuf::from)
+        .join("Downloads")
+}
+
 impl DaemonInfo {
     /// A new random token, 32 bytes in hex.
     pub fn new_token() -> String {

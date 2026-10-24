@@ -1263,3 +1263,111 @@ fn convert_makes_an_mp3_and_never_replaces_a_file() {
         assert!(dir.path().join(expected).is_file(), "{}", text(&out));
     }
 }
+
+/// The daemon runs `mohona stream` for the browser extension.
+#[test]
+fn the_daemon_downloads_a_stream_for_the_extension() {
+    use mohona_daemon::{Call, Client, DaemonInfo, Response};
+    let (rt, server) = start_media_server();
+    let dir = tempfile::tempdir().unwrap();
+    let info = dir.path().join("daemon.json");
+    let out = dir.path().join("out");
+    let mut daemon = mohona(&dir.path().join("m.db"))
+        .arg("daemon")
+        .arg("--info")
+        .arg(&info)
+        .arg("--folder")
+        .arg(&out)
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .spawn()
+        .unwrap();
+    let started = Instant::now();
+    while !DaemonInfo::read(&info).is_ok_and(|i| i.pid == daemon.id()) {
+        assert!(started.elapsed() < Duration::from_secs(10), "no daemon");
+        std::thread::sleep(Duration::from_millis(50));
+    }
+    let client = Client::from_info_file(&info).unwrap();
+    let call = |call| rt.block_on(client.call(call)).unwrap();
+
+    // Refused before anything runs.
+    for url in [
+        "file:///etc/passwd",
+        "ftp://example.com/a.m3u8",
+        "http://a/\r\nX: y",
+    ] {
+        let answer = call(Call::Stream {
+            url: url.into(),
+            dest_dir: None,
+            cookies: None,
+            referrer: None,
+            user_agent: None,
+            headers: vec![],
+            name: None,
+        });
+        assert!(
+            matches!(answer, Response::Error { .. }),
+            "{url}: {answer:?}"
+        );
+    }
+    let answer = call(Call::Stream {
+        url: format!("http://{server}/hls/master.m3u8"),
+        dest_dir: None,
+        cookies: Some("session=ok".into()),
+        referrer: Some("https://example.com/watch".into()),
+        user_agent: Some("Test UA".into()),
+        headers: vec![("Accept-Language".into(), "bn".into())],
+        name: Some("Lesson 1".into()),
+    });
+    let Response::Started { job, .. } = answer else {
+        panic!("{answer:?}");
+    };
+    let started = Instant::now();
+    loop {
+        let Response::Jobs { jobs } = call(Call::Jobs) else {
+            panic!()
+        };
+        let row = jobs.iter().find(|j| j.id == job).unwrap();
+        if row.status != "running" {
+            assert_eq!(row.status, "finished", "{row:?}");
+            break;
+        }
+        assert!(started.elapsed() < Duration::from_secs(30), "stuck");
+        std::thread::sleep(Duration::from_millis(100));
+    }
+    let names: Vec<String> = std::fs::read_dir(&out)
+        .unwrap()
+        .flatten()
+        .map(|e| e.file_name().to_string_lossy().into_owned())
+        .collect();
+    assert!(names.iter().any(|n| n.starts_with("Lesson 1")), "{names:?}");
+
+    // A stream that does not exist fails, with the program's message.
+    let Response::Started { job, .. } = call(Call::Stream {
+        url: format!("http://{server}/hls/missing.m3u8"),
+        dest_dir: None,
+        cookies: None,
+        referrer: None,
+        user_agent: None,
+        headers: vec![],
+        name: None,
+    }) else {
+        panic!()
+    };
+    let started = Instant::now();
+    loop {
+        let Response::Jobs { jobs } = call(Call::Jobs) else {
+            panic!()
+        };
+        let row = jobs.iter().find(|j| j.id == job).unwrap();
+        if row.status != "running" {
+            assert_eq!(row.status, "failed");
+            assert!(row.message.is_some());
+            break;
+        }
+        assert!(started.elapsed() < Duration::from_secs(30), "stuck");
+        std::thread::sleep(Duration::from_millis(100));
+    }
+    call(Call::Shutdown);
+    let _ = daemon.wait();
+}

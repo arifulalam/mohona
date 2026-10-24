@@ -158,3 +158,28 @@ export async function startEngine(client: NativeClient): Promise<Outcome | null>
     return failure("host_unavailable", asError(e).message);
   }
 }
+
+/**
+ * Hands an HLS or DASH stream to Mohona, which runs `mohona stream` for it.
+ * Starts the engine once when it is not running, like `addDownload`.
+ */
+export async function startStream(client: NativeClient, details: AddDetails): Promise<Outcome> {
+  try {
+    let answer = await client.request({ type: "stream", ...details }, 15_000);
+    if (answer.type === "error" && answer.code === "engine_not_running") {
+      const started = await client.request({ type: "startEngine" }, 30_000);
+      if (started.type === "error") return failure(started.code, started.message);
+      answer = await client.request({ type: "stream", ...details }, 15_000);
+    }
+    switch (answer.type) {
+      case "streamStarted":
+        return { kind: "streaming", job: answer.job, folder: answer.folder };
+      case "error":
+        return failure(answer.code, answer.message);
+      default:
+        return failure("unexpected", "Mohona gave an unexpected answer");
+    }
+  } catch (e) {
+    return failure("host_unavailable", asError(e).message);
+  }
+}

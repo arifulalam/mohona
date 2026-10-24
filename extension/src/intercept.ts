@@ -100,7 +100,12 @@ export async function intercept(item: Item, deps: Deps): Promise<Result> {
     }
     return {
       kind: "kept",
-      reason: outcome.kind === "duplicate" ? `Mohona already has it: ${outcome.message}` : outcome.message,
+      reason:
+        outcome.kind === "duplicate"
+          ? `Mohona already has it: ${outcome.message}`
+          : outcome.kind === "error"
+            ? outcome.message
+            : "Mohona did not take it",
     };
   } catch (e) {
     return { kind: "kept", reason: e instanceof Error ? e.message : String(e) };

@@ -62,6 +62,16 @@ fn error(code: &str, message: impl Into<String>) -> Value {
 /// How long `startEngine` waits for a freshly started engine to answer.
 const START_WAIT: Duration = Duration::from_secs(8);
 
+/// The fields of a download message, checked.
+struct Details {
+    url: String,
+    referrer: Option<String>,
+    cookies: Option<String>,
+    user_agent: Option<String>,
+    headers: Vec<(String, String)>,
+    name: Option<String>,
+}
+
 pub struct Host {
     /// The engine's connection file (see `mohona_daemon::DaemonInfo`).
     info_path: PathBuf,
@@ -112,6 +122,7 @@ impl Host {
     /// |---|---|
     /// | `hello` | who is there: `protocol`, `version`, `engineRunning`, `engineVersion` |
     /// | `add` | put `url` in the list, with optional `referrer`, `cookies`, `userAgent`, `headers` |
+    /// | `stream` | download the HLS/DASH stream at `url` (same optional fields, and `name`) |
     /// | `startEngine` | start `mohona daemon` if it is not answering, and wait for it |
     pub fn handle(&self, message: &[u8]) -> Value {
         let mut value: Value = match serde_json::from_slice(message) {
@@ -126,6 +137,7 @@ impl Host {
         let mut answer = match kind.as_deref() {
             Some("hello") => self.hello(),
             Some("add") => self.add(&mut value),
+            Some("stream") => self.stream(&mut value),
             Some("startEngine") => self.start_engine(),
             Some(other) => error("unknown_type", format!("unknown message type \"{other}\"")),
             None => error("bad_request", "the message has no \"type\""),
@@ -147,9 +159,10 @@ impl Host {
         })
     }
 
-    fn add(&self, message: &mut Value) -> Value {
+    /// Checks the fields every download message shares. `Err` is the answer to give.
+    fn details(message: &mut Value, schemes: &[&str]) -> Result<Details, Value> {
         let Some(map) = message.as_object_mut() else {
-            return error("bad_request", "the message is not an object");
+            return Err(error("bad_request", "the message is not an object"));
         };
         let text = |map: &Map<String, Value>, key: &str| -> Result<Option<String>, Value> {
             match map.get(key) {
@@ -163,66 +176,104 @@ impl Host {
                 Some(_) => Err(error("bad_request", format!("\"{key}\" must be text"))),
             }
         };
-        let url = match text(map, "url") {
-            Ok(Some(url)) => url,
-            Ok(None) => return error("bad_request", "\"url\" is missing"),
-            Err(e) => return e,
+        let Some(url) = text(map, "url")? else {
+            return Err(error("bad_request", "\"url\" is missing"));
         };
         let (bare, _) = mohona_net::split_userinfo(&url);
-        let scheme_ok = ["http://", "https://", "ftp://", "ftps://", "sftp://"]
+        let lower = bare.to_ascii_lowercase();
+        if !schemes
             .iter()
-            .any(|s| bare.to_ascii_lowercase().starts_with(s));
-        if !scheme_ok {
-            return error(
+            .any(|s| lower.starts_with(&format!("{s}://")))
+        {
+            return Err(error(
                 "bad_url",
-                "only http, https, ftp, ftps and sftp addresses can be downloaded",
-            );
-        }
-        let (mut referrer, mut cookies, mut user_agent) = (None, None, None);
-        for (key, slot) in [
-            ("referrer", &mut referrer),
-            ("cookies", &mut cookies),
-            ("userAgent", &mut user_agent),
-        ] {
-            match text(map, key) {
-                Ok(v) => *slot = v,
-                Err(e) => return e,
-            }
+                format!(
+                    "only {} addresses can be downloaded here",
+                    schemes.join(", ")
+                ),
+            ));
         }
         let mut headers = Vec::new();
         if let Some(list) = map.get("headers") {
             let Some(list) = list.as_array() else {
-                return error("bad_request", "\"headers\" must be a list");
+                return Err(error("bad_request", "\"headers\" must be a list"));
             };
             for header in list {
                 let (Some(name), Some(value)) = (
                     header.get("name").and_then(Value::as_str),
                     header.get("value").and_then(Value::as_str),
                 ) else {
-                    return error(
+                    return Err(error(
                         "bad_request",
                         "each header needs a \"name\" and a \"value\"",
-                    );
+                    ));
                 };
                 if name.chars().any(char::is_control) || value.chars().any(char::is_control) {
-                    return error("bad_request", "a header contains control characters");
+                    return Err(error("bad_request", "a header contains control characters"));
                 }
                 headers.push((name.to_string(), value.to_string()));
             }
         }
-        let answer = self.call(Call::Add {
+        let name = text(map, "name")?;
+        if name
+            .as_deref()
+            .is_some_and(|n| n.contains(['/', '\\', ':']) || n.starts_with('.'))
+        {
+            return Err(error("bad_request", "\"name\" must be a plain file name"));
+        }
+        Ok(Details {
             url: url.trim().to_string(),
-            dest_dir: None,
-            cookies,
-            referrer,
-            user_agent,
+            referrer: text(map, "referrer")?,
+            cookies: text(map, "cookies")?,
+            user_agent: text(map, "userAgent")?,
             headers,
+            name,
+        })
+    }
+
+    fn add(&self, message: &mut Value) -> Value {
+        let d = match Self::details(message, &["http", "https", "ftp", "ftps", "sftp"]) {
+            Ok(d) => d,
+            Err(e) => return e,
+        };
+        let answer = self.call(Call::Add {
+            url: d.url,
+            dest_dir: None,
+            cookies: d.cookies,
+            referrer: d.referrer,
+            user_agent: d.user_agent,
+            headers: d.headers,
             sort: true,
             duplicates: Some("skip".into()),
         });
         match answer {
             Ok(Response::Added { id }) => json!({"type": "added", "id": id}),
             Ok(Response::Skipped { reason }) => json!({"type": "duplicate", "message": reason}),
+            Ok(Response::Error { message }) => error("engine", message),
+            Ok(_) => error("engine", "the engine gave an unexpected answer"),
+            Err(e) => e,
+        }
+    }
+
+    /// An HLS or DASH stream: the engine runs `mohona stream` for it.
+    fn stream(&self, message: &mut Value) -> Value {
+        let d = match Self::details(message, &["http", "https"]) {
+            Ok(d) => d,
+            Err(e) => return e,
+        };
+        let answer = self.call(Call::Stream {
+            url: d.url,
+            dest_dir: None,
+            cookies: d.cookies,
+            referrer: d.referrer,
+            user_agent: d.user_agent,
+            headers: d.headers,
+            name: d.name,
+        });
+        match answer {
+            Ok(Response::Started { job, folder }) => {
+                json!({"type": "streamStarted", "job": job, "folder": folder})
+            }
             Ok(Response::Error { message }) => error("engine", message),
             Ok(_) => error("engine", "the engine gave an unexpected answer"),
             Err(e) => e,

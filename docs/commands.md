@@ -408,6 +408,7 @@ Started by the browser, not by you. It reads and writes length-prefixed JSON mes
 |---|---|---|
 | `hello` | `{"type":"hello","requestId":1}` | `{"type":"hello","protocol":1,"version":"0.0.1","engineRunning":true,"engineVersion":"0.0.1","requestId":1}` |
 | `add` | `{"type":"add","url":"https://example.com/a.zip","cookies":"a=b","referrer":"https://example.com/","userAgent":"...","headers":[{"name":"X","value":"y"}]}` | `{"type":"added","id":3}` |
+| `stream` | `{"type":"stream","url":"https://cdn.example.com/a/index.m3u8","name":"Lesson 1","referrer":"https://example.com/","cookies":"a=b"}` | `{"type":"streamStarted","job":1,"folder":"C:\\Users\\you\\Downloads"}` (the engine runs `mohona stream`; only http and https; `name` is a plain file name) |
 | `startEngine` | `{"type":"startEngine"}` | `{"type":"engine","running":false,"started":true}` (`running:true,started:false` if it was already there) |
 
 Every answer repeats the `requestId` of the question. Errors look like `{"type":"error","code":"...","message":"..."}` with codes `bad_json`, `bad_request`, `bad_url`, `unknown_type`, `engine_not_running` (send `startEngine`, then retry), `no_engine` (the `mohona` program was not found or did not start) and `engine`. A repeated address answers `{"type":"duplicate","message":"already in the list as #1 (...)"}`.

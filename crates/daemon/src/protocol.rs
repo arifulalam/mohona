@@ -35,6 +35,25 @@ pub enum Call {
         #[serde(default)]
         duplicates: Option<String>,
     },
+    /// Download an HLS or DASH stream by running `mohona stream` for it.
+    Stream {
+        url: String,
+        #[serde(default)]
+        dest_dir: Option<String>,
+        #[serde(default)]
+        cookies: Option<String>,
+        #[serde(default)]
+        referrer: Option<String>,
+        #[serde(default)]
+        user_agent: Option<String>,
+        #[serde(default)]
+        headers: Vec<(String, String)>,
+        /// The file name to save as (without extension).
+        #[serde(default)]
+        name: Option<String>,
+    },
+    /// The stream downloads started since the daemon began.
+    Jobs,
     /// Every download, oldest first.
     List,
     Pause {
@@ -70,8 +89,26 @@ pub struct DownloadInfo {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct JobInfo {
+    pub id: u64,
+    pub url: String,
+    /// `running`, `finished` or `failed`.
+    pub status: String,
+    /// For a failure: the last thing the program said.
+    pub message: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum Response {
+    Started {
+        job: u64,
+        /// Where the file will be saved.
+        folder: String,
+    },
+    Jobs {
+        jobs: Vec<JobInfo>,
+    },
     Pong {
         version: String,
         pid: u32,

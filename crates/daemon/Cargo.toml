@@ -14,7 +14,7 @@ mohona-store = { path = "../store" }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 thiserror = "2"
-tokio.workspace = true
+tokio = { workspace = true, features = ["process"] }
 
 [dev-dependencies]
 mohona-core = { path = "../core" }

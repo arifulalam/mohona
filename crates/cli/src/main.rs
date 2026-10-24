@@ -279,7 +279,13 @@ pub(crate) struct RequestArgs {
 impl RequestArgs {
     pub(crate) fn context(&self) -> Result<mohona_net::RequestContext, String> {
         let mut context = mohona_net::RequestContext {
-            cookies: self.cookie.clone(),
+            // MOHONA_COOKIE keeps a session cookie out of the process list
+            // (the browser host uses it).
+            cookies: self.cookie.clone().or_else(|| {
+                std::env::var("MOHONA_COOKIE")
+                    .ok()
+                    .filter(|c| !c.is_empty())
+            }),
             referrer: self.referer.clone(),
             user_agent: self.user_agent.clone(),
             ..Default::default()

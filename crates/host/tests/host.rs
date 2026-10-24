@@ -22,6 +22,10 @@ struct Engine {
 
 impl Engine {
     fn start(dir: &Path) -> Self {
+        Self::start_with(dir, None)
+    }
+
+    fn start_with(dir: &Path, stream_program: Option<PathBuf>) -> Self {
         let info = dir.join("daemon.json");
         let downloads = dir.join("dl");
         std::fs::create_dir_all(&downloads).unwrap();
@@ -54,6 +58,7 @@ impl Engine {
                     ServerConfig {
                         info_path: info2,
                         default_dir: dl2,
+                        stream_program,
                         shutdown: stop,
                     },
                 )
@@ -399,5 +404,114 @@ mod registration {
         places.windows = true;
         let path = places.manifest_path(Browser::Edge);
         assert_eq!(path, dir.path().join("data/native-messaging/edge.json"));
+    }
+}
+
+#[cfg(unix)]
+mod streams {
+    use super::*;
+    use std::os::unix::fs::PermissionsExt;
+
+    /// A pretend `mohona` that records how it was called.
+    fn fake_engine(dir: &Path) -> (PathBuf, PathBuf) {
+        let record = dir.join("record.txt");
+        let script = dir.join("mohona");
+        std::fs::write(
+            &script,
+            format!(
+                "#!/bin/sh\nprintf '%s\\n' \"$@\" > {r}\nprintf 'cookie=%s\\n' \"$MOHONA_COOKIE\" >> {r}\n",
+                r = record.display()
+            ),
+        )
+        .unwrap();
+        std::fs::set_permissions(&script, std::fs::Permissions::from_mode(0o755)).unwrap();
+        (script, record)
+    }
+
+    fn wait_for(path: &Path) -> String {
+        let started = Instant::now();
+        loop {
+            if let Ok(text) = std::fs::read_to_string(path) {
+                if text.contains("cookie=") {
+                    return text;
+                }
+            }
+            assert!(started.elapsed() < Duration::from_secs(10), "never ran");
+            std::thread::sleep(Duration::from_millis(30));
+        }
+    }
+
+    #[test]
+    fn a_stream_is_started_with_the_cookie_in_the_environment_only() {
+        let dir = tempfile::tempdir().unwrap();
+        let (script, record) = fake_engine(dir.path());
+        let engine = Engine::start_with(dir.path(), Some(script));
+        let host = host_for(&engine.info);
+        let answer = ask(
+            &host,
+            json!({
+                "type": "stream", "requestId": 4,
+                "url": "https://cdn.example.com/live/index.m3u8",
+                "referrer": "https://example.com/",
+                "cookies": "session=secret",
+                "userAgent": "UA/1",
+                "name": "Lesson 1",
+                "headers": [{"name": "X-Token", "value": "t"}],
+            }),
+        );
+        assert_eq!(answer["type"], "streamStarted", "{answer}");
+        assert_eq!(answer["requestId"], 4);
+        let text = wait_for(&record);
+        let lines: Vec<&str> = text.lines().collect();
+        assert_eq!(lines[0], "stream");
+        assert_eq!(lines.last().copied(), Some("cookie=session=secret"));
+        assert_eq!(
+            lines[lines.len() - 2],
+            "https://cdn.example.com/live/index.m3u8"
+        );
+        assert!(text.contains("--referer=https://example.com/"));
+        assert!(text.contains("--user-agent=UA/1"));
+        assert!(text.contains("--name=Lesson 1"));
+        assert!(text.contains("--header=X-Token: t"));
+        // The secret is not among the arguments.
+        assert!(!lines[..lines.len() - 1]
+            .iter()
+            .any(|l| l.contains("secret")));
+    }
+
+    #[test]
+    fn bad_stream_requests_start_nothing() {
+        let dir = tempfile::tempdir().unwrap();
+        let (script, record) = fake_engine(dir.path());
+        let engine = Engine::start_with(dir.path(), Some(script));
+        let host = host_for(&engine.info);
+        let code = |m: Value| ask(&host, m)["code"].as_str().unwrap().to_string();
+        assert_eq!(
+            code(json!({"type": "stream", "url": "ftp://a/x.m3u8"})),
+            "bad_url"
+        );
+        assert_eq!(
+            code(json!({"type": "stream", "url": "file:///x.m3u8"})),
+            "bad_url"
+        );
+        assert_eq!(
+            code(json!({"type": "stream", "url": "https://a/x.m3u8", "name": "../evil"})),
+            "bad_request"
+        );
+        assert_eq!(
+            code(json!({"type": "stream", "url": "https://a/x.m3u8", "name": "C:evil"})),
+            "bad_request"
+        );
+        assert_eq!(code(json!({"type": "stream"})), "bad_request");
+        let nobody = host_for(&dir.path().join("nothing.json"));
+        assert_eq!(
+            ask(
+                &nobody,
+                json!({"type": "stream", "url": "https://a/x.m3u8"})
+            )["code"],
+            "engine_not_running"
+        );
+        std::thread::sleep(Duration::from_millis(300));
+        assert!(!record.exists());
     }
 }

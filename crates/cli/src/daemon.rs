@@ -4,21 +4,13 @@
 use std::path::PathBuf;
 use std::sync::Arc;
 
-use mohona_daemon::{default_info_path, serve, ServerConfig};
+use mohona_daemon::{default_download_dir, default_info_path, serve, ServerConfig};
 use mohona_manager::{Manager, ManagerConfig};
 use mohona_net::{ClientConfig, HttpClient};
 use mohona_store::Store;
 use tokio::sync::Notify;
 
 use crate::describe;
-
-/// The folder downloads go to when a client does not name one.
-fn default_folder() -> PathBuf {
-    std::env::var_os("USERPROFILE")
-        .or_else(|| std::env::var_os("HOME"))
-        .map_or_else(|| PathBuf::from("."), PathBuf::from)
-        .join("Downloads")
-}
 
 pub async fn run(
     db: PathBuf,
@@ -47,7 +39,8 @@ pub async fn run(
         manager,
         ServerConfig {
             info_path,
-            default_dir: folder.unwrap_or_else(default_folder),
+            default_dir: folder.unwrap_or_else(default_download_dir),
+            stream_program: std::env::current_exe().ok(),
             shutdown,
         },
     )

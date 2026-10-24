@@ -1,5 +1,6 @@
 import { cookieHeaderOf, intercept, type Item, type Result } from "./intercept";
-import { addDownload, NativeClient, startEngine, status } from "./native";
+import { addDownload, NativeClient, startEngine, startStream, status } from "./native";
+import { addMedia, classify, nameFromUrl, totalFromRange, type Media } from "./sniffer";
 import type { Reply, Request } from "./messages";
 import { HOST_NAME } from "./protocol";
 import { downloadFromMenu, MENU_ID, type ClickInfo } from "./menu";
@@ -81,6 +82,83 @@ chrome.downloads.onCreated.addListener((item) => {
   })();
 });
 
+// --- media found on pages -------------------------------------------------
+
+// The worker may be stopped at any time, so the list lives in session storage.
+const key = (tabId: number) => `media:${tabId}`;
+let queue: Promise<void> = Promise.resolve();
+
+async function mediaOf(tabId: number): Promise<Media[]> {
+  const stored = await chrome.storage.session.get(key(tabId));
+  const list = stored[key(tabId)];
+  return Array.isArray(list) ? (list as Media[]) : [];
+}
+
+function showCount(tabId: number, count: number): void {
+  void chrome.action.setBadgeBackgroundColor({ tabId, color: "#1565c0" });
+  void chrome.action.setBadgeText({ tabId, text: count > 0 ? String(count) : "" });
+}
+
+/** One change at a time, so two quick responses do not overwrite each other. */
+function changeMedia(tabId: number, change: (list: Media[]) => Media[]): void {
+  queue = queue
+    .then(async () => {
+      const list = change(await mediaOf(tabId));
+      await chrome.storage.session.set({ [key(tabId)]: list });
+      showCount(tabId, list.length);
+    })
+    .catch(() => undefined);
+}
+
+chrome.webRequest.onBeforeRequest.addListener(
+  (details) => {
+    if (details.tabId >= 0) changeMedia(details.tabId, () => []); // a new page
+  },
+  { urls: ["<all_urls>"], types: ["main_frame"] },
+);
+
+chrome.webRequest.onHeadersReceived.addListener(
+  (details) => {
+    if (details.tabId < 0) return;
+    const header = (name: string) =>
+      details.responseHeaders?.find((h) => h.name.toLowerCase() === name)?.value;
+    const length = Number(header("content-length"));
+    const size = totalFromRange(header("content-range")) ?? (Number.isFinite(length) && length > 0 ? length : undefined);
+    const contentType = header("content-type");
+    const kind = classify(details.url, contentType, size);
+    if (!kind) return;
+    const page = (details as { documentUrl?: string }).documentUrl ?? details.initiator;
+    changeMedia(details.tabId, (list) =>
+      addMedia(list, {
+        url: details.url,
+        kind,
+        name: nameFromUrl(details.url),
+        contentType,
+        size,
+        referrer: page ? (page.endsWith("/") || page.includes("/", 8) ? page : `${page}/`) : undefined,
+      }),
+    );
+  },
+  { urls: ["<all_urls>"], types: ["media", "xmlhttprequest", "other"] },
+  ["responseHeaders"],
+);
+
+chrome.tabs.onRemoved.addListener((tabId) => void chrome.storage.session.remove(key(tabId)));
+
+async function downloadMedia(media: Media) {
+  const cookies = await cookieHeader(media.url).catch(() => "");
+  const details = {
+    url: media.url,
+    referrer: media.referrer,
+    cookies: cookies || undefined,
+    userAgent: navigator.userAgent,
+    name: media.name,
+  };
+  return media.kind === "file"
+    ? addDownload(client, { ...details, name: undefined })
+    : startStream(client, details);
+}
+
 async function handle(request: Request): Promise<Reply> {
   switch (request.kind) {
     case "status":
@@ -89,6 +167,13 @@ async function handle(request: Request): Promise<Reply> {
       return { kind: "outcome", outcome: await startEngine(client) };
     case "add":
       return { kind: "outcome", outcome: await addDownload(client, { url: request.url }) };
+    case "media":
+      return { kind: "media", media: await mediaOf(request.tabId) };
+    case "downloadMedia": {
+      const outcome = await downloadMedia(request.media);
+      last = outcome.kind === "error" ? `Not sent: ${outcome.message}` : `Sent to Mohona: ${request.media.url}`;
+      return { kind: "outcome", outcome };
+    }
     case "getSettings":
       return { kind: "settings", settings: await loadSettings() };
     case "setSettings":

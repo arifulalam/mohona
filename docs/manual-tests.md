@@ -141,10 +141,21 @@ Automated tests use a local test server. These need real streams from the intern
 ## Context menu
 
 1. Right-click a link to a file, then "Download with Mohona": the file arrives in Downloads through Mohona; the toolbar button shows a green check for a few seconds; the popup says "Sent to Mohona: ...".
-2. Right-click an image and a video (or audio) player: the entry is there, and the media file is downloaded. A video from a streaming site that uses `blob:` does nothing (that is for the media sniffer, a later step).
+2. Right-click an image and a video (or audio) player: the entry is there, and the media file is downloaded. A video from a streaming site that uses `blob:` does nothing there; use the toolbar popup's media list instead.
 3. Right-click ordinary text or the page background: no Mohona entry.
 4. Stop Mohona and make it unable to start: the entry shows a red "!" and the popup says "Not sent: ...".
 5. Use the entry on a link already in Mohona's list: red "!" and "Mohona already has it".
+
+## Media detection and streams
+
+1. Open a page that plays a video from an HLS stream (many news and lecture sites; a public test stream such as the Apple or Bitmovin sample pages). Start the video. The toolbar button must show a number, and the popup lists "HLS" entries under "Media on this page".
+2. Press the download button of one entry. The popup says "Stream download started. It will be saved in ...". After a short while the file appears in that folder (`.ts`, or `.mp4` when ffmpeg is installed). It must play.
+3. A page that plays a plain MP4 from a normal address: it is listed as "file", and the button adds it to Mohona's list and downloads it with several connections.
+4. Open a new page in the same tab: the list and the number must reset. Close the tab: nothing is left behind.
+5. A site with protected video (Netflix, Prime Video): nothing downloadable may be offered, or a download must fail with a clear "protected" message and no broken file. Mohona does not remove DRM.
+6. Streams that need a login: log in to the site first, then download; the stream must come with your session (cookies and referrer).
+7. Stop Mohona and make it unable to start: pressing the button shows an error; nothing breaks in the page.
+8. Page titles with odd characters (quotes, slashes, Bengali): the saved file name must be valid on Windows.
 
 ## Logins and cookies against a real site
 

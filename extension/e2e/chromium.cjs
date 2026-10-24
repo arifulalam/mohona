@@ -40,5 +40,17 @@ const { chromium } = require('playwright');
   console.log('5:', got);
   const left = await sw.evaluate(() => chrome.downloads.search({}).then(d => d.length));
   console.log('6: downloads left in the browser:', left);
+  // 7: media on a page is detected, and an HLS stream is downloaded by Mohona.
+  await web.evaluate(() => fetch('/hls/master.m3u8').then((r) => r.text()));
+  const tabId = await sw.evaluate(() => chrome.tabs.query({ url: 'http://127.0.0.1:18080/*' }).then((t) => t[0].id));
+  let media = [];
+  for (let i = 0; i < 40 && !media.length; i++) {
+    media = (await page.evaluate((id) => chrome.runtime.sendMessage({ kind: 'media', tabId: id }), tabId)).media;
+    if (!media.length) await new Promise((r) => setTimeout(r, 250));
+  }
+  console.log('7: detected', media.map((m) => m.kind + ' ' + m.name).join(', '));
+  const outcome = (await page.evaluate((m) => chrome.runtime.sendMessage({ kind: 'downloadMedia', media: m }), media[0])).outcome;
+  console.log('8:', JSON.stringify(outcome));
+  await new Promise((r) => setTimeout(r, 6000));
   await ctx.close();
 })().catch(e => { console.error('FAIL', e.message); process.exit(1); });

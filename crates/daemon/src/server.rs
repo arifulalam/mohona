@@ -9,6 +9,7 @@ use tokio::sync::Notify;
 
 use crate::info::DaemonInfo;
 use crate::protocol::{Call, DownloadInfo, Request, Response};
+use crate::streams::StreamJob;
 
 /// The longest request line accepted.
 const MAX_LINE: usize = 1024 * 1024;
@@ -18,6 +19,9 @@ pub struct ServerConfig {
     pub info_path: PathBuf,
     /// Where downloads go unless the client says otherwise.
     pub default_dir: PathBuf,
+    /// The `mohona` program that runs stream downloads (`mohona stream`).
+    /// `None`: stream calls are refused.
+    pub stream_program: Option<PathBuf>,
     /// Pass a [`Notify`] to stop the daemon from outside (Ctrl-C); a
     /// `shutdown` call stops it too.
     pub shutdown: Arc<Notify>,
@@ -28,6 +32,7 @@ struct State {
     token: String,
     default_dir: PathBuf,
     shutdown: Arc<Notify>,
+    streams: crate::streams::Streams,
 }
 
 /// Runs the API until shutdown, then stops the manager and removes the info
@@ -56,6 +61,7 @@ pub async fn serve(manager: Manager, config: ServerConfig) -> std::io::Result<()
         token: info.token.clone(),
         default_dir: config.default_dir,
         shutdown: config.shutdown.clone(),
+        streams: crate::streams::Streams::new(config.stream_program),
     });
     loop {
         tokio::select! {
@@ -172,6 +178,33 @@ async fn handle(state: &State, call: Call) -> Response {
                 Err(e) => error(e),
             }
         }
+        Call::Stream {
+            url,
+            dest_dir,
+            cookies,
+            referrer,
+            user_agent,
+            headers,
+            name,
+        } => {
+            let folder = dest_dir.map_or_else(|| state.default_dir.clone(), PathBuf::from);
+            let shown = folder.display().to_string();
+            match state.streams.start(StreamJob {
+                url,
+                folder,
+                cookies,
+                referrer,
+                user_agent,
+                headers,
+                name,
+            }) {
+                Ok(job) => Response::Started { job, folder: shown },
+                Err(message) => Response::Error { message },
+            }
+        }
+        Call::Jobs => Response::Jobs {
+            jobs: state.streams.list(),
+        },
         Call::List => match manager.list().await {
             Ok(rows) => Response::Downloads {
                 downloads: rows

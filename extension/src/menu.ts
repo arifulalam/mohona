@@ -51,6 +51,7 @@ export async function downloadFromMenu(info: ClickInfo, deps: MenuDeps): Promise
     });
     switch (outcome.kind) {
       case "added":
+      case "streaming":
         return { kind: "sent", url };
       case "duplicate":
         return { kind: "failed", message: `Mohona already has it: ${outcome.message}` };

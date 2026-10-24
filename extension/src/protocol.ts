@@ -10,12 +10,15 @@ export interface AddDetails {
   cookies?: string;
   userAgent?: string;
   headers?: { name: string; value: string }[];
+  /** A file name to use (streams only). */
+  name?: string;
 }
 
 export type Question =
   | { type: "hello" }
   | { type: "startEngine" }
-  | ({ type: "add" } & AddDetails);
+  | ({ type: "add" } & AddDetails)
+  | ({ type: "stream" } & AddDetails);
 
 export type Answer =
   | {
@@ -27,6 +30,7 @@ export type Answer =
     }
   | { type: "added"; id: number }
   | { type: "duplicate"; message: string }
+  | { type: "streamStarted"; job: number; folder: string }
   | { type: "engine"; running: boolean; started: boolean }
   | { type: "error"; code: string; message: string };
 
@@ -34,4 +38,5 @@ export type Answer =
 export type Outcome =
   | { kind: "added"; id: number }
   | { kind: "duplicate"; message: string }
+  | { kind: "streaming"; job: number; folder: string }
   | { kind: "error"; code: string; message: string };

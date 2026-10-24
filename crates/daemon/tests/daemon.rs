@@ -58,6 +58,7 @@ async fn start(dir: &Path) -> Daemon {
     let config = ServerConfig {
         info_path: info_path.clone(),
         default_dir: downloads.clone(),
+        stream_program: None,
         shutdown: shutdown.clone(),
     };
     let task = tokio::spawn(serve(manager, config));
@@ -296,6 +297,7 @@ async fn a_second_daemon_is_refused_but_a_stale_info_file_is_replaced() {
         ServerConfig {
             info_path: d.info_path.clone(),
             default_dir: dir.path().to_path_buf(),
+            stream_program: None,
             shutdown: Arc::new(Notify::new()),
         },
     )
