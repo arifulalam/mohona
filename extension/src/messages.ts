@@ -13,6 +13,7 @@ export type Request =
   | { kind: "media"; tabId: number }
   | { kind: "downloadMedia"; media: Media }
   | { kind: "saveLocal"; url: string; tabId: number }
+  | { kind: "pageMedia"; direct?: string; page?: string }
   | { kind: "expired" }
   | { kind: "refreshDownload"; id: number }
   | { kind: "getSettings" }

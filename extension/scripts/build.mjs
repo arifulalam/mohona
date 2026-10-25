@@ -12,7 +12,7 @@ rmSync(dist, { recursive: true, force: true });
 for (const target of ["chromium", "firefox"]) {
   const out = `${dist}${target}`;
   mkdirSync(out, { recursive: true });
-  for (const name of ["background", "popup"]) {
+  for (const name of ["background", "popup", "content"]) {
     await build({
       root,
       configFile: false,

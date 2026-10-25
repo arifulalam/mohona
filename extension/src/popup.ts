@@ -61,6 +61,9 @@ $<HTMLFormElement>("form").addEventListener("submit", async (event) => {
   await refresh();
 });
 
+$<HTMLInputElement>("videoButton").addEventListener("change", async (event) => {
+  await ask({ kind: "setSettings", settings: { videoButton: (event.target as HTMLInputElement).checked } });
+});
 $<HTMLInputElement>("autoRefresh").addEventListener("change", async (event) => {
   await ask({ kind: "setSettings", settings: { autoRefresh: (event.target as HTMLInputElement).checked } });
 });
@@ -146,6 +149,7 @@ void (async () => {
   if (reply.kind === "settings") {
     $<HTMLInputElement>("intercept").checked = reply.settings.intercept;
     $<HTMLInputElement>("autoRefresh").checked = reply.settings.autoRefresh;
+    $<HTMLInputElement>("videoButton").checked = reply.settings.videoButton;
   }
   await refresh();
   await showExpired();

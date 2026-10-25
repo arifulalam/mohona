@@ -5,6 +5,10 @@ export interface Settings {
   minSizeBytes: number;
   /** Look for a fresh link by itself when a download's link has expired. */
   autoRefresh: boolean;
+  /** Show a small "download" button on videos in pages. */
+  videoButton: boolean;
+  /** Sites (and their subdomains) where that button is not shown. */
+  buttonHiddenHosts: string[];
   /** Never take downloads from these sites (and their subdomains). */
   excludedHosts: string[];
 }
@@ -12,6 +16,8 @@ export interface Settings {
 export const DEFAULTS: Settings = {
   intercept: true,
   autoRefresh: true,
+  videoButton: true,
+  buttonHiddenHosts: [],
   minSizeBytes: 0,
   excludedHosts: [],
 };
@@ -19,14 +25,18 @@ export const DEFAULTS: Settings = {
 /** Whatever was stored, made safe: wrong types fall back to the defaults. */
 export function sanitize(raw: unknown): Settings {
   const r = (typeof raw === "object" && raw !== null ? raw : {}) as Record<string, unknown>;
-  const hosts = Array.isArray(r.excludedHosts)
-    ? r.excludedHosts
-        .filter((h): h is string => typeof h === "string")
-        .map((h) => h.trim().toLowerCase().replace(/^\*?\./, ""))
-        .filter((h) => h.length > 0)
-    : DEFAULTS.excludedHosts;
+  const hostList = (value: unknown, fallback: string[]): string[] =>
+    Array.isArray(value)
+      ? value
+          .filter((h): h is string => typeof h === "string")
+          .map((h) => h.trim().toLowerCase().replace(/^\*?\./, ""))
+          .filter((h) => h.length > 0)
+      : fallback;
+  const hosts = hostList(r.excludedHosts, DEFAULTS.excludedHosts);
   return {
     intercept: typeof r.intercept === "boolean" ? r.intercept : DEFAULTS.intercept,
+    videoButton: typeof r.videoButton === "boolean" ? r.videoButton : DEFAULTS.videoButton,
+    buttonHiddenHosts: hostList(r.buttonHiddenHosts, DEFAULTS.buttonHiddenHosts),
     autoRefresh: typeof r.autoRefresh === "boolean" ? r.autoRefresh : DEFAULTS.autoRefresh,
     minSizeBytes:
       typeof r.minSizeBytes === "number" && Number.isFinite(r.minSizeBytes) && r.minSizeBytes >= 0

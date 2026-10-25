@@ -286,7 +286,7 @@ chrome.alarms.onAlarm.addListener((alarm) => {
   })();
 });
 
-async function handle(request: Request): Promise<Reply> {
+async function handle(request: Request, sender: chrome.runtime.MessageSender): Promise<Reply> {
   switch (request.kind) {
     case "status":
       return { kind: "status", status: await status(client), last };
@@ -296,6 +296,20 @@ async function handle(request: Request): Promise<Reply> {
       return { kind: "outcome", outcome: await addDownload(client, { url: request.url }) };
     case "media":
       return { kind: "media", media: await mediaOf(request.tabId) };
+    case "pageMedia": {
+      // From the button on a video: what the tab has shown, plus the video's own address.
+      const tabId = sender.tab?.id;
+      const found = tabId === undefined ? [] : await mediaOf(tabId);
+      if (request.direct && !found.some((m) => m.url === request.direct)) {
+        found.unshift({
+          url: request.direct,
+          kind: "file",
+          name: nameFromUrl(request.direct),
+          referrer: request.page,
+        });
+      }
+      return { kind: "media", media: found };
+    }
     case "downloadMedia": {
       const outcome = await downloadMedia(request.media);
       last = outcome.kind === "error" ? `Not sent: ${outcome.message}` : `Sent to Mohona: ${request.media.url}`;
@@ -323,6 +337,6 @@ async function handle(request: Request): Promise<Reply> {
 }
 
 chrome.runtime.onMessage.addListener((message: Request, _sender, sendResponse) => {
-  void handle(message).then(sendResponse);
+  void handle(message, _sender).then(sendResponse);
   return true; // the answer comes later
 });

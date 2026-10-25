@@ -182,6 +182,15 @@ Automated tests use a local test server. These need real streams from the intern
 - [ ] A real Digest site → downloads.
 - [ ] https://www.trainedbyjp.com/downloads/4k_Thetestdata.mp4 after the server is fixed: `--cookie` with a real session cookie → downloads (earlier answer was 401, then 500 from the server).
 
+## On-page video button
+
+1. Open a page with a large video (for example a news site) and look at the video's top right corner: a dark "⬇ Mohona" button appears, faint until the mouse is over it. Small players (ads, previews) get none.
+2. Press play, wait a few seconds, click the button. The panel lists the video (file, HLS or DASH). "Download" sends it; the button says "Sent ✓" and the download appears in Mohona.
+3. Scroll the page and resize the window: the button follows the video and disappears when the video is mostly out of view. Full screen: the button is not shown (the player covers it); leave full screen and it returns.
+4. Click "Hide on <site>": the button goes away at once on every tab of that site and stays away after a restart. Untick "Show a download button on videos" in the popup: it goes away everywhere.
+5. Clicking the button must never pause or start the video, or open the page's own menu.
+6. On a site with a strict Content Security Policy (for example github.com) nothing breaks and the page works as before.
+
 ## Power and system behaviour
 
 - [ ] `queue run --then sleep`, `hibernate`, `shutdown` really do that after the countdown (try shutdown last), and Ctrl-C in the countdown cancels.

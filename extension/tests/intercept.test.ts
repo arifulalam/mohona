@@ -110,6 +110,8 @@ describe("rules", () => {
     expect(sanitize({ intercept: false, minSizeBytes: 12.7, excludedHosts: [" *.Example.com ", "", 3, "a.org"] })).toEqual({
       intercept: false,
       autoRefresh: true,
+      videoButton: true,
+      buttonHiddenHosts: [],
       minSizeBytes: 12,
       excludedHosts: ["example.com", "a.org"],
     });

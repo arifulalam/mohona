@@ -72,6 +72,18 @@ const { chromium } = require('playwright');
   console.log('11: expired', expired.map((d) => d.status + ' page=' + d.page).join(', '));
   const refreshed = await page.evaluate((id) => chrome.runtime.sendMessage({ kind: 'refreshDownload', id }), expired[0].id);
   console.log('12:', JSON.stringify(refreshed.result));
+  // 13: a big video in a page gets the button; clicking it lists the video's address.
+  await web.goto('http://127.0.0.1:18080/expiring/page?size=1000');
+  await web.evaluate(() => {
+    const v = document.createElement('video');
+    v.src = 'http://127.0.0.1:18080/file?size=5000';
+    v.style.cssText = 'display:block;width:640px;height:360px';
+    document.body.prepend(v);
+  });
+  await web.waitForSelector('mohona-video-button', { state: 'attached', timeout: 8000 });
+  await web.locator('mohona-video-button button.main').click();
+  await web.waitForFunction(() => document.querySelector('mohona-video-button').shadowRoot.querySelector('.item'), null, { timeout: 8000 });
+  console.log('13: panel lists', await web.evaluate(() => document.querySelector('mohona-video-button').shadowRoot.querySelector('.item span').title));
   await new Promise((r) => setTimeout(r, 3000));
   await ctx.close();
 })().catch(e => { console.error('FAIL', e.message); process.exit(1); });

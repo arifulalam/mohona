@@ -7,11 +7,21 @@ const read = (name) => JSON.parse(readFileSync(new URL(name, here), "utf8"));
 export function manifestFor(target) {
   const base = read("manifest.base.json");
   const identity = read("identity.json");
+  // The button on videos: web pages only, never browser or extension pages.
+  const content_scripts = [
+    {
+      matches: ["http://*/*", "https://*/*"],
+      js: ["content.js"],
+      all_frames: true,
+      run_at: "document_idle",
+    },
+  ];
   if (target === "chromium") {
     return {
       ...base,
       // Pins the extension id (see identity.json), so the host can be registered for it.
       key: identity.chromiumKey,
+      content_scripts,
       background: { service_worker: "background.js" },
     };
   }
@@ -19,6 +29,7 @@ export function manifestFor(target) {
     return {
       ...base,
       background: { scripts: ["background.js"] },
+      content_scripts,
       browser_specific_settings: {
         gecko: { id: identity.firefoxId, strict_min_version: identity.firefoxMinVersion },
       },
