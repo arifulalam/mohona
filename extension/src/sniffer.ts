@@ -24,6 +24,21 @@ const FILE_EXTENSIONS = ["mp4", "webm", "mkv", "mov", "flv", "mp3", "m4a", "ogg"
 // Pieces of a stream, not something to download by themselves.
 const SEGMENT_TYPES = ["video/mp2t", "video/iso.segment", "audio/aac", "audio/mp2t", "video/vnd.dlna.mpeg-tts"];
 
+// Pieces of a stream by their file name (DASH and CMAF segments, TS chunks).
+const SEGMENT_EXTENSIONS = ["ts", "m4s", "m4f", "cmfv", "cmfa", "cmft", "fmp4", "init"];
+
+/** Chunks of an adaptive player (YouTube and alike): signed, ranged, and video and audio apart. */
+function looksLikeChunk(parsed: URL): boolean {
+  const q = parsed.searchParams;
+  return (
+    parsed.pathname.endsWith("/videoplayback") ||
+    q.has("range") ||
+    q.has("bytestart") ||
+    q.has("byteend") ||
+    /(^|[/_-])(seg|segment|frag|fragment|chunk)[-_]?\d+/i.test(parsed.pathname)
+  );
+}
+
 function extensionOf(path: string): string {
   const name = path.split("/").pop() ?? "";
   const dot = name.lastIndexOf(".");
@@ -53,7 +68,7 @@ export function classify(
   const ext = extensionOf(parsed.pathname);
   if (ext === "m3u8" || HLS_TYPES.includes(type)) return "hls";
   if (ext === "mpd" || type === "application/dash+xml") return "dash";
-  if (SEGMENT_TYPES.includes(type)) return null;
+  if (SEGMENT_TYPES.includes(type) || SEGMENT_EXTENSIONS.includes(ext) || looksLikeChunk(parsed)) return null;
   const mediaType = type.startsWith("video/") || type.startsWith("audio/");
   if (!mediaType && !FILE_EXTENSIONS.includes(ext)) return null;
   if (!mediaType && type && type !== "application/octet-stream") return null;

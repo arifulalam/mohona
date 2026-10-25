@@ -114,7 +114,9 @@ class Button {
     const parts: HTMLElement[] = [];
     if (media.length === 0) {
       const p = document.createElement("p");
-      p.textContent = "Nothing to download was found yet. Press play, wait a moment, and try again.";
+      p.textContent = /(^|\.)(youtube\.com|youtu\.be)$/.test(location.hostname)
+        ? "YouTube sends video and sound in many small signed pieces, so there is no single file to take yet. Support for it is planned."
+        : "Nothing to download was found yet. Press play, wait a moment, and try again.";
       parts.push(p);
     }
     for (const item of media) {

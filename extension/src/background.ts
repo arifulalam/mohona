@@ -308,6 +308,8 @@ async function handle(request: Request, sender: chrome.runtime.MessageSender): P
           referrer: request.page,
         });
       }
+      // Streams (which carry video and sound together) before plain files.
+      found.sort((a, b) => Number(a.kind === "file") - Number(b.kind === "file"));
       return { kind: "media", media: found };
     }
     case "downloadMedia": {

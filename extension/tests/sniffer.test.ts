@@ -56,3 +56,14 @@ describe("helpers", () => {
     expect(list.filter((x) => x.name === String(MAX_PER_TAB))).toHaveLength(1);
   });
 });
+
+describe("segments and chunks are not files", () => {
+  it("skips DASH/CMAF segments, numbered chunks and ranged player chunks", async () => {
+    const { classify } = await import("../src/sniffer");
+    expect(classify("https://v.bbc.test/a/video-1080/segment-12.m4s", "video/mp4", 900_000)).toBeNull();
+    expect(classify("https://v.test/x/init.mp4", "video/mp4", 900_000)).toBe("file");
+    expect(classify("https://v.test/x/chunk_00042.mp4", "video/mp4", 900_000)).toBeNull();
+    expect(classify("https://r1.googlevideo.com/videoplayback?id=1&range=0-999", "video/mp4", 900_000)).toBeNull();
+    expect(classify("https://v.test/film.mp4", "video/mp4", 90_000_000)).toBe("file");
+  });
+});
