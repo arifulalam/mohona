@@ -59,5 +59,19 @@ const { chromium } = require('playwright');
   const blobUrl = await web.evaluate(() => URL.createObjectURL(new Blob(['%PDF-1.4\n' + 'x'.repeat(1200000)], { type: 'application/octet-stream' })));
   const r2 = await page.evaluate((a) => chrome.runtime.sendMessage(a), { kind: 'saveLocal', url: blobUrl, tabId });
   console.log('10:', JSON.stringify(r2.result));
+  // 11: an expired link is replaced from its source page and the download completes.
+  await web.goto('http://127.0.0.1:18080/expiring/page?size=60000');
+  const stale = await web.getAttribute('#dl', 'href');
+  await web.evaluate(() => fetch('/expiring/page?size=60000').then((r) => r.text())); // the page is loaded again: `stale` expires
+  await web.evaluate((u) => { const a = document.createElement('a'); a.href = u; a.download = ''; document.body.append(a); a.click(); }, stale);
+  let expired = [];
+  for (let i = 0; i < 60 && !expired.length; i++) {
+    expired = (await page.evaluate(() => chrome.runtime.sendMessage({ kind: 'expired' }))).downloads;
+    if (!expired.length) await new Promise((r) => setTimeout(r, 250));
+  }
+  console.log('11: expired', expired.map((d) => d.status + ' page=' + d.page).join(', '));
+  const refreshed = await page.evaluate((id) => chrome.runtime.sendMessage({ kind: 'refreshDownload', id }), expired[0].id);
+  console.log('12:', JSON.stringify(refreshed.result));
+  await new Promise((r) => setTimeout(r, 3000));
   await ctx.close();
 })().catch(e => { console.error('FAIL', e.message); process.exit(1); });

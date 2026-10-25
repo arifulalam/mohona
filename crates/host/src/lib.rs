@@ -124,6 +124,8 @@ impl Host {
     /// | `add` | put `url` in the list, with optional `referrer`, `cookies`, `userAgent`, `headers` |
     /// | `stream` | download the HLS/DASH stream at `url` (same optional fields, and `name`) |
     /// | `saveStart`, `savePiece`, `saveEnd`, `saveAbort` | save a file the browser holds (`blob:`, `data:`): `name`, `mime`; then pieces `transfer`, `index`, `data` (base64, up to 512 KiB each); then `saveEnd` answers `saved` with `path` |
+    /// | `list` | the downloads: `downloads` with `id`, `url`, `status`, `error`, `expired` (the link was refused, 403 or 410) and `page` (where the link was) |
+    /// | `refresh` | continue download `id` from the fresh link `url` (optional `cookies`, `referrer`, `userAgent`); refused when the link is not the same file |
     /// | `startEngine` | start `mohona daemon` if it is not answering, and wait for it |
     pub fn handle(&self, message: &[u8]) -> Value {
         let mut value: Value = match serde_json::from_slice(message) {
@@ -139,6 +141,8 @@ impl Host {
             Some("hello") => self.hello(),
             Some("add") => self.add(&mut value),
             Some("stream") => self.stream(&mut value),
+            Some("list") => self.list(),
+            Some("refresh") => self.refresh(&mut value),
             Some("saveStart") => self.save_start(&value),
             Some("savePiece") => self.save_piece(&value),
             Some("saveEnd") => self.save_end(&value),
@@ -255,6 +259,51 @@ impl Host {
             Ok(Response::Added { id }) => json!({"type": "added", "id": id}),
             Ok(Response::Skipped { reason }) => json!({"type": "duplicate", "message": reason}),
             Ok(Response::Error { message }) => error("engine", message),
+            Ok(_) => error("engine", "the engine gave an unexpected answer"),
+            Err(e) => e,
+        }
+    }
+
+    fn list(&self) -> Value {
+        match self.call(Call::List) {
+            Ok(Response::Downloads { downloads }) => {
+                let rows: Vec<Value> = downloads
+                    .into_iter()
+                    .map(|d| {
+                        json!({
+                            "id": d.id, "url": d.url, "filename": d.filename,
+                            "status": d.status, "downloaded": d.downloaded, "size": d.size,
+                            "error": d.error, "path": d.path,
+                            "page": d.page, "expired": d.expired,
+                        })
+                    })
+                    .collect();
+                json!({"type": "downloads", "downloads": rows})
+            }
+            Ok(Response::Error { message }) => error("engine", message),
+            Ok(_) => error("engine", "the engine gave an unexpected answer"),
+            Err(e) => e,
+        }
+    }
+
+    fn refresh(&self, message: &mut Value) -> Value {
+        let id = match Self::number(message, "id") {
+            Ok(id) => id as i64,
+            Err(e) => return e,
+        };
+        let d = match Self::details(message, &["http", "https"]) {
+            Ok(d) => d,
+            Err(e) => return e,
+        };
+        match self.call(Call::Refresh {
+            id,
+            url: d.url,
+            cookies: d.cookies,
+            referrer: d.referrer,
+            user_agent: d.user_agent,
+        }) {
+            Ok(Response::Done) => json!({"type": "refreshed", "id": id}),
+            Ok(Response::Error { message }) => error("refused", message),
             Ok(_) => error("engine", "the engine gave an unexpected answer"),
             Err(e) => e,
         }

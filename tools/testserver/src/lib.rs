@@ -52,6 +52,8 @@ Endpoints
 
 Query parameters (for /file and the endpoints that serve it)
   size=<bytes>        file size (default: the server's --size)
+  /expiring/page      a page whose download link (/expiring/file?token=N) is only valid
+                      until the page is loaded again; older links answer 403
   etag=<text>         change the ETag, to test files that change between runs
   limit=<bytes/sec>   throttle each connection to this speed
   max_conns=<n>       answer 429 (Retry-After: 1) while n responses are already
@@ -159,6 +161,7 @@ pub(crate) async fn serve_with(
         active: AtomicUsize::new(0),
         digest: digest::State::default(),
         live_requests: AtomicU64::new(0),
+        link_generation: AtomicU64::new(0),
     });
     loop {
         let (stream, _) = listener.accept().await?;
@@ -188,6 +191,8 @@ struct Shared {
     digest: digest::State,
     /// Playlist requests so far at `/live/index.m3u8`.
     live_requests: AtomicU64,
+    /// The newest link `/expiring/page` handed out; older ones answer 403.
+    link_generation: AtomicU64,
 }
 
 /// Counts one active response, and stops counting when dropped.
@@ -509,6 +514,47 @@ async fn route<W: AsyncWrite + Unpin>(
             )
             .await?;
             Ok(keep_alive)
+        }
+        "/expiring/page" => {
+            // Every load of the page makes the previous links stale, like a
+            // site that signs its download links.
+            let token = config.link_generation.fetch_add(1, Ordering::SeqCst) + 1;
+            let size = request.query.get("size").map_or("50000", String::as_str);
+            let body = format!(
+                "<!doctype html><title>Download</title><a id=\"dl\" href=\"/expiring/file?size={size}&token={token}\">Download</a>\n"
+            );
+            let head = format!(
+                "HTTP/1.1 200 OK\r\nContent-Type: text/html; charset=utf-8\r\nContent-Length: {}\r\nConnection: {}\r\n\r\n",
+                body.len(),
+                connection_word(keep_alive)
+            );
+            writer.write_all(head.as_bytes()).await?;
+            if !head_only {
+                writer.write_all(body.as_bytes()).await?;
+            }
+            Ok(keep_alive)
+        }
+        "/expiring/file" => {
+            let current = config.link_generation.load(Ordering::SeqCst);
+            let fresh = request
+                .query
+                .get("token")
+                .and_then(|t| t.parse::<u64>().ok())
+                .is_some_and(|t| t == current);
+            if fresh {
+                serve_file(request, writer, config, keep_alive, head_only).await
+            } else {
+                simple(
+                    writer,
+                    "403 Forbidden",
+                    "this link has expired\n",
+                    &[],
+                    keep_alive,
+                    head_only,
+                )
+                .await?;
+                Ok(keep_alive)
+            }
         }
         "/cookie" => {
             let allowed = request

@@ -3,11 +3,18 @@ export interface Settings {
   intercept: boolean;
   /** Leave downloads smaller than this to the browser (0: take all). */
   minSizeBytes: number;
+  /** Look for a fresh link by itself when a download's link has expired. */
+  autoRefresh: boolean;
   /** Never take downloads from these sites (and their subdomains). */
   excludedHosts: string[];
 }
 
-export const DEFAULTS: Settings = { intercept: true, minSizeBytes: 0, excludedHosts: [] };
+export const DEFAULTS: Settings = {
+  intercept: true,
+  autoRefresh: true,
+  minSizeBytes: 0,
+  excludedHosts: [],
+};
 
 /** Whatever was stored, made safe: wrong types fall back to the defaults. */
 export function sanitize(raw: unknown): Settings {
@@ -20,6 +27,7 @@ export function sanitize(raw: unknown): Settings {
     : DEFAULTS.excludedHosts;
   return {
     intercept: typeof r.intercept === "boolean" ? r.intercept : DEFAULTS.intercept,
+    autoRefresh: typeof r.autoRefresh === "boolean" ? r.autoRefresh : DEFAULTS.autoRefresh,
     minSizeBytes:
       typeof r.minSizeBytes === "number" && Number.isFinite(r.minSizeBytes) && r.minSizeBytes >= 0
         ? Math.floor(r.minSizeBytes)

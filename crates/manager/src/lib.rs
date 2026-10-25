@@ -52,6 +52,9 @@ pub enum ManagerError {
     /// The schedule is not valid.
     #[error("{0}")]
     BadSchedule(String),
+    /// A fresh link was refused: it could not be checked, or it is not the same file.
+    #[error("{0}")]
+    Link(String),
     /// The manager has shut down.
     #[error("the download manager has stopped")]
     Stopped,
@@ -302,6 +305,15 @@ enum Command {
         reply: Reply,
     },
     List(oneshot::Sender<Result<Vec<DownloadRow>, ManagerError>>),
+    /// A download's request details and what is known about its file.
+    Details(i64, oneshot::Sender<Result<Details, ManagerError>>),
+    /// Give a stopped download a new address and details, and queue it.
+    SetLink {
+        id: i64,
+        url: String,
+        context: Box<RequestContext>,
+        reply: Reply,
+    },
     SetQueueLimit(i64, u32, Reply),
     SetSchedule(i64, Option<Schedule>, Reply),
     AddChecked(
@@ -348,11 +360,15 @@ enum Command {
 
 type Reply = oneshot::Sender<Result<(), ManagerError>>;
 
+/// A download's row, its request details and what is known about its file.
+type Details = (DownloadRow, RequestContext, Option<ProgressRecord>);
+
 /// Handle to the download manager. Clone it freely.
 #[derive(Clone)]
 pub struct Manager {
     commands: mpsc::Sender<Command>,
     events: broadcast::Sender<ManagerEvent>,
+    client: HttpClient,
 }
 
 /// Tells the manager what time it is, for schedules. Tests replace it.
@@ -473,6 +489,7 @@ impl Manager {
             .and_then(|text| text.parse::<u64>().ok())
             .unwrap_or(0);
         let net = network::Watch::new(config.network.0.state(), std::time::Instant::now());
+        let for_checks = client.clone();
         let actor = Actor {
             store,
             client,
@@ -494,7 +511,11 @@ impl Manager {
             net,
         };
         tokio::spawn(actor.run());
-        Ok(Manager { commands, events })
+        Ok(Manager {
+            commands,
+            events,
+            client: for_checks,
+        })
     }
 
     /// Watch what the manager does. Slow receivers may miss events; the
@@ -588,6 +609,123 @@ impl Manager {
         self.ask(|reply| Command::Remove {
             id,
             delete_file,
+            reply,
+        })
+        .await
+    }
+
+    /// The request details saved with a download (its source page, cookies, headers).
+    pub async fn request_context(&self, id: i64) -> Result<RequestContext, ManagerError> {
+        Ok(self.ask(|r| Command::Details(id, r)).await?.1)
+    }
+
+    /// Continue a download that failed (or was paused) from a fresh link to
+    /// the same file, for example after the old link expired.
+    ///
+    /// The new link is checked first, and nothing changes if it does not
+    /// pass: when the old file's size is known the new link must serve a
+    /// file of the same size, and the same name (or, when only the name
+    /// differs, the same `ETag` or `Last-Modified`). Whatever was downloaded
+    /// already is kept. `update` carries the new cookies, referrer and user
+    /// agent; what it leaves out stays as it was.
+    pub async fn refresh_link(
+        &self,
+        id: i64,
+        url: &str,
+        update: RequestContext,
+    ) -> Result<(), ManagerError> {
+        let (row, mut context, record) = self.ask(|r| Command::Details(id, r)).await?;
+        if !matches!(
+            row.status,
+            Status::Failed | Status::Paused | Status::Canceled
+        ) {
+            return Err(ManagerError::WrongState(row.status.as_str()));
+        }
+        let (url, from_address) = mohona_net::split_userinfo(url.trim());
+        let lower = url.to_ascii_lowercase();
+        if !(lower.starts_with("http://") || lower.starts_with("https://")) {
+            return Err(ManagerError::Link(
+                "only http and https links can be refreshed".into(),
+            ));
+        }
+        if update.cookies.is_some() {
+            context.cookies = update.cookies;
+        }
+        if update.referrer.is_some() {
+            context.referrer = update.referrer;
+        }
+        if update.user_agent.is_some() {
+            context.user_agent = update.user_agent;
+        }
+        for (name, value) in update.headers {
+            context
+                .headers
+                .retain(|(old, _)| !old.eq_ignore_ascii_case(&name));
+            context.headers.push((name, value));
+        }
+        if from_address.is_some() {
+            context.credentials = from_address;
+        }
+        let scoped = self
+            .client
+            .with_context(&context)
+            .map_err(|e| ManagerError::Link(e.to_string()))?;
+        let probe = scoped
+            .probe(&url)
+            .await
+            .map_err(|e| ManagerError::Link(format!("the new link does not work: {e}")))?;
+        if let Some(expected) = row.size {
+            match probe.size {
+                Some(size) if size == expected => {}
+                Some(size) => {
+                    return Err(ManagerError::Link(format!(
+                        "the new link is a different file ({size} bytes, expected {expected})"
+                    )))
+                }
+                None => {
+                    return Err(ManagerError::Link(
+                        "the new link does not say how big the file is, so it cannot be checked"
+                            .into(),
+                    ))
+                }
+            }
+            let known_name = row.filename.as_deref().map(mohona_core::sanitize_filename);
+            let new_name = probe
+                .filename
+                .as_deref()
+                .map(mohona_core::sanitize_filename);
+            let same_name = match (&known_name, &new_name) {
+                (Some(a), Some(b)) => a.eq_ignore_ascii_case(b),
+                _ => true,
+            };
+            let agree = |old: &Option<String>, new: &Option<String>| match (old, new) {
+                (Some(a), Some(b)) => Some(a == b),
+                _ => None,
+            };
+            let (etag, modified) = record.as_ref().map_or((None, None), |r| {
+                (
+                    agree(&r.etag, &probe.etag),
+                    agree(&r.last_modified, &probe.last_modified),
+                )
+            });
+            if etag == Some(false) || modified == Some(false) {
+                return Err(ManagerError::Link(
+                    "the new link is a different version of the file (its ETag or date changed)"
+                        .into(),
+                ));
+            }
+            if !same_name && etag != Some(true) && modified != Some(true) {
+                return Err(ManagerError::Link(format!(
+                    "the new link has a different file name ({} instead of {})",
+                    new_name.unwrap_or_default(),
+                    known_name.unwrap_or_default()
+                )));
+            }
+        }
+        self.ask(|reply| Command::SetLink {
+            id,
+            url,
+            context: Box::new(context),
             reply,
         })
         .await
@@ -1050,6 +1188,30 @@ impl Actor {
             } => {
                 let _ = reply.send(self.remove(id, delete_file));
             }
+            Command::Details(id, reply) => {
+                let result = self.row(id).and_then(|row| {
+                    let context = self
+                        .store
+                        .headers_json(id)?
+                        .and_then(|json| RequestContext::from_json(&json).ok())
+                        .unwrap_or_default();
+                    let record = self.store.load_progress(id)?;
+                    Ok((row, context, record))
+                });
+                let _ = reply.send(result);
+            }
+            Command::SetLink {
+                id,
+                url,
+                context,
+                reply,
+            } => {
+                let result = self.set_link(id, &url, &context);
+                if result.is_ok() {
+                    self.pump();
+                }
+                let _ = reply.send(result);
+            }
             Command::List(reply) => {
                 let _ = reply.send(self.store.list_downloads().map_err(Into::into));
             }
@@ -1245,6 +1407,29 @@ impl Actor {
             }
             status => Err(ManagerError::WrongState(status.as_str())),
         }
+    }
+
+    fn set_link(
+        &mut self,
+        id: i64,
+        url: &str,
+        context: &RequestContext,
+    ) -> Result<(), ManagerError> {
+        let row = self.row(id)?;
+        if self.running.contains_key(&id)
+            || !matches!(
+                row.status,
+                Status::Failed | Status::Paused | Status::Canceled
+            )
+        {
+            return Err(ManagerError::WrongState(row.status.as_str()));
+        }
+        self.store.set_url(id, url)?;
+        self.store.set_headers_json(id, Some(&context.to_json()))?;
+        let _ = self
+            .store
+            .add_log(id, "info", "continued from a fresh link");
+        self.requeue(id)
     }
 
     fn remove(&mut self, id: i64, delete_file: bool) -> Result<(), ManagerError> {

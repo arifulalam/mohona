@@ -319,6 +319,53 @@ fn a_file_the_browser_holds_is_saved_in_pieces() {
 }
 
 #[test]
+fn downloads_can_be_listed_and_refused_links_are_reported() {
+    let dir = tempfile::tempdir().unwrap();
+    let engine = Engine::start(dir.path());
+    let server = file_server();
+    let host = host_for(&engine.info);
+    let listed = ask(&host, json!({"type": "list", "requestId": 3}));
+    assert_eq!(listed["type"], "downloads");
+    assert_eq!(listed["requestId"], 3);
+    assert_eq!(listed["downloads"], json!([]));
+
+    let id = ask(
+        &host,
+        json!({"type": "add", "url": format!("http://{server}/file?size=1000")}),
+    )["id"]
+        .as_i64()
+        .unwrap();
+    let started = Instant::now();
+    loop {
+        let rows = ask(&host, json!({"type": "list"}));
+        let row = &rows["downloads"][0];
+        if row["status"] == "completed" {
+            assert_eq!(row["expired"], false);
+            break;
+        }
+        assert!(started.elapsed() < Duration::from_secs(10), "{rows}");
+        std::thread::sleep(Duration::from_millis(50));
+    }
+    // A finished download cannot take a new link, and the reason comes back.
+    let refused = ask(
+        &host,
+        json!({"type": "refresh", "id": id, "url": "https://a/b"}),
+    );
+    assert_eq!(refused["code"], "refused", "{refused}");
+    assert_eq!(
+        ask(&host, json!({"type": "refresh", "url": "https://a/b"}))["code"],
+        "bad_request"
+    );
+    assert_eq!(
+        ask(
+            &host,
+            json!({"type": "refresh", "id": 1, "url": "ftp://a/b"})
+        )["code"],
+        "bad_url"
+    );
+}
+
+#[test]
 fn a_login_in_the_address_is_accepted() {
     let dir = tempfile::tempdir().unwrap();
     let engine = Engine::start(dir.path());

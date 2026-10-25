@@ -241,10 +241,23 @@ async fn handle(state: &State, call: Call) -> Response {
             jobs: state.streams.list(),
         },
         Call::List => match manager.list().await {
-            Ok(rows) => Response::Downloads {
-                downloads: rows
-                    .into_iter()
-                    .map(|r| DownloadInfo {
+            Ok(rows) => {
+                let mut downloads = Vec::with_capacity(rows.len());
+                for r in rows {
+                    let expired = r.status == mohona_store::Status::Failed
+                        && r.error.as_deref().is_some_and(|e| {
+                            e.contains("answered 403") || e.contains("answered 410")
+                        });
+                    let page = if expired {
+                        manager
+                            .request_context(r.id)
+                            .await
+                            .ok()
+                            .and_then(|c| c.referrer)
+                    } else {
+                        None
+                    };
+                    downloads.push(DownloadInfo {
                         id: r.id,
                         url: r.url,
                         filename: r.filename,
@@ -253,11 +266,34 @@ async fn handle(state: &State, call: Call) -> Response {
                         size: r.size,
                         error: r.error,
                         path: r.path,
-                    })
-                    .collect(),
-            },
+                        page,
+                        expired,
+                    });
+                }
+                Response::Downloads { downloads }
+            }
             Err(e) => error(e),
         },
+        Call::Refresh {
+            id,
+            url,
+            cookies,
+            referrer,
+            user_agent,
+        } => done(
+            manager
+                .refresh_link(
+                    id,
+                    &url,
+                    RequestContext {
+                        cookies,
+                        referrer,
+                        user_agent,
+                        ..RequestContext::default()
+                    },
+                )
+                .await,
+        ),
         Call::Pause { id } => done(manager.pause(id).await),
         Call::Resume { id } => done(manager.resume(id).await),
         Call::Cancel { id } => done(manager.cancel(id).await),

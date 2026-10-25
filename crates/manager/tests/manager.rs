@@ -1389,3 +1389,192 @@ async fn it_logs_in_with_basic_and_digest_and_keeps_the_login_out_of_the_address
     };
     wait_for(&manager, wrong, Status::Failed).await;
 }
+
+/// Loads a page from the test server and returns its text.
+async fn load_page(addr: SocketAddr, path: &str) -> String {
+    use tokio::io::{AsyncReadExt, AsyncWriteExt};
+    let mut stream = tokio::net::TcpStream::connect(addr).await.unwrap();
+    stream
+        .write_all(
+            format!("GET {path} HTTP/1.1\r\nHost: x\r\nConnection: close\r\n\r\n").as_bytes(),
+        )
+        .await
+        .unwrap();
+    let mut text = String::new();
+    stream.read_to_string(&mut text).await.unwrap();
+    text
+}
+
+/// The download link in the page (`href="..."`), made absolute.
+fn link_in(addr: SocketAddr, page: &str) -> String {
+    let start = page.find("href=\"").unwrap() + 6;
+    let end = start + page[start..].find('"').unwrap();
+    format!("http://{addr}{}", page[start..end].replace("&amp;", "&"))
+}
+
+#[tokio::test]
+async fn an_expired_link_is_replaced_by_a_fresh_one_and_the_download_completes() {
+    let addr = start_server().await;
+    let dir = tempfile::tempdir().unwrap();
+    let manager = manager_at(&dir.path().join("m.db"));
+    let old = link_in(addr, &load_page(addr, "/expiring/page?size=50000").await);
+    // The page is opened again (a second visit): the first link is stale now.
+    let fresh = link_in(addr, &load_page(addr, "/expiring/page?size=50000").await);
+    assert_ne!(old, fresh);
+
+    let id = manager.add(&old, dir.path().join("out")).await.unwrap();
+    wait_for(&manager, id, Status::Failed).await;
+    let row = manager
+        .list()
+        .await
+        .unwrap()
+        .into_iter()
+        .find(|r| r.id == id)
+        .unwrap();
+    assert!(
+        row.error.as_deref().unwrap().contains("403"),
+        "{:?}",
+        row.error
+    );
+
+    manager
+        .refresh_link(
+            id,
+            &fresh,
+            mohona_net::RequestContext {
+                referrer: Some(format!("http://{addr}/expiring/page")),
+                ..Default::default()
+            },
+        )
+        .await
+        .unwrap();
+    wait_for(&manager, id, Status::Completed).await;
+    let row = manager
+        .list()
+        .await
+        .unwrap()
+        .into_iter()
+        .find(|r| r.id == id)
+        .unwrap();
+    assert_eq!(row.url, fresh);
+    check_content(Path::new(row.path.as_deref().unwrap()), 50_000);
+    // The source page is remembered with the download.
+    let context = manager.request_context(id).await.unwrap();
+    assert_eq!(
+        context.referrer.as_deref(),
+        Some(format!("http://{addr}/expiring/page").as_str())
+    );
+}
+
+#[tokio::test]
+async fn a_fresh_link_to_a_different_file_is_refused_and_nothing_changes() {
+    let addr = start_server().await;
+    let dir = tempfile::tempdir().unwrap();
+    let manager = manager_at(&dir.path().join("m.db"));
+    let url = format!("http://{addr}/file?size=2000000&limit=500000");
+    let id = manager.add(&url, dir.path().join("out")).await.unwrap();
+    wait_for_bytes(&manager, id, 100_000).await;
+    manager.pause(id).await.unwrap();
+    wait_for(&manager, id, Status::Paused).await;
+    let kept = manager
+        .list()
+        .await
+        .unwrap()
+        .into_iter()
+        .find(|r| r.id == id)
+        .unwrap()
+        .downloaded;
+
+    let none = mohona_net::RequestContext::default();
+    // A different size.
+    let other = manager
+        .refresh_link(
+            id,
+            &format!("http://{addr}/file?size=2000001"),
+            none.clone(),
+        )
+        .await
+        .unwrap_err();
+    assert!(other.to_string().contains("different file"), "{other}");
+    // The same size but a changed version of the file.
+    let changed = manager
+        .refresh_link(
+            id,
+            &format!("http://{addr}/file?size=2000000&etag=2"),
+            none.clone(),
+        )
+        .await
+        .unwrap_err();
+    assert!(
+        changed.to_string().contains("different version"),
+        "{changed}"
+    );
+    // Not a web address, and a link that does not work.
+    assert!(manager
+        .refresh_link(id, "ftp://x/y", none.clone())
+        .await
+        .is_err());
+    let dead = manager
+        .refresh_link(
+            id,
+            &format!("http://{addr}/expiring/file?size=2000000&token=99"),
+            none.clone(),
+        )
+        .await
+        .unwrap_err();
+    assert!(dead.to_string().contains("does not work"), "{dead}");
+
+    let row = manager
+        .list()
+        .await
+        .unwrap()
+        .into_iter()
+        .find(|r| r.id == id)
+        .unwrap();
+    assert_eq!(row.url, url, "the address is unchanged");
+    assert_eq!(row.status, Status::Paused);
+    assert_eq!(row.downloaded, kept, "what was downloaded is kept");
+
+    // The same file from another address is accepted, and the download finishes.
+    let same = format!("http://{addr}/file?size=2000000&limit=5000000&n=2");
+    manager.refresh_link(id, &same, none).await.unwrap();
+    wait_for(&manager, id, Status::Completed).await;
+    let path = manager
+        .list()
+        .await
+        .unwrap()
+        .into_iter()
+        .find(|r| r.id == id)
+        .unwrap()
+        .path
+        .unwrap();
+    check_content(Path::new(&path), 2_000_000);
+}
+
+#[tokio::test]
+async fn a_download_that_is_running_or_finished_cannot_be_given_a_new_link() {
+    let addr = start_server().await;
+    let dir = tempfile::tempdir().unwrap();
+    let manager = manager_at(&dir.path().join("m.db"));
+    let id = manager
+        .add(
+            format!("http://{addr}/file?size=1000"),
+            dir.path().join("out"),
+        )
+        .await
+        .unwrap();
+    wait_for(&manager, id, Status::Completed).await;
+    let error = manager
+        .refresh_link(
+            id,
+            &format!("http://{addr}/file?size=1000"),
+            Default::default(),
+        )
+        .await
+        .unwrap_err();
+    assert!(error.to_string().contains("cannot do that"), "{error}");
+    assert!(manager
+        .refresh_link(999, "http://a/b", Default::default())
+        .await
+        .is_err());
+}

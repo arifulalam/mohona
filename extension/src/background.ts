@@ -6,6 +6,8 @@ import { HOST_NAME } from "./protocol";
 import { downloadFromMenu, localTarget, MENU_ID, type ClickInfo } from "./menu";
 import { saveLocal, sliceInPage, sourceFromBlob, sourceFromData, type SaveResult } from "./local";
 import { loadSettings, saveSettings } from "./settings";
+import { linksInPage, nextToRefresh, refreshExpired, type RefreshResult } from "./refresh";
+import type { DownloadRow } from "./protocol";
 
 const client = new NativeClient(() => chrome.runtime.connectNative(HOST_NAME));
 
@@ -197,6 +199,93 @@ async function downloadMedia(media: Media) {
     : startStream(client, details);
 }
 
+// --- expired links ---------------------------------------------------------
+
+/** How many times each download's link was tried in this browser session. */
+const tries = new Map<number, number>();
+
+async function downloadsList(): Promise<DownloadRow[]> {
+  const answer = await client.request({ type: "list" }, 10_000);
+  return answer.type === "downloads" ? answer.downloads : [];
+}
+
+/** Opens the page in a background tab, waits for it to load, and reads the addresses on it. */
+async function collectLinks(page: string): Promise<string[]> {
+  const tab = await chrome.tabs.create({ url: page, active: false });
+  const tabId = tab.id;
+  if (tabId === undefined) throw new Error("could not open the page");
+  try {
+    await new Promise<void>((resolve, reject) => {
+      const timer = setTimeout(() => done(() => reject(new Error("the page took too long to load"))), 25_000);
+      const listener = (id: number, change: chrome.tabs.TabChangeInfo) => {
+        if (id === tabId && change.status === "complete") done(resolve);
+      };
+      const done = (finish: () => void) => {
+        clearTimeout(timer);
+        chrome.tabs.onUpdated.removeListener(listener);
+        finish();
+      };
+      chrome.tabs.onUpdated.addListener(listener);
+    });
+    // Players and download buttons often build their links a moment after loading.
+    await new Promise((r) => setTimeout(r, 1500));
+    const [run] = await chrome.scripting.executeScript({ target: { tabId }, func: linksInPage });
+    const found = new Set<string>(Array.isArray(run?.result) ? (run.result as string[]) : []);
+    for (const media of await mediaOf(tabId)) found.add(media.url);
+    return [...found];
+  } finally {
+    await chrome.tabs.remove(tabId).catch(() => undefined);
+  }
+}
+
+async function refreshOne(download: DownloadRow): Promise<RefreshResult> {
+  tries.set(download.id, (tries.get(download.id) ?? 0) + 1);
+  const result = await refreshExpired(download, {
+    collect: collectLinks,
+    cookieHeader,
+    userAgent: navigator.userAgent,
+    refresh: async (id, url, cookies, referrer, userAgent) => {
+      const answer = await client.request(
+        { type: "refresh", id, url, cookies: cookies || undefined, referrer, userAgent },
+        30_000,
+      );
+      if (answer.type === "refreshed") return null;
+      return answer.type === "error" ? answer.message : "Mohona gave an unexpected answer";
+    },
+  });
+  last =
+    result.kind === "refreshed"
+      ? `Continued from a fresh link: ${download.filename ?? download.url}`
+      : `Could not refresh the link of ${download.filename ?? download.url}: ${describeRefresh(result)}`;
+  return result;
+}
+
+function describeRefresh(result: RefreshResult): string {
+  switch (result.kind) {
+    case "no_page":
+      return "the page it came from is not known";
+    case "no_link":
+      return "no matching link was found on the page (open it and download again)";
+    case "refused":
+    case "failed":
+      return result.message;
+    case "refreshed":
+      return "done";
+  }
+}
+
+chrome.alarms.create("mohona-refresh", { periodInMinutes: 1 });
+chrome.alarms.onAlarm.addListener((alarm) => {
+  if (alarm.name !== "mohona-refresh") return;
+  void (async () => {
+    if (!(await loadSettings()).autoRefresh) return;
+    // Only when the engine is already running: this never starts it.
+    const rows = await downloadsList().catch(() => [] as DownloadRow[]);
+    const next = nextToRefresh(rows, tries);
+    if (next) await refreshOne(next);
+  })();
+});
+
 async function handle(request: Request): Promise<Reply> {
   switch (request.kind) {
     case "status":
@@ -215,6 +304,16 @@ async function handle(request: Request): Promise<Reply> {
     case "saveLocal": {
       const tab = await chrome.tabs.get(request.tabId);
       return { kind: "saved", result: await saveFromPage(request.url, tab, 0) };
+    }
+    case "expired": {
+      const rows = await downloadsList().catch(() => [] as DownloadRow[]);
+      return { kind: "expired", downloads: rows.filter((r) => r.expired && r.status === "failed") };
+    }
+    case "refreshDownload": {
+      const row = (await downloadsList()).find((r) => r.id === request.id);
+      if (!row) return { kind: "refreshed", result: { kind: "failed", message: "that download is gone" } };
+      tries.delete(row.id);
+      return { kind: "refreshed", result: await refreshOne(row) };
     }
     case "getSettings":
       return { kind: "settings", settings: await loadSettings() };

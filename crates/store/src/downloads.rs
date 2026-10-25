@@ -324,6 +324,13 @@ impl Store {
             .flatten())
     }
 
+    /// Point a download at a new address (a fresh link to the same file).
+    pub fn set_url(&self, id: i64, url: &str) -> Result<(), StoreError> {
+        self.conn
+            .execute("UPDATE downloads SET url=?2 WHERE id=?1", params![id, url])?;
+        Ok(())
+    }
+
     /// Save request details (cookies, headers) with a download.
     pub fn set_headers_json(&self, id: i64, json: Option<&str>) -> Result<(), StoreError> {
         self.conn.execute(

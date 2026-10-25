@@ -61,6 +61,10 @@ $<HTMLFormElement>("form").addEventListener("submit", async (event) => {
   await refresh();
 });
 
+$<HTMLInputElement>("autoRefresh").addEventListener("change", async (event) => {
+  await ask({ kind: "setSettings", settings: { autoRefresh: (event.target as HTMLInputElement).checked } });
+});
+
 $<HTMLInputElement>("intercept").addEventListener("change", async (event) => {
   await ask({ kind: "setSettings", settings: { intercept: (event.target as HTMLInputElement).checked } });
 });
@@ -75,6 +79,31 @@ function size(bytes: number | undefined): string {
     i++;
   }
   return `${n.toFixed(i === 0 ? 0 : 1)} ${units[i]}`;
+}
+
+async function showExpired(): Promise<void> {
+  const reply = await ask({ kind: "expired" });
+  if (reply.kind !== "expired") return;
+  $("expiredBox").hidden = reply.downloads.length === 0;
+  const list = $("expired");
+  list.replaceChildren();
+  for (const download of reply.downloads) {
+    const row = document.createElement("li");
+    const label = document.createElement("span");
+    label.textContent = download.filename ?? download.url;
+    label.title = download.url;
+    const button = document.createElement("button");
+    button.textContent = "Refresh link";
+    button.addEventListener("click", async () => {
+      button.disabled = true;
+      button.textContent = "Looking…";
+      await ask({ kind: "refreshDownload", id: download.id });
+      await refresh();
+      await showExpired();
+    });
+    row.append(label, button);
+    list.append(row);
+  }
 }
 
 async function showMedia(): Promise<void> {
@@ -114,7 +143,11 @@ async function showMedia(): Promise<void> {
 
 void (async () => {
   const reply = await ask({ kind: "getSettings" });
-  if (reply.kind === "settings") $<HTMLInputElement>("intercept").checked = reply.settings.intercept;
+  if (reply.kind === "settings") {
+    $<HTMLInputElement>("intercept").checked = reply.settings.intercept;
+    $<HTMLInputElement>("autoRefresh").checked = reply.settings.autoRefresh;
+  }
   await refresh();
+  await showExpired();
   await showMedia();
 })();

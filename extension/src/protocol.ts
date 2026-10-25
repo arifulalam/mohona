@@ -14,11 +14,29 @@ export interface AddDetails {
   name?: string;
 }
 
+/** A download in Mohona's list. */
+export interface DownloadRow {
+  id: number;
+  url: string;
+  filename: string | null;
+  status: string;
+  downloaded: number;
+  size: number | null;
+  error: string | null;
+  path: string | null;
+  /** The page the link was on (known for expired links). */
+  page: string | null;
+  /** The server refused the link (403 or 410): it probably expired. */
+  expired: boolean;
+}
+
 export type Question =
   | { type: "hello" }
   | { type: "startEngine" }
   | ({ type: "add" } & AddDetails)
   | ({ type: "stream" } & AddDetails)
+  | { type: "list" }
+  | { type: "refresh"; id: number; url: string; cookies?: string; referrer?: string; userAgent?: string }
   | { type: "saveStart"; name: string; mime?: string }
   | { type: "savePiece"; transfer: number; index: number; data: string }
   | { type: "saveEnd"; transfer: number }
@@ -35,6 +53,8 @@ export type Answer =
   | { type: "added"; id: number }
   | { type: "duplicate"; message: string }
   | { type: "streamStarted"; job: number; folder: string }
+  | { type: "downloads"; downloads: DownloadRow[] }
+  | { type: "refreshed"; id: number }
   | { type: "saving"; transfer: number }
   | { type: "piece"; index: number }
   | { type: "saved"; path: string; name: string }

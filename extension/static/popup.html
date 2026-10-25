@@ -20,6 +20,7 @@
     <h1>Mohona</h1>
     <p id="status">Checking…</p>
     <label><input id="intercept" type="checkbox" /> Take over browser downloads</label>
+    <label><input id="autoRefresh" type="checkbox" /> Refresh expired links automatically</label>
     <button id="start" hidden>Start Mohona</button>
     <form id="form">
       <input id="url" type="url" placeholder="Paste a download address" required />
@@ -27,6 +28,10 @@
     </form>
     <p id="result" role="status"></p>
     <p id="last"></p>
+    <div id="expiredBox" hidden>
+      <h2>Expired links</h2>
+      <ul id="expired"></ul>
+    </div>
     <h2>Media on this page</h2>
     <ul id="media"></ul>
     <script src="popup.js"></script>

@@ -324,3 +324,116 @@ async fn a_second_daemon_is_refused_but_a_stale_info_file_is_replaced() {
     again.shutdown.notify_one();
     again.task.await.unwrap().unwrap();
 }
+
+async fn page_link(server: SocketAddr, size: u64) -> String {
+    let mut stream = TcpStream::connect(server).await.unwrap();
+    stream
+        .write_all(
+            format!(
+                "GET /expiring/page?size={size} HTTP/1.1\r\nHost: x\r\nConnection: close\r\n\r\n"
+            )
+            .as_bytes(),
+        )
+        .await
+        .unwrap();
+    let mut text = String::new();
+    stream.read_to_string(&mut text).await.unwrap();
+    let start = text.find("href=\"").unwrap() + 6;
+    let end = start + text[start..].find('"').unwrap();
+    format!("http://{server}{}", text[start..end].replace("&amp;", "&"))
+}
+
+#[tokio::test]
+async fn a_failed_expired_download_says_so_and_can_continue_from_a_fresh_link() {
+    let server = files().await;
+    let dir = tempfile::tempdir().unwrap();
+    let d = start(dir.path()).await;
+    let page = format!("http://{server}/expiring/page?size=40000");
+    let old = page_link(server, 40_000).await;
+    // The page is loaded again: the first link is stale.
+    page_link(server, 40_000).await;
+
+    let Response::Added { id } = d
+        .client
+        .call(Call::Add {
+            url: old,
+            dest_dir: None,
+            cookies: None,
+            referrer: Some(page.clone()),
+            user_agent: None,
+            headers: vec![],
+            sort: false,
+            duplicates: None,
+        })
+        .await
+        .unwrap()
+    else {
+        panic!()
+    };
+    // Wait until it fails, then look at what the list says.
+    let started = Instant::now();
+    let row = loop {
+        let Response::Downloads { downloads } = d.client.call(Call::List).await.unwrap() else {
+            panic!()
+        };
+        let row = downloads.into_iter().find(|x| x.id == id).unwrap();
+        if row.status == "failed" {
+            break row;
+        }
+        assert!(
+            started.elapsed() < Duration::from_secs(20),
+            "{}",
+            row.status
+        );
+        tokio::time::sleep(Duration::from_millis(50)).await;
+    };
+    assert!(row.expired, "{row:?}");
+    assert_eq!(row.page.as_deref(), Some(page.as_str()));
+
+    // A link that does not work is refused and changes nothing.
+    let refused = d
+        .client
+        .call(Call::Refresh {
+            id,
+            url: format!("http://{server}/expiring/file?size=40000&token=99"),
+            cookies: None,
+            referrer: None,
+            user_agent: None,
+        })
+        .await
+        .unwrap();
+    assert!(matches!(refused, Response::Error { .. }), "{refused:?}");
+    let fresh = page_link(server, 40_000).await;
+    let answer = d
+        .client
+        .call(Call::Refresh {
+            id,
+            url: fresh,
+            cookies: Some("a=b".into()),
+            referrer: None,
+            user_agent: None,
+        })
+        .await
+        .unwrap();
+    assert_eq!(answer, Response::Done);
+    let path = wait_for_status(&d.client, id, "completed").await;
+    assert_eq!(std::fs::metadata(path).unwrap().len(), 40_000);
+
+    // Nothing to refresh on a finished download, or an unknown one.
+    for id in [id, 77] {
+        let answer = d
+            .client
+            .call(Call::Refresh {
+                id,
+                url: "http://x/y".into(),
+                cookies: None,
+                referrer: None,
+                user_agent: None,
+            })
+            .await
+            .unwrap();
+        assert!(matches!(answer, Response::Error { .. }), "{answer:?}");
+    }
+    d.shutdown.notify_one();
+    d.task.await.unwrap().unwrap();
+}

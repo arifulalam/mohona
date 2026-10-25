@@ -75,6 +75,17 @@ pub enum Call {
     ReceiveAbort {
         transfer: u64,
     },
+    /// Continue a failed or paused download from a fresh link to the same file.
+    Refresh {
+        id: i64,
+        url: String,
+        #[serde(default)]
+        cookies: Option<String>,
+        #[serde(default)]
+        referrer: Option<String>,
+        #[serde(default)]
+        user_agent: Option<String>,
+    },
     /// The stream downloads started since the daemon began.
     Jobs,
     /// Every download, oldest first.
@@ -109,6 +120,13 @@ pub struct DownloadInfo {
     pub error: Option<String>,
     /// Where the finished file is.
     pub path: Option<String>,
+    /// The page the link was on, for downloads whose link expired.
+    #[serde(default)]
+    pub page: Option<String>,
+    /// The download failed because the server refused its link (403 or 410),
+    /// which usually means the link expired and a fresh one may work.
+    #[serde(default)]
+    pub expired: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

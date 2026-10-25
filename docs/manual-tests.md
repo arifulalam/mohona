@@ -167,6 +167,15 @@ Automated tests use a local test server. These need real streams from the intern
 6. Stop Mohona and make it unable to start: the red "!" appears and the popup says "Not saved: ...".
 7. A page title with odd characters (`:`, `?`, quotes, a very long title, only dots): the file name is valid on Windows.
 
+## Expired links
+
+1. Find a site whose download links expire (a file host or a course site that signs its links; or leave a paused download in Mohona for a few hours). Start a download from it and pause or stop Mohona's network until the link expires, then resume. It fails with "the server answered 403" (or 410).
+2. Open the extension popup: the download is listed under "Expired links". Press "Refresh link": a tab opens in the background for a moment and closes; the download continues from where it stopped (the progress does not restart from zero) and finishes. Compare the file with a fresh download of it.
+3. Leave "Refresh expired links automatically" ticked and wait a minute or two: the same happens without pressing anything. Untick it: nothing happens by itself.
+4. A site where the new link is a different file (a new version): Mohona refuses with a message about the size, the version or the name and keeps the download as it was; the file is never mixed up.
+5. A page that needs a click or a login you do not have in the browser: the popup says no matching link was found; the download stays in the list.
+6. While the refresh runs the background tab must not steal focus or play sound.
+
 ## Logins and cookies against a real site
 
 - [ ] A real HTTP Basic site: `get URL -u user:password` → downloads; wrong password → `refused the user name or password`.

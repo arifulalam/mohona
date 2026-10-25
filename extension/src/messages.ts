@@ -1,4 +1,5 @@
-import type { Outcome } from "./protocol";
+import type { DownloadRow, Outcome } from "./protocol";
+import type { RefreshResult } from "./refresh";
 import type { Status } from "./native";
 import type { Media } from "./sniffer";
 import type { Settings } from "./settings";
@@ -12,6 +13,8 @@ export type Request =
   | { kind: "media"; tabId: number }
   | { kind: "downloadMedia"; media: Media }
   | { kind: "saveLocal"; url: string; tabId: number }
+  | { kind: "expired" }
+  | { kind: "refreshDownload"; id: number }
   | { kind: "getSettings" }
   | { kind: "setSettings"; settings: Partial<Settings> };
 
@@ -19,5 +22,7 @@ export type Reply =
   | { kind: "status"; status: Status; last: string | null }
   | { kind: "media"; media: Media[] }
   | { kind: "saved"; result: SaveResult }
+  | { kind: "expired"; downloads: DownloadRow[] }
+  | { kind: "refreshed"; result: RefreshResult }
   | { kind: "settings"; settings: Settings }
   | { kind: "outcome"; outcome: Outcome | null };
