@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { AddDialog, Modal } from "./AddDialog";
 import { allowed, counts, FILTERS, matches, type Filter } from "./filters";
 import { List } from "./List";
+import { SettingsDialog } from "./SettingsDialog";
 import { applyTheme, loadTheme, nextTheme, saveTheme, type Theme } from "./theme";
 import type { Api } from "./types";
 import { useDownloads } from "./useDownloads";
@@ -14,6 +15,7 @@ export function App({ api, every }: { api: Api; every?: number }) {
   const [selected, setSelected] = useState<Set<number>>(new Set());
   const [adding, setAdding] = useState(false);
   const [removing, setRemoving] = useState(false);
+  const [settings, setSettings] = useState(false);
   const [deleteFiles, setDeleteFiles] = useState(false);
   const [theme, setTheme] = useState<Theme>(loadTheme());
 
@@ -68,6 +70,9 @@ export function App({ api, every }: { api: Api; every?: number }) {
           {d.engine === null ? "Connecting…" : running ? `Engine running${d.engine.version ? ` (${d.engine.version})` : ""}` : "Engine stopped"}
         </span>
         <div className="flex-1" />
+        <button className="btn" onClick={() => setSettings(true)} disabled={!running}>
+          Settings
+        </button>
         <button className="btn" onClick={() => setTheme(nextTheme(theme))} title="Change the colour theme">
           {THEME_LABEL[theme]}
         </button>
@@ -134,6 +139,7 @@ export function App({ api, every }: { api: Api; every?: number }) {
         </main>
       </div>
 
+      {settings && <SettingsDialog api={api} onClose={() => setSettings(false)} />}
       {adding && <AddDialog onAdd={addAll} onClose={() => setAdding(false)} />}
       {removing && (
         <Modal title="Remove from the list" onClose={() => setRemoving(false)}>

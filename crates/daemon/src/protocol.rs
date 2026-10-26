@@ -21,6 +21,20 @@ pub enum Call {
         key: String,
         value: String,
     },
+    /// The engine's own settings (for the app).
+    GetConfig,
+    /// Change some of the engine's settings; what is left out stays.
+    SetConfig {
+        /// A folder (absolute path); an empty text goes back to the default.
+        #[serde(default)]
+        download_folder: Option<String>,
+        /// Bytes per second for all downloads together; 0 removes the limit.
+        #[serde(default)]
+        speed_limit: Option<u64>,
+        /// How many downloads run at once (1 to 32).
+        #[serde(default)]
+        max_active: Option<u32>,
+    },
     /// Add a download. It starts when its queue has a free slot.
     Add {
         url: String,
@@ -179,6 +193,15 @@ pub enum Response {
     },
     Downloads {
         downloads: Vec<DownloadInfo>,
+    },
+    Config {
+        /// The folder downloads go to unless told otherwise.
+        download_folder: String,
+        /// Where it is when the person has not chosen one.
+        default_folder: String,
+        /// Bytes per second; `None` when there is no limit.
+        speed_limit: Option<u64>,
+        max_active: u32,
     },
     /// The value of a setting, if there is one.
     Setting {

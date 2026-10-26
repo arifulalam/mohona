@@ -1675,6 +1675,7 @@ dependencies = [
  "mohona-store",
  "mohona-testserver",
  "serde",
+ "serde_json",
  "tempfile",
  "thiserror",
  "tokio",

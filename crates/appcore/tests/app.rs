@@ -152,3 +152,41 @@ async fn pausing_an_unknown_download_is_an_error_not_a_crash() {
     assert!(engine.status().await.running);
     shutdown.notify_one();
 }
+
+#[tokio::test]
+async fn settings_pages_round_trip_through_the_engine() {
+    use mohona_appcore::{ConfigChange, ExtensionSettings};
+    let dir = tempfile::tempdir().unwrap();
+    let (engine, shutdown) = engine(dir.path()).await;
+
+    let folder = dir.path().join("chosen");
+    let config = engine
+        .set_config(ConfigChange {
+            download_folder: Some(folder.display().to_string()),
+            speed_limit: Some(250_000),
+            max_active: Some(3),
+        })
+        .await
+        .unwrap();
+    assert_eq!(config.speed_limit, Some(250_000));
+    assert_eq!(config.max_active, 3);
+    assert_eq!(engine.config().await.unwrap(), config);
+    let refused = engine
+        .set_config(ConfigChange {
+            max_active: Some(0),
+            ..ConfigChange::default()
+        })
+        .await;
+    assert!(refused.is_err());
+    assert_eq!(engine.config().await.unwrap().max_active, 3);
+
+    // The extension's settings: defaults first, then a change the browsers will see as newer.
+    let mut ext = engine.extension_settings().await.unwrap();
+    assert_eq!(ext, ExtensionSettings::default());
+    ext.excluded_hosts = vec!["bank.example".into()];
+    ext.min_size_bytes = 5 << 20;
+    let saved = engine.set_extension_settings(ext.clone()).await.unwrap();
+    assert_eq!(saved, ext);
+    assert_eq!(engine.extension_settings().await.unwrap(), ext);
+    shutdown.notify_one();
+}

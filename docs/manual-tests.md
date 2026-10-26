@@ -203,7 +203,9 @@ The window cannot be built where the tests run (it needs the system web view), s
 6. Ctrl-click selects several rows; the toolbar acts on all of them.
 7. Theme button cycles system, light, dark; the choice is remembered after restart. With "system", switching Windows between light and dark changes the window.
 8. A download started from the browser extension appears in the window without any action.
-9. `npm run tauri build` makes an installer in `app\src-tauri\target\release\bundle`. (The installer does not include `mohona.exe` yet: Phase 8.)
+9. Settings: set a speed limit of 200 KB/s and start a large download: the speed stays near the limit; clear the box: it speeds up. Set "Downloads at the same time" to 1 and add three downloads: one runs, two wait. Type a folder that does not exist (`D:\\Mohona test`) and Save: the folder is created and a new download goes there; a relative path (`downloads`) is refused with a reason.
+10. Settings, browsers: add `example.com` to the sites list and Save; within a minute the extension's popup ("Which downloads to take over") shows it. Change something in the extension popup: reopening Settings in the app shows it.
+11. `npm run tauri build` makes an installer in `app\src-tauri\target\release\bundle`. (The installer does not include `mohona.exe` yet: Phase 8.)
 
 ## Store packaging
 

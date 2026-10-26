@@ -2,7 +2,7 @@ import { cleanup, render, screen, waitFor, within } from "@testing-library/react
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { App } from "../src/App";
-import type { Api, EngineStatus, Row } from "../src/types";
+import type { Api, Config, ConfigChange, EngineStatus, ExtensionSettings, Row } from "../src/types";
 
 const row = (id: number, name: string, status: string, extra: Partial<Row> = {}): Row => ({
   id, name, url: `https://x.test/${name}`, status, downloaded: 50, size: 100, percent: 50, speed: 0, eta: null,
@@ -12,6 +12,8 @@ const row = (id: number, name: string, status: string, extra: Partial<Row> = {})
 function fake(initial: Row[], running = true) {
   let rows = initial;
   let engine = running;
+  let cfg: Config = { downloadFolder: "C:\\Dl", defaultFolder: "C:\\Dl", speedLimit: null, maxActive: 4 };
+  let ext: ExtensionSettings = { intercept: true, minSizeBytes: 0, excludedHosts: [], videoButton: true, buttonHiddenHosts: [], autoRefresh: true };
   const status = (): EngineStatus => ({ running: engine, version: engine ? "9.9" : null, message: null });
   const api = {
     status: vi.fn(async () => status()),
@@ -26,6 +28,13 @@ function fake(initial: Row[], running = true) {
     resume: vi.fn(async () => undefined),
     cancel: vi.fn(async () => undefined),
     remove: vi.fn(async (id: number) => void (rows = rows.filter((r) => r.id !== id))),
+    config: vi.fn(async () => cfg),
+    setConfig: vi.fn(async (c: ConfigChange) => {
+      if (c.maxActive === 13) throw new Error("the engine refused this");
+      return (cfg = { ...cfg, speedLimit: c.speedLimit || null, maxActive: c.maxActive ?? cfg.maxActive });
+    }),
+    extensionSettings: vi.fn(async () => ext),
+    setExtensionSettings: vi.fn(async (s: ExtensionSettings) => (ext = s)),
   } satisfies Api;
   return api;
 }
@@ -105,5 +114,43 @@ describe("App", () => {
   it("shows an expired link in words a person understands", async () => {
     render(<App api={fake([row(1, "a.iso", "failed", { expired: true, error: "server answered 403" })])} every={50} />);
     expect(await screen.findByText(/link has expired/)).toBeTruthy();
+  });
+
+  it("saves the settings: limit, simultaneous downloads, and the browser's list of sites", async () => {
+    const api = fake([]);
+    render(<App api={api} every={50} />);
+    await userEvent.click(await screen.findByRole("button", { name: "Settings" }));
+    const dialog = await screen.findByRole("dialog");
+    await userEvent.type(await within(dialog).findByLabelText("Speed limit"), "2");
+    const active = within(dialog).getByLabelText("Simultaneous downloads");
+    await userEvent.clear(active);
+    await userEvent.type(active, "6");
+    await userEvent.type(within(dialog).getByLabelText("Smallest size in MB"), "5");
+    await userEvent.type(within(dialog).getByPlaceholderText("example.com"), "bank.example");
+    await userEvent.click(within(dialog).getByRole("checkbox", { name: /video/ }));
+    await userEvent.click(within(dialog).getByRole("button", { name: "Save" }));
+    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+    expect(api.setConfig).toHaveBeenCalledWith({ downloadFolder: "", speedLimit: 2 * 1024 * 1024, maxActive: 6 });
+    expect(api.setExtensionSettings).toHaveBeenCalledWith(
+      expect.objectContaining({ minSizeBytes: 5 * 1024 * 1024, excludedHosts: ["bank.example"], videoButton: false }),
+    );
+  });
+
+  it("keeps the settings open and shows the reason when something is refused", async () => {
+    const api = fake([]);
+    render(<App api={api} every={50} />);
+    await userEvent.click(await screen.findByRole("button", { name: "Settings" }));
+    const dialog = await screen.findByRole("dialog");
+    await userEvent.type(await within(dialog).findByLabelText("Speed limit"), "abc");
+    await userEvent.click(within(dialog).getByRole("button", { name: "Save" }));
+    expect((await within(dialog).findByRole("alert")).textContent).toContain("must be a number");
+    expect(api.setConfig).not.toHaveBeenCalled();
+    await userEvent.clear(within(dialog).getByLabelText("Speed limit"));
+    const active = within(dialog).getByLabelText("Simultaneous downloads");
+    await userEvent.clear(active);
+    await userEvent.type(active, "13");
+    await userEvent.click(within(dialog).getByRole("button", { name: "Save" }));
+    expect((await within(dialog).findByRole("alert")).textContent).toContain("engine refused");
+    expect(api.setExtensionSettings).not.toHaveBeenCalled();
   });
 });

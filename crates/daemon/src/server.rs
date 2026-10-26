@@ -1,7 +1,7 @@
 use std::path::PathBuf;
 use std::sync::Arc;
 
-use mohona_manager::{AddRequest, AddResult, DuplicatePolicy, Manager, ManagerError};
+use mohona_manager::{AddRequest, AddResult, DuplicatePolicy, Manager, ManagerError, SpeedTarget};
 use mohona_net::RequestContext;
 use tokio::io::{AsyncBufReadExt, AsyncReadExt, AsyncWriteExt, BufReader};
 use tokio::net::{TcpListener, TcpStream};
@@ -157,10 +157,7 @@ async fn handle(state: &State, call: Call) -> Response {
                     ))
                 }
             };
-            let mut request = AddRequest::new(
-                url,
-                dest_dir.map_or_else(|| state.default_dir.clone(), PathBuf::from),
-            );
+            let mut request = AddRequest::new(url, folder_or_default(state, dest_dir).await);
             request.sort_into_categories = sort;
             request.duplicates = policy;
             // Only what a browser session legitimately carries: nothing that
@@ -189,7 +186,7 @@ async fn handle(state: &State, call: Call) -> Response {
             headers,
             name,
         } => {
-            let folder = dest_dir.map_or_else(|| state.default_dir.clone(), PathBuf::from);
+            let folder = folder_or_default(state, dest_dir).await;
             let shown = folder.display().to_string();
             match state.streams.start(StreamJob {
                 url,
@@ -209,7 +206,7 @@ async fn handle(state: &State, call: Call) -> Response {
             mime,
             dest_dir,
         } => {
-            let folder = dest_dir.map_or_else(|| state.default_dir.clone(), PathBuf::from);
+            let folder = folder_or_default(state, dest_dir).await;
             match state.receiver.start(&folder, &name, mime) {
                 Ok(transfer) => Response::Receiving { transfer },
                 Err(message) => Response::Error { message },
@@ -308,12 +305,114 @@ async fn handle(state: &State, call: Call) -> Response {
                 )
                 .await,
         ),
+        Call::GetConfig => config(state).await,
+        Call::SetConfig {
+            download_folder,
+            speed_limit,
+            max_active,
+        } => set_config(state, download_folder, speed_limit, max_active).await,
         Call::Pause { id } => done(manager.pause(id).await),
         Call::Resume { id } => done(manager.resume(id).await),
         Call::Cancel { id } => done(manager.cancel(id).await),
         Call::Remove { id, delete_file } => done(manager.remove(id, delete_file).await),
         Call::Shutdown => Response::Done,
     }
+}
+
+/// The settings key of the folder downloads go to.
+const FOLDER_KEY: &str = "download_folder";
+/// The settings key of the global speed limit (the manager's own).
+const SPEED_KEY: &str = "speed_limit";
+
+/// The folder a client named, else the folder the person chose, else the default.
+async fn folder_or_default(state: &State, named: Option<String>) -> PathBuf {
+    if let Some(named) = named {
+        return PathBuf::from(named);
+    }
+    match state.manager.setting(FOLDER_KEY).await {
+        Ok(Some(chosen)) if !chosen.is_empty() => PathBuf::from(chosen),
+        _ => state.default_dir.clone(),
+    }
+}
+
+async fn config(state: &State) -> Response {
+    let manager = &state.manager;
+    let folder = folder_or_default(state, None).await;
+    let speed_limit = manager
+        .setting(SPEED_KEY)
+        .await
+        .ok()
+        .flatten()
+        .and_then(|v| v.parse::<u64>().ok())
+        .filter(|n| *n > 0);
+    let max_active = match manager.queues().await {
+        Ok(queues) => queues.first().map_or(4, |q| q.max_active),
+        Err(e) => return error(e),
+    };
+    Response::Config {
+        download_folder: folder.display().to_string(),
+        default_folder: state.default_dir.display().to_string(),
+        speed_limit,
+        max_active,
+    }
+}
+
+async fn set_config(
+    state: &State,
+    folder: Option<String>,
+    speed_limit: Option<u64>,
+    max_active: Option<u32>,
+) -> Response {
+    let manager = &state.manager;
+    // Check everything first, so a refused value changes nothing.
+    let folder = match folder.map(|f| f.trim().to_string()) {
+        None => None,
+        Some(f) if f.is_empty() => Some(String::new()),
+        Some(f) => {
+            let path = PathBuf::from(&f);
+            if !path.is_absolute() || f.chars().any(char::is_control) {
+                return error(
+                    "the download folder must be a full path such as C:\\Users\\you\\Downloads",
+                );
+            }
+            if let Err(e) = std::fs::create_dir_all(&path) {
+                return error(format!("cannot use the folder {f}: {e}"));
+            }
+            Some(f)
+        }
+    };
+    if max_active.is_some_and(|n| !(1..=32).contains(&n)) {
+        return error("simultaneous downloads must be between 1 and 32");
+    }
+    if let Some(f) = folder {
+        let result = if f.is_empty() {
+            manager.set_setting(FOLDER_KEY, "").await
+        } else {
+            manager.set_setting(FOLDER_KEY, &f).await
+        };
+        if let Err(e) = result {
+            return error(e);
+        }
+    }
+    if let Some(limit) = speed_limit {
+        let value = (limit > 0).then_some(limit);
+        if let Err(e) = manager.set_speed_limit(SpeedTarget::Global, value).await {
+            return error(e);
+        }
+    }
+    if let Some(n) = max_active {
+        match manager.queues().await {
+            Ok(queues) => {
+                for q in queues.iter().take(1) {
+                    if let Err(e) = manager.set_queue_limit(q.id, n).await {
+                        return error(e);
+                    }
+                }
+            }
+            Err(e) => return error(e),
+        }
+    }
+    config(state).await
 }
 
 /// The largest setting value the daemon keeps for a client.

@@ -479,3 +479,106 @@ async fn clients_keep_extension_settings_and_nothing_else() {
     d.shutdown.notify_one();
     d.task.await.unwrap().unwrap();
 }
+
+#[tokio::test]
+async fn the_app_can_read_and_change_the_engines_settings() {
+    let dir = tempfile::tempdir().unwrap();
+    let server = files().await;
+    let d = start(dir.path()).await;
+    let set = |folder: Option<&str>, speed: Option<u64>, active: Option<u32>| Call::SetConfig {
+        download_folder: folder.map(str::to_string),
+        speed_limit: speed,
+        max_active: active,
+    };
+
+    let first = d.client.call(Call::GetConfig).await.unwrap();
+    let Response::Config {
+        download_folder,
+        default_folder,
+        speed_limit,
+        max_active,
+    } = first
+    else {
+        panic!("{first:?}")
+    };
+    assert_eq!(download_folder, default_folder);
+    assert_eq!(speed_limit, None);
+    assert!(max_active >= 1);
+
+    // Refused values change nothing, and say why.
+    for bad in [
+        set(Some("relative/folder"), Some(1000), None),
+        set(None, Some(5000), Some(0)),
+        set(None, None, Some(99)),
+    ] {
+        let Response::Error { message } = d.client.call(bad).await.unwrap() else {
+            panic!("should be refused")
+        };
+        assert!(!message.is_empty());
+    }
+    let Response::Config { speed_limit, .. } = d.client.call(Call::GetConfig).await.unwrap() else {
+        panic!()
+    };
+    assert_eq!(
+        speed_limit, None,
+        "a refused change must not be half applied"
+    );
+
+    // A good change is kept, and new downloads use the new folder.
+    let chosen = dir.path().join("my downloads");
+    let Response::Config {
+        download_folder,
+        speed_limit,
+        max_active,
+        ..
+    } = d
+        .client
+        .call(set(Some(chosen.to_str().unwrap()), Some(500_000), Some(2)))
+        .await
+        .unwrap()
+    else {
+        panic!()
+    };
+    assert_eq!(download_folder, chosen.display().to_string());
+    assert_eq!((speed_limit, max_active), (Some(500_000), 2));
+    assert!(chosen.is_dir(), "the folder is created");
+
+    let url = format!("http://{server}/file?size=20000&seed=2");
+    let Response::Added { id } = d.client.call(add(&url)).await.unwrap() else {
+        panic!()
+    };
+    let started = Instant::now();
+    loop {
+        let Response::Downloads { downloads } = d.client.call(Call::List).await.unwrap() else {
+            panic!()
+        };
+        let row = downloads.iter().find(|r| r.id == id).unwrap();
+        if row.status == "completed" {
+            assert!(
+                row.path
+                    .as_deref()
+                    .unwrap()
+                    .starts_with(chosen.to_str().unwrap()),
+                "{:?}",
+                row.path
+            );
+            break;
+        }
+        assert!(started.elapsed() < Duration::from_secs(10), "{row:?}");
+        tokio::time::sleep(Duration::from_millis(50)).await;
+    }
+
+    // 0 removes the limit; an empty folder goes back to the default.
+    let Response::Config {
+        download_folder,
+        speed_limit,
+        ..
+    } = d.client.call(set(Some(""), Some(0), None)).await.unwrap()
+    else {
+        panic!()
+    };
+    assert_eq!(speed_limit, None);
+    assert_eq!(download_folder, default_folder);
+    d.shutdown.notify_one();
+    d.task.await.unwrap().unwrap();
+}

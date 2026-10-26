@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { allowed, counts, matches } from "../src/filters";
 import * as fmt from "../src/format";
+import { parseHosts, parseLimit, parseMegabytes, splitLimit } from "../src/limits";
 import { applyTheme, nextTheme } from "../src/theme";
 import type { Row } from "../src/types";
 
@@ -49,5 +50,23 @@ describe("theme", () => {
     expect(el.getAttribute("data-theme")).toBe("dark");
     applyTheme("system", el);
     expect(el.hasAttribute("data-theme")).toBe(false);
+  });
+});
+
+describe("limits", () => {
+  it("reads what was typed", () => {
+    expect(parseLimit("", "MB")).toBe(0);
+    expect(parseLimit("2", "MB")).toBe(2 * 1024 * 1024);
+    expect(parseLimit("1,5", "KB")).toBe(1536);
+    expect(parseLimit("abc", "MB")).toBeNull();
+    expect(parseLimit("-1", "MB")).toBeNull();
+    expect(parseMegabytes("5")).toBe(5 * 1024 * 1024);
+    expect(parseMegabytes("5.5")).toBeNull();
+    expect(parseHosts(" a.com \n\n b.org\r\n")).toEqual(["a.com", "b.org"]);
+  });
+  it("shows a limit in the unit that reads best", () => {
+    expect(splitLimit(null)).toEqual({ text: "", unit: "MB" });
+    expect(splitLimit(3 * 1024 * 1024)).toEqual({ text: "3", unit: "MB" });
+    expect(splitLimit(1536)).toEqual({ text: "1.5", unit: "KB" });
   });
 });

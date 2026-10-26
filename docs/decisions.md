@@ -498,3 +498,11 @@ A `401` now becomes its own error (`NetError::Unauthorized`) that names the kind
 **The page can run without Tauri.** In a plain browser the page uses a pretend engine with sample downloads, which is what the page tests and design checks use. Errors from the engine reach the page as plain text and are shown as they are.
 
 **Not done yet (next Phase 6 steps).** Queues and scheduler, speed limits and settings pages, categories and the destination folder, tray icon and notifications, clipboard watching, file open/show-in-folder buttons, language switching.
+
+## ADR-0050: The engine's settings are typed calls, kept in the engine; the browser settings are edited in the app through the same shared text
+
+**Decision.** The daemon has `get_config` and `set_config` (download folder, a global speed limit, and how many downloads run at once). They are separate from the free-form `extension.*` settings that clients may keep, so a client can never write the engine's own keys. `set_config` checks every value before it changes anything (the folder must be a full path and must be creatable; the number of simultaneous downloads must be 1 to 32), so a refused change is never half applied. The folder the person chose is used for every download that does not name its own folder, including those from the browser. A speed limit of 0 and an empty folder mean "remove the limit" and "back to the default". The count of simultaneous downloads is the first queue's limit (the default queue); more queues and schedules get their own page later.
+
+**Browser settings in the app.** The settings page edits the same `extension.settings` text the browsers sync (ADR-0047): the app keeps fields it does not know, writes the ones it does, cleans site names the way the extension does, and gives the text an `updated` time strictly newer than what was there, so every browser takes the change over at its next check.
+
+**Not included.** A folder picker (needs a dialog plugin; the folder is typed for now), proxy and connection settings, notifications, language.

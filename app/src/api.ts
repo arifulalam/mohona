@@ -1,4 +1,4 @@
-import type { Api, EngineStatus, Row } from "./types";
+import type { Api, Config, ConfigChange, EngineStatus, ExtensionSettings, Row } from "./types";
 
 /** True inside the Tauri window; false in a plain browser (development, tests). */
 export function insideTauri(): boolean {
@@ -23,6 +23,10 @@ function tauriApi(): Api {
     resume: (id) => call<void>("resume_download", { id }),
     cancel: (id) => call<void>("cancel_download", { id }),
     remove: (id, deleteFile) => call<void>("remove_download", { id, deleteFile }),
+    config: () => call<Config>("get_config"),
+    setConfig: (change) => call<Config>("set_config", { change }),
+    extensionSettings: () => call<ExtensionSettings>("get_extension_settings"),
+    setExtensionSettings: (settings) => call<ExtensionSettings>("set_extension_settings", { settings }),
   };
 }
 
@@ -45,6 +49,8 @@ export function demoApi(tick = 1000): Api {
         : { ...r, downloaded, percent: (downloaded / r.size) * 100, eta: Math.ceil((r.size - downloaded) / r.speed) };
     });
   }, tick);
+  let config: Config = { downloadFolder: "C:\\Users\\you\\Downloads", defaultFolder: "C:\\Users\\you\\Downloads", speedLimit: null, maxActive: 4 };
+  let ext: ExtensionSettings = { intercept: true, minSizeBytes: 0, excludedHosts: [], videoButton: true, buttonHiddenHosts: [], autoRefresh: true };
   const status = (): EngineStatus => ({ running, version: running ? "demo" : null, message: null });
   const need = () => {
     if (!running) throw new Error("Mohona is not running");
@@ -67,6 +73,20 @@ export function demoApi(tick = 1000): Api {
     resume: async (id) => (need(), set(id, { status: "downloading" })),
     cancel: async (id) => (need(), set(id, { status: "canceled", downloaded: 0, percent: 0, eta: null })),
     remove: async (id) => (need(), void (rows = rows.filter((r) => r.id !== id))),
+    config: async () => (need(), config),
+    setConfig: async (c: ConfigChange) => {
+      need();
+      if (c.maxActive !== undefined && (c.maxActive < 1 || c.maxActive > 32)) throw new Error("simultaneous downloads must be between 1 and 32");
+      config = {
+        ...config,
+        downloadFolder: c.downloadFolder === undefined ? config.downloadFolder : c.downloadFolder || config.defaultFolder,
+        speedLimit: c.speedLimit === undefined ? config.speedLimit : c.speedLimit || null,
+        maxActive: c.maxActive ?? config.maxActive,
+      };
+      return config;
+    },
+    extensionSettings: async () => (need(), ext),
+    setExtensionSettings: async (s) => (need(), (ext = s)),
   };
 }
 

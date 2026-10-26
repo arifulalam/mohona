@@ -7,6 +7,7 @@
 //! of downloads about once a second.
 
 mod rows;
+mod settings;
 mod speed;
 
 use std::path::PathBuf;
@@ -16,6 +17,7 @@ use mohona_daemon::{Call, Client, ClientError, Response};
 use serde::Serialize;
 
 pub use rows::{name_of, Row};
+pub use settings::{merge_extension, ExtensionSettings};
 pub use speed::SpeedTracker;
 
 #[derive(Debug, thiserror::Error)]
@@ -52,6 +54,30 @@ pub struct EngineStatus {
     /// app only shows this when it knows it.
     pub message: Option<String>,
 }
+
+/// The engine's own settings, as the settings page shows them.
+#[derive(Debug, Clone, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct Config {
+    pub download_folder: String,
+    pub default_folder: String,
+    /// Bytes per second; `None` for no limit.
+    pub speed_limit: Option<u64>,
+    pub max_active: u32,
+}
+
+/// What may be changed; what is `None` stays as it is.
+#[derive(Debug, Clone, Default, serde::Deserialize)]
+#[serde(rename_all = "camelCase", default)]
+pub struct ConfigChange {
+    pub download_folder: Option<String>,
+    /// Bytes per second; 0 removes the limit.
+    pub speed_limit: Option<u64>,
+    pub max_active: Option<u32>,
+}
+
+/// The settings key the browser extension and the app share.
+const EXTENSION_KEY: &str = "extension.settings";
 
 /// How to reach (and start) the engine.
 #[derive(Debug, Clone)]
@@ -182,6 +208,87 @@ impl Engine {
             Response::Skipped { reason } => Err(AppError::Input(reason)),
             _ => Err(AppError::Engine("unexpected answer from the engine".into())),
         }
+    }
+
+    pub async fn config(&self) -> Result<Config, AppError> {
+        match self.call(Call::GetConfig).await? {
+            Response::Config {
+                download_folder,
+                default_folder,
+                speed_limit,
+                max_active,
+            } => Ok(Config {
+                download_folder,
+                default_folder,
+                speed_limit,
+                max_active,
+            }),
+            _ => Err(AppError::Engine("unexpected answer from the engine".into())),
+        }
+    }
+
+    pub async fn set_config(&self, change: ConfigChange) -> Result<Config, AppError> {
+        match self
+            .call(Call::SetConfig {
+                download_folder: change.download_folder,
+                speed_limit: change.speed_limit,
+                max_active: change.max_active,
+            })
+            .await?
+        {
+            Response::Config {
+                download_folder,
+                default_folder,
+                speed_limit,
+                max_active,
+            } => Ok(Config {
+                download_folder,
+                default_folder,
+                speed_limit,
+                max_active,
+            }),
+            _ => Err(AppError::Engine("unexpected answer from the engine".into())),
+        }
+    }
+
+    /// The browser extension's settings (shared with the browsers).
+    pub async fn extension_settings(&self) -> Result<ExtensionSettings, AppError> {
+        let text = match self
+            .call(Call::SettingGet {
+                key: EXTENSION_KEY.into(),
+            })
+            .await?
+        {
+            Response::Setting { value } => value,
+            _ => return Err(AppError::Engine("unexpected answer from the engine".into())),
+        };
+        Ok(ExtensionSettings::from_text(text.as_deref()))
+    }
+
+    /// Saves new extension settings. The browsers take them over at their next check.
+    pub async fn set_extension_settings(
+        &self,
+        new: ExtensionSettings,
+    ) -> Result<ExtensionSettings, AppError> {
+        let current = match self
+            .call(Call::SettingGet {
+                key: EXTENSION_KEY.into(),
+            })
+            .await?
+        {
+            Response::Setting { value } => value,
+            _ => return Err(AppError::Engine("unexpected answer from the engine".into())),
+        };
+        let now = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map_or(0, |d| d.as_millis() as u64);
+        let text = merge_extension(current.as_deref(), &new, now);
+        self.call(Call::SettingSet {
+            key: EXTENSION_KEY.into(),
+            value: text.clone(),
+        })
+        .await?;
+        Ok(ExtensionSettings::from_text(Some(&text)))
     }
 
     pub async fn pause(&self, id: i64) -> Result<(), AppError> {
