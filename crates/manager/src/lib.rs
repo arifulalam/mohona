@@ -307,6 +307,11 @@ enum Command {
     List(oneshot::Sender<Result<Vec<DownloadRow>, ManagerError>>),
     /// A download's request details and what is known about its file.
     Details(i64, oneshot::Sender<Result<Details, ManagerError>>),
+    GetSetting(
+        String,
+        oneshot::Sender<Result<Option<String>, ManagerError>>,
+    ),
+    PutSetting(String, String, oneshot::Sender<Result<(), ManagerError>>),
     /// Give a stopped download a new address and details, and queue it.
     SetLink {
         id: i64,
@@ -612,6 +617,17 @@ impl Manager {
             reply,
         })
         .await
+    }
+
+    /// A value from the settings table (the browser extension's settings, for one).
+    pub async fn setting(&self, key: &str) -> Result<Option<String>, ManagerError> {
+        self.ask(|r| Command::GetSetting(key.to_string(), r)).await
+    }
+
+    /// Saves a value in the settings table.
+    pub async fn set_setting(&self, key: &str, value: &str) -> Result<(), ManagerError> {
+        self.ask(|r| Command::PutSetting(key.to_string(), value.to_string(), r))
+            .await
     }
 
     /// The request details saved with a download (its source page, cookies, headers).
@@ -1187,6 +1203,16 @@ impl Actor {
                 reply,
             } => {
                 let _ = reply.send(self.remove(id, delete_file));
+            }
+            Command::GetSetting(key, reply) => {
+                let _ = reply.send(self.store.setting(&key).map_err(ManagerError::from));
+            }
+            Command::PutSetting(key, value, reply) => {
+                let _ = reply.send(
+                    self.store
+                        .set_setting(&key, &value)
+                        .map_err(ManagerError::from),
+                );
             }
             Command::Details(id, reply) => {
                 let result = self.row(id).and_then(|row| {

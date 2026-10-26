@@ -474,3 +474,11 @@ A `401` now becomes its own error (`NetError::Unauthorized`) that names the kind
 **Switches.** "Show a download button on videos" in the popup (`videoButton`, on by default) and "Hide on this site" in the button's own panel (`buttonHiddenHosts`, a site and its subdomains). Both live in the synced extension settings, and open pages react to a change at once.
 
 **Cost.** This is the first script that runs inside every web page, so it is kept small, does its work after a short delay when the page changes, and does nothing at all while the button is switched off. The store text (step 10) must say so.
+
+## ADR-0047: Settings the app and the extension share live in the engine, as one text, and the newer copy wins
+
+**The problem.** The extension has settings (take over downloads, minimum size, excluded sites, the video button and its hidden sites, automatic link refresh). The desktop app will show the same ones, and `chrome.storage.sync` is per browser: Chrome, Edge and Firefox on one computer do not share it.
+
+**Decision.** The engine keeps one value, `extension.settings` (JSON text, at most 64 KiB), in its `settings` table. It never reads it. Clients may only use keys that start with `extension.` (the engine's own settings are out of reach). The host passes it through as `getSettings` and `setSettings`. The extension compares its copy with the engine's when it starts, every minute (with the expired-link round) and after each change a person makes: the copy with the larger `updated` time (set only when a person saves a setting, never when a copy is adopted) is taken by the other side; equal copies change nothing. Unreadable or invalid engine text is replaced by the extension's copy, and every value is checked (`sanitize`) before use, so a bad copy can never switch on anything unexpected. Nothing happens when the engine is not running; the next round catches up. The popup edits the minimum size and the excluded sites, and the other checkboxes.
+
+**Limits.** The newer whole copy wins; two changes made on two browsers between rounds are not merged field by field (the later one wins). The file-type list is not a setting yet: what to take over is decided by the browser's own download events, size and site.

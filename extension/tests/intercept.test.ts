@@ -112,6 +112,7 @@ describe("rules", () => {
       autoRefresh: true,
       videoButton: true,
       buttonHiddenHosts: [],
+      updated: 0,
       minSizeBytes: 12,
       excludedHosts: ["example.com", "a.org"],
     });

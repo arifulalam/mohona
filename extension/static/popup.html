@@ -22,6 +22,15 @@
     <label><input id="intercept" type="checkbox" /> Take over browser downloads</label>
     <label><input id="videoButton" type="checkbox" /> Show a download button on videos</label>
     <label><input id="autoRefresh" type="checkbox" /> Refresh expired links automatically</label>
+    <details id="more">
+      <summary>Which downloads to take over</summary>
+      <label>Leave files smaller than <input id="minMb" type="number" min="0" step="1" style="width:4em" /> MB to the browser</label>
+      <label>Never take downloads from these sites (one per line)
+        <textarea id="excluded" rows="3" style="width:100%" placeholder="example.com"></textarea>
+      </label>
+      <button id="saveMore" type="button">Save</button> <small id="savedMore"></small>
+      <small>These settings are shared with the Mohona app.</small>
+    </details>
     <button id="start" hidden>Start Mohona</button>
     <form id="form">
       <input id="url" type="url" placeholder="Paste a download address" required />

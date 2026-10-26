@@ -1,5 +1,6 @@
 import type { Reply, Request } from "./messages";
 import type { Outcome } from "./protocol";
+import type { Settings } from "./settings";
 
 const $ = <T extends HTMLElement>(id: string): T => document.getElementById(id) as T;
 
@@ -67,6 +68,24 @@ $<HTMLInputElement>("videoButton").addEventListener("change", async (event) => {
 $<HTMLInputElement>("autoRefresh").addEventListener("change", async (event) => {
   await ask({ kind: "setSettings", settings: { autoRefresh: (event.target as HTMLInputElement).checked } });
 });
+
+$<HTMLButtonElement>("saveMore").addEventListener("click", async () => {
+  const mb = Number($<HTMLInputElement>("minMb").value);
+  const excludedHosts = $<HTMLTextAreaElement>("excluded").value.split(/[\s,]+/);
+  const reply = await ask({
+    kind: "setSettings",
+    settings: { minSizeBytes: Number.isFinite(mb) && mb > 0 ? Math.round(mb * 1_048_576) : 0, excludedHosts },
+  });
+  if (reply.kind === "settings") {
+    $("savedMore").textContent = "Saved.";
+    showMore(reply.settings);
+  }
+});
+
+function showMore(settings: Settings): void {
+  $<HTMLInputElement>("minMb").value = String(Math.round(settings.minSizeBytes / 1_048_576));
+  $<HTMLTextAreaElement>("excluded").value = settings.excludedHosts.join("\n");
+}
 
 $<HTMLInputElement>("intercept").addEventListener("change", async (event) => {
   await ask({ kind: "setSettings", settings: { intercept: (event.target as HTMLInputElement).checked } });
@@ -150,6 +169,7 @@ void (async () => {
     $<HTMLInputElement>("intercept").checked = reply.settings.intercept;
     $<HTMLInputElement>("autoRefresh").checked = reply.settings.autoRefresh;
     $<HTMLInputElement>("videoButton").checked = reply.settings.videoButton;
+    showMore(reply.settings);
   }
   await refresh();
   await showExpired();

@@ -84,6 +84,23 @@ const { chromium } = require('playwright');
   await web.locator('mohona-video-button button.main').click();
   await web.waitForFunction(() => document.querySelector('mohona-video-button').shadowRoot.querySelector('.item'), null, { timeout: 8000 });
   console.log('13: panel lists', await web.evaluate(() => document.querySelector('mohona-video-button').shadowRoot.querySelector('.item span').title));
+  // 14: a settings change reaches Mohona's copy (the app reads the same text).
+  await page.evaluate(() => chrome.runtime.sendMessage({ kind: 'setSettings', settings: { excludedHosts: ['sync.example'], minSizeBytes: 5242880 } }));
+  let copy = null;
+  for (let i = 0; i < 40 && !copy; i++) {
+    const a = await page.evaluate(() => new Promise((res) => chrome.runtime.sendNativeMessage('org.mohona.host', { type: 'getSettings' }, res)));
+    copy = a && a.value;
+    if (!copy) await new Promise((r) => setTimeout(r, 250));
+  }
+  console.log('14: engine copy', copy);
+  // 14: a change made in the extension reaches Mohona's copy (shared with the app), and back.
+  await page.evaluate(() => chrome.runtime.sendMessage({ kind: 'setSettings', settings: { excludedHosts: ['sync.example'], minSizeBytes: 1048576 } }));
+  await new Promise((r) => setTimeout(r, 1500));
+  const kept = await page.evaluate(async () => {
+    const port = chrome.runtime.connectNative('org.mohona.host');
+    return await new Promise((res) => { port.onMessage.addListener((m) => { res(m); port.disconnect(); }); port.postMessage({ type: 'getSettings', requestId: 99 }); });
+  });
+  console.log('14: engine copy', kept.value);
   await new Promise((r) => setTimeout(r, 3000));
   await ctx.close();
 })().catch(e => { console.error('FAIL', e.message); process.exit(1); });

@@ -437,3 +437,45 @@ async fn a_failed_expired_download_says_so_and_can_continue_from_a_fresh_link() 
     d.shutdown.notify_one();
     d.task.await.unwrap().unwrap();
 }
+
+#[tokio::test]
+async fn clients_keep_extension_settings_and_nothing_else() {
+    let dir = tempfile::tempdir().unwrap();
+    let d = start(dir.path()).await;
+    let get = |key: &str| Call::SettingGet { key: key.into() };
+    let set = |key: &str, value: &str| Call::SettingSet {
+        key: key.into(),
+        value: value.into(),
+    };
+    assert!(matches!(
+        d.client.call(get("extension.settings")).await.unwrap(),
+        Response::Setting { value: None }
+    ));
+    assert!(matches!(
+        d.client
+            .call(set("extension.settings", "{}"))
+            .await
+            .unwrap(),
+        Response::Done
+    ));
+    match d.client.call(get("extension.settings")).await.unwrap() {
+        Response::Setting { value } => assert_eq!(value.as_deref(), Some("{}")),
+        other => panic!("{other:?}"),
+    }
+    for key in ["theme", "../x", "extension.A", ""] {
+        assert!(matches!(
+            d.client.call(set(key, "x")).await.unwrap(),
+            Response::Error { .. }
+        ));
+    }
+    let big = "x".repeat(70_000);
+    assert!(matches!(
+        d.client
+            .call(set("extension.settings", &big))
+            .await
+            .unwrap(),
+        Response::Error { .. }
+    ));
+    d.shutdown.notify_one();
+    d.task.await.unwrap().unwrap();
+}

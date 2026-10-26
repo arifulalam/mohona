@@ -12,6 +12,15 @@ pub struct Request {
 pub enum Call {
     /// Is the daemon there? Answered with [`Response::Pong`].
     Ping,
+    /// A saved setting of the browser extension (key `extension.*`).
+    SettingGet {
+        key: String,
+    },
+    /// Save a setting of the browser extension (key `extension.*`, at most 64 KiB).
+    SettingSet {
+        key: String,
+        value: String,
+    },
     /// Add a download. It starts when its queue has a free slot.
     Add {
         url: String,
@@ -170,6 +179,10 @@ pub enum Response {
     },
     Downloads {
         downloads: Vec<DownloadInfo>,
+    },
+    /// The value of a setting, if there is one.
+    Setting {
+        value: Option<String>,
     },
     Done,
     Error {

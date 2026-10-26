@@ -36,6 +36,8 @@ export type Question =
   | ({ type: "add" } & AddDetails)
   | ({ type: "stream" } & AddDetails)
   | { type: "list" }
+  | { type: "getSettings" }
+  | { type: "setSettings"; value: string }
   | { type: "refresh"; id: number; url: string; cookies?: string; referrer?: string; userAgent?: string }
   | { type: "saveStart"; name: string; mime?: string }
   | { type: "savePiece"; transfer: number; index: number; data: string }
@@ -55,6 +57,8 @@ export type Answer =
   | { type: "streamStarted"; job: number; folder: string }
   | { type: "downloads"; downloads: DownloadRow[] }
   | { type: "refreshed"; id: number }
+  | { type: "settings"; value: string | null }
+  | { type: "settingsSaved" }
   | { type: "saving"; transfer: number }
   | { type: "piece"; index: number }
   | { type: "saved"; path: string; name: string }

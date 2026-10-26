@@ -142,6 +142,8 @@ impl Host {
             Some("add") => self.add(&mut value),
             Some("stream") => self.stream(&mut value),
             Some("list") => self.list(),
+            Some("getSettings") => self.get_settings(),
+            Some("setSettings") => self.set_settings(&value),
             Some("refresh") => self.refresh(&mut value),
             Some("saveStart") => self.save_start(&value),
             Some("savePiece") => self.save_piece(&value),
@@ -280,6 +282,33 @@ impl Host {
                     .collect();
                 json!({"type": "downloads", "downloads": rows})
             }
+            Ok(Response::Error { message }) => error("engine", message),
+            Ok(_) => error("engine", "the engine gave an unexpected answer"),
+            Err(e) => e,
+        }
+    }
+
+    /// The extension keeps one setting in the engine, as JSON text it writes and reads itself.
+    fn get_settings(&self) -> Value {
+        match self.call(Call::SettingGet {
+            key: SETTINGS_KEY.into(),
+        }) {
+            Ok(Response::Setting { value }) => json!({"type": "settings", "value": value}),
+            Ok(Response::Error { message }) => error("engine", message),
+            Ok(_) => error("engine", "the engine gave an unexpected answer"),
+            Err(e) => e,
+        }
+    }
+
+    fn set_settings(&self, message: &Value) -> Value {
+        let Some(value) = message.get("value").and_then(Value::as_str) else {
+            return error("bad_request", "\"value\" must be text");
+        };
+        match self.call(Call::SettingSet {
+            key: SETTINGS_KEY.into(),
+            value: value.to_string(),
+        }) {
+            Ok(Response::Done) => json!({"type": "settingsSaved"}),
             Ok(Response::Error { message }) => error("engine", message),
             Ok(_) => error("engine", "the engine gave an unexpected answer"),
             Err(e) => e,
@@ -436,6 +465,9 @@ impl Host {
         error("no_engine", "Mohona was started but did not answer in time")
     }
 }
+
+/// Where the engine keeps the extension's settings.
+const SETTINGS_KEY: &str = "extension.settings";
 
 fn engine_error(e: ClientError) -> Value {
     match e {

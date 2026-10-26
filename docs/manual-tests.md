@@ -191,6 +191,12 @@ Automated tests use a local test server. These need real streams from the intern
 5. Clicking the button must never pause or start the video, or open the page's own menu.
 6. On a site with a strict Content Security Policy (for example github.com) nothing breaks and the page works as before.
 
+## Shared settings
+
+1. Chrome and Edge both loaded, Mohona running. In Chrome's popup open "Which downloads to take over", set 5 MB and `example.com`, Save. Within a minute (or after closing and reopening Edge's popup) Edge shows the same values.
+2. Stop Mohona, change the size in Chrome, start Mohona: after a minute the change reaches Edge.
+3. `mohona-host` with a damaged value: not testable by hand; covered by the unit tests.
+
 ## Power and system behaviour
 
 - [ ] `queue run --then sleep`, `hibernate`, `shutdown` really do that after the countdown (try shutdown last), and Ctrl-C in the countdown cancels.

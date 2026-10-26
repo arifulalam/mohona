@@ -5,7 +5,8 @@ import type { Reply, Request } from "./messages";
 import { HOST_NAME } from "./protocol";
 import { downloadFromMenu, localTarget, MENU_ID, type ClickInfo } from "./menu";
 import { saveLocal, sliceInPage, sourceFromBlob, sourceFromData, type SaveResult } from "./local";
-import { loadSettings, saveSettings } from "./settings";
+import { adoptSettings, loadSettings, saveSettings } from "./settings";
+import { reconcile } from "./settingsync";
 import { linksInPage, nextToRefresh, refreshExpired, type RefreshResult } from "./refresh";
 import type { DownloadRow } from "./protocol";
 
@@ -274,10 +275,25 @@ function describeRefresh(result: RefreshResult): string {
   }
 }
 
+/** Compares the settings with Mohona's copy and updates the older one. Does nothing when Mohona is not running. */
+async function syncSettings(): Promise<void> {
+  try {
+    const answer = await client.request({ type: "getSettings" }, 5_000);
+    if (answer.type !== "settings") return;
+    const plan = reconcile(await loadSettings(), answer.value);
+    if (plan.apply) await adoptSettings(plan.apply);
+    if (plan.push) await client.request({ type: "setSettings", value: JSON.stringify(plan.push) }, 5_000);
+  } catch {
+    // Next time.
+  }
+}
+void syncSettings();
+
 chrome.alarms.create("mohona-refresh", { periodInMinutes: 1 });
 chrome.alarms.onAlarm.addListener((alarm) => {
   if (alarm.name !== "mohona-refresh") return;
   void (async () => {
+    await syncSettings();
     if (!(await loadSettings()).autoRefresh) return;
     // Only when the engine is already running: this never starts it.
     const rows = await downloadsList().catch(() => [] as DownloadRow[]);
@@ -333,8 +349,11 @@ async function handle(request: Request, sender: chrome.runtime.MessageSender): P
     }
     case "getSettings":
       return { kind: "settings", settings: await loadSettings() };
-    case "setSettings":
-      return { kind: "settings", settings: await saveSettings(request.settings) };
+    case "setSettings": {
+      const settings = await saveSettings(request.settings);
+      void syncSettings();
+      return { kind: "settings", settings };
+    }
   }
 }
 

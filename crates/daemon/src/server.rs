@@ -240,6 +240,20 @@ async fn handle(state: &State, call: Call) -> Response {
         Call::Jobs => Response::Jobs {
             jobs: state.streams.list(),
         },
+        Call::SettingGet { key } => match setting_key(&key) {
+            Err(message) => Response::Error { message },
+            Ok(()) => match manager.setting(&key).await {
+                Ok(value) => Response::Setting { value },
+                Err(e) => error(e),
+            },
+        },
+        Call::SettingSet { key, value } => match setting_key(&key) {
+            Err(message) => Response::Error { message },
+            Ok(()) if value.len() > MAX_SETTING => Response::Error {
+                message: "the setting is too large".into(),
+            },
+            Ok(()) => done(manager.set_setting(&key, &value).await),
+        },
         Call::List => match manager.list().await {
             Ok(rows) => {
                 let mut downloads = Vec::with_capacity(rows.len());
@@ -299,5 +313,22 @@ async fn handle(state: &State, call: Call) -> Response {
         Call::Cancel { id } => done(manager.cancel(id).await),
         Call::Remove { id, delete_file } => done(manager.remove(id, delete_file).await),
         Call::Shutdown => Response::Done,
+    }
+}
+
+/// The largest setting value the daemon keeps for a client.
+const MAX_SETTING: usize = 64 * 1024;
+
+/// Clients may only touch `extension.*` settings (never the engine's own).
+fn setting_key(key: &str) -> Result<(), String> {
+    let ok = key.len() <= 64
+        && key.starts_with("extension.")
+        && key
+            .bytes()
+            .all(|b| b.is_ascii_lowercase() || b == b'.' || b == b'_');
+    if ok {
+        Ok(())
+    } else {
+        Err(format!("\"{key}\" is not a setting clients may use"))
     }
 }

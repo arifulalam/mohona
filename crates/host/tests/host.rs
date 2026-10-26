@@ -635,3 +635,25 @@ mod streams {
         assert!(!record.exists());
     }
 }
+
+#[test]
+fn the_extensions_settings_are_kept_by_the_engine() {
+    let dir = tempfile::tempdir().unwrap();
+    let engine = Engine::start(dir.path());
+    let host = host_for(&engine.info);
+    let first = ask(&host, json!({"type": "getSettings", "requestId": 1}));
+    assert_eq!(first["type"], "settings");
+    assert_eq!(first["requestId"], 1);
+    assert!(first["value"].is_null());
+    let saved = ask(
+        &host,
+        json!({"type": "setSettings", "value": "{\"updated\":5}"}),
+    );
+    assert_eq!(saved["type"], "settingsSaved");
+    assert_eq!(
+        ask(&host, json!({"type": "getSettings"}))["value"],
+        "{\"updated\":5}"
+    );
+    let bad = ask(&host, json!({"type": "setSettings", "value": 7}));
+    assert_eq!(bad["code"], "bad_request");
+}

@@ -9,6 +9,8 @@ export interface Settings {
   videoButton: boolean;
   /** Sites (and their subdomains) where that button is not shown. */
   buttonHiddenHosts: string[];
+  /** When the settings were last changed by a person (ms since 1970); the newer copy wins when they are synced with Mohona. */
+  updated: number;
   /** Never take downloads from these sites (and their subdomains). */
   excludedHosts: string[];
 }
@@ -20,6 +22,7 @@ export const DEFAULTS: Settings = {
   buttonHiddenHosts: [],
   minSizeBytes: 0,
   excludedHosts: [],
+  updated: 0,
 };
 
 /** Whatever was stored, made safe: wrong types fall back to the defaults. */
@@ -43,6 +46,10 @@ export function sanitize(raw: unknown): Settings {
         ? Math.floor(r.minSizeBytes)
         : DEFAULTS.minSizeBytes,
     excludedHosts: hosts,
+    updated:
+      typeof r.updated === "number" && Number.isFinite(r.updated) && r.updated >= 0
+        ? Math.floor(r.updated)
+        : DEFAULTS.updated,
   };
 }
 
@@ -60,8 +67,16 @@ export async function loadSettings(): Promise<Settings> {
   }
 }
 
+/** Saves a change made by a person (it gets a new time stamp). */
 export async function saveSettings(patch: Partial<Settings>): Promise<Settings> {
-  const next = sanitize({ ...(await loadSettings()), ...patch });
+  const next = sanitize({ ...(await loadSettings()), ...patch, updated: Date.now() });
+  await chrome.storage.sync.set(next);
+  return next;
+}
+
+/** Saves a copy that came from Mohona, as it is. */
+export async function adoptSettings(copy: Settings): Promise<Settings> {
+  const next = sanitize(copy);
   await chrome.storage.sync.set(next);
   return next;
 }
