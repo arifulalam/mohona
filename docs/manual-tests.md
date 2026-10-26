@@ -191,6 +191,20 @@ Automated tests use a local test server. These need real streams from the intern
 5. Clicking the button must never pause or start the video, or open the page's own menu.
 6. On a site with a strict Content Security Policy (for example github.com) nothing breaks and the page works as before.
 
+## Desktop app
+
+The window cannot be built where the tests run (it needs the system web view), so its Rust shell (`app/src-tauri`) has only been checked by reading; please run these on Windows.
+
+1. `cargo build --release -p mohona-cli`, then in `app`: `npm install`, set `MOHONA_PROGRAM` to the built `mohona.exe`, `npm run tauri dev`. The window opens and shows "Mohona is not running" with a "Start Mohona" button. If it does not compile, send the first error.
+2. Press "Start Mohona": the banner goes away and "Engine running (0.0.1)" shows. `%LOCALAPPDATA%\Mohona\daemon.json` exists. Close the window: `mohona list` still works (the engine keeps running).
+3. "+ Add", paste a real download address: the row appears within a second, with a moving progress bar, speed and time left. Pause and Resume (row buttons and toolbar) work; Cancel marks it cancelled.
+4. Add the same address again: the dialog shows the reason it was refused. Add `example.com/a.zip` (no http): "the address must start with http://…".
+5. Select a finished download, "Remove", tick "Also delete the downloaded file": the file is gone from the folder. Without the tick it stays.
+6. Ctrl-click selects several rows; the toolbar acts on all of them.
+7. Theme button cycles system, light, dark; the choice is remembered after restart. With "system", switching Windows between light and dark changes the window.
+8. A download started from the browser extension appears in the window without any action.
+9. `npm run tauri build` makes an installer in `app\src-tauri\target\release\bundle`. (The installer does not include `mohona.exe` yet: Phase 8.)
+
 ## Store packaging
 
 1. `cd extension && npm run package`, unzip `dist/store/mohona-chromium-0.0.1.zip` into an empty folder and load it unpacked in Chrome: it loads without errors, shows the Mohona icon, and its id is different from the development id (it has no `key`), so the popup says not connected until the host is registered for that id.

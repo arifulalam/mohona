@@ -1,0 +1,23 @@
+[package]
+name = "mohona-app"
+description = "The Mohona desktop app"
+version = "0.0.1"
+edition = "2021"
+license = "MIT OR Apache-2.0"
+rust-version = "1.85"
+
+# Not part of the engine's workspace: it needs the system web view (WebView2 on
+# Windows) and is built with `npm run tauri build` from the app folder.
+[workspace]
+
+[lib]
+name = "mohona_app_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+mohona-appcore = { path = "../../crates/appcore" }
+tauri = { version = "2", features = [] }
+tokio = { version = "1", features = ["sync"] }

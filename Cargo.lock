@@ -1666,6 +1666,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "mohona-appcore"
+version = "0.0.1"
+dependencies = [
+ "mohona-daemon",
+ "mohona-manager",
+ "mohona-net",
+ "mohona-store",
+ "mohona-testserver",
+ "serde",
+ "tempfile",
+ "thiserror",
+ "tokio",
+]
+
+[[package]]
 name = "mohona-cli"
 version = "0.0.1"
 dependencies = [

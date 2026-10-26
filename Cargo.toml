@@ -6,11 +6,14 @@ members = [
     "crates/media",
     "crates/host",
     "crates/daemon",
+    "crates/appcore",
     "crates/store",
     "crates/manager",
     "crates/cli",
     "tools/testserver",
 ]
+# The window needs the system's web view libraries; it is built on its own (see app/README.md).
+exclude = ["app/src-tauri"]
 
 [workspace.package]
 version = "0.0.1"

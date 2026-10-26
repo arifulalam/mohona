@@ -175,6 +175,10 @@ mohona get webdavs://cloud.example.com/remote.php/dav/files/alice/report.pdf -u 
 
 `webdav://` and `webdavs://` (or `dav://`, `davs://`) are HTTP and HTTPS with another name, so logins, certificates, proxies, pieces and resume all work.
 
+## Desktop app (early)
+
+`app/` holds the desktop window (Tauri 2, React, Tailwind): download list with progress, speed and time left, add, pause, resume, cancel, remove, filters, light and dark themes. It uses the same engine as the command line and the browser extension. See `app/README.md`; a first look in any browser needs only `cd app && npm install && npm run dev`.
+
 ## Browser extension (early)
 
 `extension/` holds the browser extension (TypeScript, Manifest V3, Chrome/Edge/Firefox). Build it with `cd extension && npm install && npm run build`, load `dist/chromium` or `dist/firefox`, and register the host with `mohona-host install`. The extension takes over the browser's downloads (and falls back to the browser whenever Mohona cannot take them) and its popup can send a pasted address; it adds a "Download with Mohona" right-click entry; it lists video and audio found on the page (including HLS and DASH streams, which Mohona downloads with `mohona stream`) in the popup, and puts a small download button on videos in pages (it can be hidden per site), saves files only the browser holds (`blob:`, `data:`) from the right-click entry, and renews expired download links from the page they came from. See `docs/manual-tests.md`.

@@ -488,3 +488,13 @@ A `401` now becomes its own error (`NetError::Unauthorized`) that names the kind
 **Decision.** `npm run package` builds both targets and writes the upload files (`dist/store/mohona-<target>-<version>.zip`, fixed time stamps, readable unminified code so reviewers can follow it). The Chromium upload has no pinned `key` (stores sign with their own); local builds keep it so the host id stays fixed. Firefox gets `data_collection_permissions: none`. Icons (16–128 px) are in the manifest. `docs/privacy.md` says what is handled and that nothing leaves the computer; `docs/store.md` has the listing text, a justification for every permission, reviewer notes and the submission checklist. A test fails if the manifest asks for a permission the table does not explain.
 
 **Known consequence.** A store gives its own extension id, so the host must also be registered for that id (documented in `docs/store.md`); the store ids are not known until the first upload, so this step stays open until then.
+
+## ADR-0049: The app is a client of the engine; the window code is a thin shell over a tested crate
+
+**Decision.** The desktop app (`app/`) is Tauri 2 with a React, TypeScript and Tailwind page. It does not contain an engine: it talks to the same daemon as the command line and the browser extension (found through the info file, started with `mohona daemon` when not running), so downloads keep going when the window is closed and the extension and the window always show the same list. Everything the window does lives in `crates/appcore` (status, start, list with measured speed and time left, add with checks, pause, resume, cancel, remove), tested against a real in-process daemon; `app/src-tauri` only forwards eight commands. It is kept out of the engine's workspace (`exclude`), so `cargo test --workspace` does not need the system web view libraries.
+
+**List refresh.** The page asks for the list once a second; the speed is measured by the Rust side from how much each download grew between two lists and smoothed, because the engine's API has no progress events yet. A push stream is a later improvement (it would also let the extension show live progress).
+
+**The page can run without Tauri.** In a plain browser the page uses a pretend engine with sample downloads, which is what the page tests and design checks use. Errors from the engine reach the page as plain text and are shown as they are.
+
+**Not done yet (next Phase 6 steps).** Queues and scheduler, speed limits and settings pages, categories and the destination folder, tray icon and notifications, clipboard watching, file open/show-in-folder buttons, language switching.

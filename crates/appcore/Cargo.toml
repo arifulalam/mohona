@@ -1,0 +1,20 @@
+[package]
+name = "mohona-appcore"
+description = "What the Mohona desktop app does with the engine, without any window code (so it can be tested)"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+mohona-daemon = { path = "../daemon" }
+serde = { version = "1", features = ["derive"] }
+thiserror = "2"
+tokio.workspace = true
+
+[dev-dependencies]
+mohona-manager = { path = "../manager" }
+mohona-net = { version = "0.0.1", path = "../net" }
+mohona-store = { path = "../store" }
+mohona-testserver = { path = "../../tools/testserver" }
+tempfile = "3"
