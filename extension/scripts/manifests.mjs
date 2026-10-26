@@ -4,7 +4,7 @@ const here = new URL("../", import.meta.url);
 const read = (name) => JSON.parse(readFileSync(new URL(name, here), "utf8"));
 
 /** The manifest for `target`: "chromium" (Chrome, Edge, Chromium) or "firefox". */
-export function manifestFor(target) {
+export function manifestFor(target, { store = false } = {}) {
   const base = read("manifest.base.json");
   const identity = read("identity.json");
   // The button on videos: web pages only, never browser or extension pages.
@@ -20,7 +20,8 @@ export function manifestFor(target) {
     return {
       ...base,
       // Pins the extension id (see identity.json), so the host can be registered for it.
-      key: identity.chromiumKey,
+      // (Not in the file for the store: the store signs the extension with its own key.)
+      ...(store ? {} : { key: identity.chromiumKey }),
       content_scripts,
       background: { service_worker: "background.js" },
     };
@@ -31,7 +32,12 @@ export function manifestFor(target) {
       background: { scripts: ["background.js"] },
       content_scripts,
       browser_specific_settings: {
-        gecko: { id: identity.firefoxId, strict_min_version: identity.firefoxMinVersion },
+        gecko: {
+          id: identity.firefoxId,
+          strict_min_version: identity.firefoxMinVersion,
+          // Mohona collects nothing (docs/privacy.md); newer Firefox asks every add-on to say so.
+          data_collection_permissions: { required: ["none"] },
+        },
       },
     };
   }

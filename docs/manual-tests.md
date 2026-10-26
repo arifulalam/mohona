@@ -191,6 +191,12 @@ Automated tests use a local test server. These need real streams from the intern
 5. Clicking the button must never pause or start the video, or open the page's own menu.
 6. On a site with a strict Content Security Policy (for example github.com) nothing breaks and the page works as before.
 
+## Store packaging
+
+1. `cd extension && npm run package`, unzip `dist/store/mohona-chromium-0.0.1.zip` into an empty folder and load it unpacked in Chrome: it loads without errors, shows the Mohona icon, and its id is different from the development id (it has no `key`), so the popup says not connected until the host is registered for that id.
+2. Load the Firefox zip as a temporary add-on: no manifest warnings except possibly about `data_collection_permissions` on Firefox older than 140.
+3. Open both manifests: no `key` in the Chromium one.
+
 ## Shared settings
 
 1. Chrome and Edge both loaded, Mohona running. In Chrome's popup open "Which downloads to take over", set 5 MB and `example.com`, Save. Within a minute (or after closing and reopening Edge's popup) Edge shows the same values.

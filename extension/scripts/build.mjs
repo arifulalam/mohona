@@ -1,6 +1,6 @@
 // Builds dist/chromium and dist/firefox: two scripts (as classic, self-contained
 // files, which every browser loads the same way), the popup and a manifest each.
-import { copyFileSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
+import { cpSync, copyFileSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { build } from "vite";
 import { manifestFor } from "./manifests.mjs";
@@ -26,6 +26,7 @@ for (const target of ["chromium", "firefox"]) {
       },
     });
   }
+  cpSync(`${root}static/icons`, `${out}/icons`, { recursive: true });
   copyFileSync(`${root}static/popup.html`, `${out}/popup.html`);
   writeFileSync(`${out}/manifest.json`, JSON.stringify(manifestFor(target), null, 2) + "\n");
   console.log(`built ${target}`);
