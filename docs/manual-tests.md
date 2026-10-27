@@ -205,7 +205,10 @@ The window cannot be built where the tests run (it needs the system web view), s
 8. A download started from the browser extension appears in the window without any action.
 9. Settings: set a speed limit of 200 KB/s and start a large download: the speed stays near the limit; clear the box: it speeds up. Set "Downloads at the same time" to 1 and add three downloads: one runs, two wait. Type a folder that does not exist (`D:\\Mohona test`) and Save: the folder is created and a new download goes there; a relative path (`downloads`) is refused with a reason.
 10. Settings, browsers: add `example.com` to the sites list and Save; within a minute the extension's popup ("Which downloads to take over") shows it. Change something in the extension popup: reopening Settings in the app shows it.
-11. `npm run tauri build` makes an installer in `app\src-tauri\target\release\bundle`. (The installer does not include `mohona.exe` yet: Phase 8.)
+11. Tray: the Mohona icon is in the notification area (maybe under the ^ arrow). Left click shows the window. Close the window: it disappears but the icon stays and downloads continue (`mohona list`). Settings, untick "Keep Mohona in the tray", Save, close the window: the app really exits and the engine keeps running (`mohona list` works). Tray menu "Quit and stop Mohona": the engine stops (`mohona list` says it is not running).
+12. Messages: add a small download: a "Download finished" message appears (window open or hidden). Add a link that fails (a wrong path on a real server): "Download failed". Restart the app with old finished downloads in the list: no messages. Untick "Show a message…": none appear.
+13. Finished row: "Open" opens a PDF or image with its program; "Show in folder" opens Explorer with the file selected. Download any `.exe` or `.zip`: "Open" on the `.exe` shows the safety message and does not start it. Delete the file in Explorer, press "Open": "the file is no longer there".
+14. `npm run tauri build` makes an installer in `app\src-tauri\target\release\bundle`. (The installer does not include `mohona.exe` yet: Phase 8.)
 
 ## Store packaging
 

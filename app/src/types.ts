@@ -27,6 +27,8 @@ export interface Config {
   /** Bytes per second; null for no limit. */
   speedLimit: number | null;
   maxActive: number;
+  notifications: boolean;
+  keepInTray: boolean;
 }
 
 export interface ConfigChange {
@@ -34,6 +36,8 @@ export interface ConfigChange {
   /** Bytes per second; 0 removes the limit. */
   speedLimit?: number;
   maxActive?: number;
+  notifications?: boolean;
+  keepInTray?: boolean;
 }
 
 /** What the browser extension keeps (shared with the browsers through the engine). */
@@ -56,6 +60,8 @@ export interface Api {
   resume(id: number): Promise<void>;
   cancel(id: number): Promise<void>;
   remove(id: number, deleteFile: boolean): Promise<void>;
+  open(id: number): Promise<void>;
+  show(id: number): Promise<void>;
   config(): Promise<Config>;
   setConfig(change: ConfigChange): Promise<Config>;
   extensionSettings(): Promise<ExtensionSettings>;

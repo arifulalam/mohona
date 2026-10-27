@@ -134,7 +134,7 @@ export function App({ api, every }: { api: Api; every?: number }) {
               {d.rows.length === 0 ? (running ? "No downloads yet. Press “+ Add” and paste an address." : "Start Mohona to see your downloads.") : "Nothing here."}
             </div>
           ) : (
-            <List rows={shown} selected={selected} onSelect={select} onPause={(id) => void d.act(() => api.pause(id))} onResume={(id) => void d.act(() => api.resume(id))} />
+            <List rows={shown} selected={selected} onSelect={select} onPause={(id) => void d.act(() => api.pause(id))} onResume={(id) => void d.act(() => api.resume(id))} onOpen={(id) => void d.act(() => api.open(id))} onShow={(id) => void d.act(() => api.show(id))} />
           )}
         </main>
       </div>

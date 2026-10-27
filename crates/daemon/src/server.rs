@@ -310,7 +310,18 @@ async fn handle(state: &State, call: Call) -> Response {
             download_folder,
             speed_limit,
             max_active,
-        } => set_config(state, download_folder, speed_limit, max_active).await,
+            notifications,
+            keep_in_tray,
+        } => {
+            let change = ConfigChange {
+                download_folder,
+                speed_limit,
+                max_active,
+                notifications,
+                keep_in_tray,
+            };
+            set_config(state, change).await
+        }
         Call::Pause { id } => done(manager.pause(id).await),
         Call::Resume { id } => done(manager.resume(id).await),
         Call::Cancel { id } => done(manager.cancel(id).await),
@@ -323,6 +334,8 @@ async fn handle(state: &State, call: Call) -> Response {
 const FOLDER_KEY: &str = "download_folder";
 /// The settings key of the global speed limit (the manager's own).
 const SPEED_KEY: &str = "speed_limit";
+const NOTIFY_KEY: &str = "notifications";
+const TRAY_KEY: &str = "keep_in_tray";
 
 /// The folder a client named, else the folder the person chose, else the default.
 async fn folder_or_default(state: &State, named: Option<String>) -> PathBuf {
@@ -333,6 +346,11 @@ async fn folder_or_default(state: &State, named: Option<String>) -> PathBuf {
         Ok(Some(chosen)) if !chosen.is_empty() => PathBuf::from(chosen),
         _ => state.default_dir.clone(),
     }
+}
+
+/// The yes/no settings are stored as "1" and "0"; both are on until switched off.
+async fn flag(state: &State, key: &str) -> bool {
+    !matches!(state.manager.setting(key).await, Ok(Some(v)) if v == "0")
 }
 
 async fn config(state: &State) -> Response {
@@ -354,15 +372,27 @@ async fn config(state: &State) -> Response {
         default_folder: state.default_dir.display().to_string(),
         speed_limit,
         max_active,
+        notifications: flag(state, NOTIFY_KEY).await,
+        keep_in_tray: flag(state, TRAY_KEY).await,
     }
 }
 
-async fn set_config(
-    state: &State,
-    folder: Option<String>,
+struct ConfigChange {
+    download_folder: Option<String>,
     speed_limit: Option<u64>,
     max_active: Option<u32>,
-) -> Response {
+    notifications: Option<bool>,
+    keep_in_tray: Option<bool>,
+}
+
+async fn set_config(state: &State, change: ConfigChange) -> Response {
+    let ConfigChange {
+        download_folder: folder,
+        speed_limit,
+        max_active,
+        notifications,
+        keep_in_tray,
+    } = change;
     let manager = &state.manager;
     // Check everything first, so a refused value changes nothing.
     let folder = match folder.map(|f| f.trim().to_string()) {
@@ -398,6 +428,13 @@ async fn set_config(
         let value = (limit > 0).then_some(limit);
         if let Err(e) = manager.set_speed_limit(SpeedTarget::Global, value).await {
             return error(e);
+        }
+    }
+    for (key, value) in [(NOTIFY_KEY, notifications), (TRAY_KEY, keep_in_tray)] {
+        if let Some(on) = value {
+            if let Err(e) = manager.set_setting(key, if on { "1" } else { "0" }).await {
+                return error(e);
+            }
         }
     }
     if let Some(n) = max_active {

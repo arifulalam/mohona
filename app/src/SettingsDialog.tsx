@@ -12,6 +12,8 @@ export function SettingsDialog({ api, onClose }: { api: Api; onClose(): void }) 
   const [active, setActive] = useState("4");
   const [minMb, setMinMb] = useState("");
   const [excluded, setExcluded] = useState("");
+  const [notify, setNotify] = useState(true);
+  const [tray, setTray] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -27,6 +29,8 @@ export function SettingsDialog({ api, onClose }: { api: Api; onClose(): void }) 
         setLimit(l.text);
         setUnit(l.unit);
         setActive(String(c.maxActive));
+        setNotify(c.notifications);
+        setTray(c.keepInTray);
         setMinMb(e.minSizeBytes ? String(Math.round(e.minSizeBytes / 1024 / 1024)) : "");
         setExcluded(e.excludedHosts.join("\n"));
       })
@@ -51,6 +55,8 @@ export function SettingsDialog({ api, onClose }: { api: Api; onClose(): void }) 
         downloadFolder: folder.trim() === config.defaultFolder ? "" : folder.trim(),
         speedLimit: speed,
         maxActive: simultaneous,
+        notifications: notify,
+        keepInTray: tray,
       });
       await api.setExtensionSettings({ ...ext, minSizeBytes: min, excludedHosts: parseHosts(excluded) });
       onClose();
@@ -94,6 +100,8 @@ export function SettingsDialog({ api, onClose }: { api: Api; onClose(): void }) 
                 <input className={`${field} w-20`} inputMode="numeric" value={active} onChange={(e) => setActive(e.target.value)} aria-label="Simultaneous downloads" />
               </label>
             </div>
+            <Check label="Show a message when a download finishes or fails" value={notify} onChange={setNotify} />
+            <Check label="Keep Mohona in the tray when the window is closed" value={tray} onChange={setTray} />
           </fieldset>
 
           <fieldset className="m-0 flex flex-col gap-3 border-0 p-0">

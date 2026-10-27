@@ -12,7 +12,7 @@ const row = (id: number, name: string, status: string, extra: Partial<Row> = {})
 function fake(initial: Row[], running = true) {
   let rows = initial;
   let engine = running;
-  let cfg: Config = { downloadFolder: "C:\\Dl", defaultFolder: "C:\\Dl", speedLimit: null, maxActive: 4 };
+  let cfg: Config = { downloadFolder: "C:\\Dl", defaultFolder: "C:\\Dl", speedLimit: null, maxActive: 4, notifications: true, keepInTray: true };
   let ext: ExtensionSettings = { intercept: true, minSizeBytes: 0, excludedHosts: [], videoButton: true, buttonHiddenHosts: [], autoRefresh: true };
   const status = (): EngineStatus => ({ running: engine, version: engine ? "9.9" : null, message: null });
   const api = {
@@ -28,6 +28,10 @@ function fake(initial: Row[], running = true) {
     resume: vi.fn(async () => undefined),
     cancel: vi.fn(async () => undefined),
     remove: vi.fn(async (id: number) => void (rows = rows.filter((r) => r.id !== id))),
+    open: vi.fn(async (id: number) => {
+      if (id === 7) throw new Error("for safety, programs and scripts are not opened from here");
+    }),
+    show: vi.fn(async () => undefined),
     config: vi.fn(async () => cfg),
     setConfig: vi.fn(async (c: ConfigChange) => {
       if (c.maxActive === 13) throw new Error("the engine refused this");
@@ -128,9 +132,10 @@ describe("App", () => {
     await userEvent.type(within(dialog).getByLabelText("Smallest size in MB"), "5");
     await userEvent.type(within(dialog).getByPlaceholderText("example.com"), "bank.example");
     await userEvent.click(within(dialog).getByRole("checkbox", { name: /video/ }));
+    await userEvent.click(within(dialog).getByRole("checkbox", { name: /tray/ }));
     await userEvent.click(within(dialog).getByRole("button", { name: "Save" }));
     await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
-    expect(api.setConfig).toHaveBeenCalledWith({ downloadFolder: "", speedLimit: 2 * 1024 * 1024, maxActive: 6 });
+    expect(api.setConfig).toHaveBeenCalledWith({ downloadFolder: "", speedLimit: 2 * 1024 * 1024, maxActive: 6, notifications: true, keepInTray: false });
     expect(api.setExtensionSettings).toHaveBeenCalledWith(
       expect.objectContaining({ minSizeBytes: 5 * 1024 * 1024, excludedHosts: ["bank.example"], videoButton: false }),
     );
@@ -152,5 +157,17 @@ describe("App", () => {
     await userEvent.click(within(dialog).getByRole("button", { name: "Save" }));
     expect((await within(dialog).findByRole("alert")).textContent).toContain("engine refused");
     expect(api.setExtensionSettings).not.toHaveBeenCalled();
+  });
+
+  it("opens finished files, shows them in their folder, and shows the reason when opening is refused", async () => {
+    const api = fake([row(1, "a.pdf", "completed"), row(7, "setup.exe", "completed"), row(2, "b.iso", "downloading")]);
+    render(<App api={api} every={50} />);
+    await userEvent.click(await screen.findByRole("button", { name: "Open a.pdf" }));
+    await waitFor(() => expect(api.open).toHaveBeenCalledWith(1));
+    await userEvent.click(screen.getByRole("button", { name: "Show a.pdf in its folder" }));
+    await waitFor(() => expect(api.show).toHaveBeenCalledWith(1));
+    await userEvent.click(screen.getByRole("button", { name: "Open setup.exe" }));
+    expect((await screen.findByRole("alert")).textContent).toContain("programs and scripts");
+    expect(screen.queryByRole("button", { name: "Open b.iso" })).toBeNull();
   });
 });

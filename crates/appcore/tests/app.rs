@@ -165,6 +165,7 @@ async fn settings_pages_round_trip_through_the_engine() {
             download_folder: Some(folder.display().to_string()),
             speed_limit: Some(250_000),
             max_active: Some(3),
+            ..ConfigChange::default()
         })
         .await
         .unwrap();
@@ -188,5 +189,54 @@ async fn settings_pages_round_trip_through_the_engine() {
     let saved = engine.set_extension_settings(ext.clone()).await.unwrap();
     assert_eq!(saved, ext);
     assert_eq!(engine.extension_settings().await.unwrap(), ext);
+    shutdown.notify_one();
+}
+
+#[tokio::test]
+async fn open_and_show_only_work_for_finished_files_that_still_exist() {
+    let dir = tempfile::tempdir().unwrap();
+    let server = files().await;
+    let (engine, shutdown) = engine(dir.path()).await;
+    let id = engine
+        .add(&format!("http://{server}/file?size=20000&seed=4"), None)
+        .await
+        .unwrap();
+    let started = Instant::now();
+    let mut tracker = SpeedTracker::new();
+    loop {
+        let rows = engine.list(&mut tracker).await.unwrap();
+        if rows.iter().any(|r| r.id == id && r.status == "completed") {
+            break;
+        }
+        assert!(started.elapsed() < Duration::from_secs(10));
+        tokio::time::sleep(Duration::from_millis(50)).await;
+    }
+    let path = engine.finished_file(id).await.unwrap();
+    assert!(path.is_file());
+    assert!(matches!(
+        engine.finished_file(12345).await,
+        Err(AppError::Input(_))
+    ));
+    std::fs::remove_file(&path).unwrap();
+    let err = engine.finished_file(id).await.unwrap_err();
+    assert!(err.to_string().contains("no longer there"), "{err}");
+    shutdown.notify_one();
+}
+
+#[tokio::test]
+async fn the_switches_for_messages_and_the_tray_are_kept() {
+    use mohona_appcore::ConfigChange;
+    let dir = tempfile::tempdir().unwrap();
+    let (engine, shutdown) = engine(dir.path()).await;
+    let c = engine.config().await.unwrap();
+    assert!(c.notifications && c.keep_in_tray);
+    let c = engine
+        .set_config(ConfigChange {
+            keep_in_tray: Some(false),
+            ..ConfigChange::default()
+        })
+        .await
+        .unwrap();
+    assert!(c.notifications && !c.keep_in_tray);
     shutdown.notify_one();
 }

@@ -41,9 +41,11 @@ interface Props {
   onSelect(id: number, additive: boolean): void;
   onPause(id: number): void;
   onResume(id: number): void;
+  onOpen(id: number): void;
+  onShow(id: number): void;
 }
 
-export function List({ rows, selected, onSelect, onPause, onResume }: Props) {
+export function List({ rows, selected, onSelect, onPause, onResume, onOpen, onShow }: Props) {
   return (
     <ul role="listbox" aria-multiselectable="true" aria-label="Downloads" className="m-0 list-none p-0">
       {rows.map((row) => {
@@ -80,6 +82,16 @@ export function List({ rows, selected, onSelect, onPause, onResume }: Props) {
               <span className="w-24 text-right text-[12px]" style={{ color: row.status === "failed" ? "var(--bad)" : row.status === "completed" ? "var(--ok)" : undefined }}>
                 {LABEL[row.status] ?? row.status}
               </span>
+              {row.status === "completed" && (
+                <span className="flex gap-1">
+                  <button className="btn !px-2 !py-0.5 text-[12px]" aria-label={`Open ${row.name}`} onClick={(e) => (e.stopPropagation(), onOpen(row.id))}>
+                    Open
+                  </button>
+                  <button className="btn !px-2 !py-0.5 text-[12px]" aria-label={`Show ${row.name} in its folder`} onClick={(e) => (e.stopPropagation(), onShow(row.id))}>
+                    Show in folder
+                  </button>
+                </span>
+              )}
               <span className="w-8">
                 {running && (
                   <button className="btn !p-1" aria-label={`Pause ${row.name}`} title="Pause" onClick={(e) => (e.stopPropagation(), onPause(row.id))}>

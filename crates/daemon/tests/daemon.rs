@@ -489,6 +489,8 @@ async fn the_app_can_read_and_change_the_engines_settings() {
         download_folder: folder.map(str::to_string),
         speed_limit: speed,
         max_active: active,
+        notifications: None,
+        keep_in_tray: None,
     };
 
     let first = d.client.call(Call::GetConfig).await.unwrap();
@@ -497,6 +499,8 @@ async fn the_app_can_read_and_change_the_engines_settings() {
         default_folder,
         speed_limit,
         max_active,
+        notifications,
+        keep_in_tray,
     } = first
     else {
         panic!("{first:?}")
@@ -504,6 +508,10 @@ async fn the_app_can_read_and_change_the_engines_settings() {
     assert_eq!(download_folder, default_folder);
     assert_eq!(speed_limit, None);
     assert!(max_active >= 1);
+    assert!(
+        notifications && keep_in_tray,
+        "both are on until switched off"
+    );
 
     // Refused values change nothing, and say why.
     for bad in [
@@ -579,6 +587,24 @@ async fn the_app_can_read_and_change_the_engines_settings() {
     };
     assert_eq!(speed_limit, None);
     assert_eq!(download_folder, default_folder);
+
+    // The two switches are kept, and one change leaves the other alone.
+    let off = Call::SetConfig {
+        download_folder: None,
+        speed_limit: None,
+        max_active: None,
+        notifications: Some(false),
+        keep_in_tray: None,
+    };
+    let Response::Config {
+        notifications,
+        keep_in_tray,
+        ..
+    } = d.client.call(off).await.unwrap()
+    else {
+        panic!()
+    };
+    assert_eq!((notifications, keep_in_tray), (false, true));
     d.shutdown.notify_one();
     d.task.await.unwrap().unwrap();
 }

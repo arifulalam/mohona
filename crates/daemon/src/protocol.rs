@@ -34,6 +34,12 @@ pub enum Call {
         /// How many downloads run at once (1 to 32).
         #[serde(default)]
         max_active: Option<u32>,
+        /// Tell the person when a download finishes or fails (the app does it).
+        #[serde(default)]
+        notifications: Option<bool>,
+        /// Closing the app's window leaves it in the tray.
+        #[serde(default)]
+        keep_in_tray: Option<bool>,
     },
     /// Add a download. It starts when its queue has a free slot.
     Add {
@@ -202,6 +208,8 @@ pub enum Response {
         /// Bytes per second; `None` when there is no limit.
         speed_limit: Option<u64>,
         max_active: u32,
+        notifications: bool,
+        keep_in_tray: bool,
     },
     /// The value of a setting, if there is one.
     Setting {

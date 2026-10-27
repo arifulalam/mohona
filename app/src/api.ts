@@ -23,6 +23,8 @@ function tauriApi(): Api {
     resume: (id) => call<void>("resume_download", { id }),
     cancel: (id) => call<void>("cancel_download", { id }),
     remove: (id, deleteFile) => call<void>("remove_download", { id, deleteFile }),
+    open: (id) => call<void>("open_download", { id }),
+    show: (id) => call<void>("show_download", { id }),
     config: () => call<Config>("get_config"),
     setConfig: (change) => call<Config>("set_config", { change }),
     extensionSettings: () => call<ExtensionSettings>("get_extension_settings"),
@@ -49,7 +51,7 @@ export function demoApi(tick = 1000): Api {
         : { ...r, downloaded, percent: (downloaded / r.size) * 100, eta: Math.ceil((r.size - downloaded) / r.speed) };
     });
   }, tick);
-  let config: Config = { downloadFolder: "C:\\Users\\you\\Downloads", defaultFolder: "C:\\Users\\you\\Downloads", speedLimit: null, maxActive: 4 };
+  let config: Config = { downloadFolder: "C:\\Users\\you\\Downloads", defaultFolder: "C:\\Users\\you\\Downloads", speedLimit: null, maxActive: 4, notifications: true, keepInTray: true };
   let ext: ExtensionSettings = { intercept: true, minSizeBytes: 0, excludedHosts: [], videoButton: true, buttonHiddenHosts: [], autoRefresh: true };
   const status = (): EngineStatus => ({ running, version: running ? "demo" : null, message: null });
   const need = () => {
@@ -73,6 +75,11 @@ export function demoApi(tick = 1000): Api {
     resume: async (id) => (need(), set(id, { status: "downloading" })),
     cancel: async (id) => (need(), set(id, { status: "canceled", downloaded: 0, percent: 0, eta: null })),
     remove: async (id) => (need(), void (rows = rows.filter((r) => r.id !== id))),
+    open: async (id) => {
+      need();
+      if (/\.(exe|msi|bat|cmd|ps1|lnk)$/i.test(rows.find((r) => r.id === id)?.name ?? "")) throw new Error("for safety, programs and scripts are not opened from here; use \"Show in folder\"");
+    },
+    show: async () => need(),
     config: async () => (need(), config),
     setConfig: async (c: ConfigChange) => {
       need();
@@ -82,6 +89,8 @@ export function demoApi(tick = 1000): Api {
         downloadFolder: c.downloadFolder === undefined ? config.downloadFolder : c.downloadFolder || config.defaultFolder,
         speedLimit: c.speedLimit === undefined ? config.speedLimit : c.speedLimit || null,
         maxActive: c.maxActive ?? config.maxActive,
+        notifications: c.notifications ?? config.notifications,
+        keepInTray: c.keepInTray ?? config.keepInTray,
       };
       return config;
     },

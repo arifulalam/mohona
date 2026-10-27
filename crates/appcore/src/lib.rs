@@ -9,6 +9,7 @@
 mod rows;
 mod settings;
 mod speed;
+mod watch;
 
 use std::path::PathBuf;
 use std::time::{Duration, Instant};
@@ -19,6 +20,7 @@ use serde::Serialize;
 pub use rows::{name_of, Row};
 pub use settings::{merge_extension, ExtensionSettings};
 pub use speed::SpeedTracker;
+pub use watch::{Notice, Watcher};
 
 #[derive(Debug, thiserror::Error)]
 pub enum AppError {
@@ -64,6 +66,10 @@ pub struct Config {
     /// Bytes per second; `None` for no limit.
     pub speed_limit: Option<u64>,
     pub max_active: u32,
+    /// Tell the person when a download finishes or fails.
+    pub notifications: bool,
+    /// Closing the window leaves the app in the tray.
+    pub keep_in_tray: bool,
 }
 
 /// What may be changed; what is `None` stays as it is.
@@ -74,6 +80,8 @@ pub struct ConfigChange {
     /// Bytes per second; 0 removes the limit.
     pub speed_limit: Option<u64>,
     pub max_active: Option<u32>,
+    pub notifications: Option<bool>,
+    pub keep_in_tray: Option<bool>,
 }
 
 /// The settings key the browser extension and the app share.
@@ -217,11 +225,15 @@ impl Engine {
                 default_folder,
                 speed_limit,
                 max_active,
+                notifications,
+                keep_in_tray,
             } => Ok(Config {
                 download_folder,
                 default_folder,
                 speed_limit,
                 max_active,
+                notifications,
+                keep_in_tray,
             }),
             _ => Err(AppError::Engine("unexpected answer from the engine".into())),
         }
@@ -233,6 +245,8 @@ impl Engine {
                 download_folder: change.download_folder,
                 speed_limit: change.speed_limit,
                 max_active: change.max_active,
+                notifications: change.notifications,
+                keep_in_tray: change.keep_in_tray,
             })
             .await?
         {
@@ -241,11 +255,15 @@ impl Engine {
                 default_folder,
                 speed_limit,
                 max_active,
+                notifications,
+                keep_in_tray,
             } => Ok(Config {
                 download_folder,
                 default_folder,
                 speed_limit,
                 max_active,
+                notifications,
+                keep_in_tray,
             }),
             _ => Err(AppError::Engine("unexpected answer from the engine".into())),
         }
@@ -289,6 +307,51 @@ impl Engine {
         })
         .await?;
         Ok(ExtensionSettings::from_text(Some(&text)))
+    }
+
+    /// The file of a finished download, for "Open" and "Show in folder". The
+    /// path comes from the engine, never from the page, and the file must
+    /// still be there.
+    pub async fn finished_file(&self, id: i64) -> Result<PathBuf, AppError> {
+        let mut tracker = SpeedTracker::new();
+        let rows = self.list(&mut tracker).await?;
+        let row = rows
+            .into_iter()
+            .find(|r| r.id == id)
+            .ok_or_else(|| AppError::Input("that download is no longer in the list".into()))?;
+        if row.status != "completed" {
+            return Err(AppError::Input("the download is not finished yet".into()));
+        }
+        let path = row
+            .path
+            .map(PathBuf::from)
+            .ok_or_else(|| AppError::Input("the engine does not know where the file is".into()))?;
+        if !path.is_file() {
+            return Err(AppError::Input(format!(
+                "the file is no longer there: {}",
+                path.display()
+            )));
+        }
+        Ok(path)
+    }
+
+    /// Like [`Engine::finished_file`], but refuses programs and scripts: a
+    /// download must never be started with one click by mistake. (They can
+    /// still be shown in their folder.)
+    pub async fn openable_file(&self, id: i64) -> Result<PathBuf, AppError> {
+        let path = self.finished_file(id).await?;
+        if is_risky(&path) {
+            return Err(AppError::Input(
+                "for safety, programs and scripts are not opened from here; use \"Show in folder\""
+                    .into(),
+            ));
+        }
+        Ok(path)
+    }
+
+    /// Stops the engine (running downloads are paused and continue next time).
+    pub async fn stop(&self) -> Result<(), AppError> {
+        self.call(Call::Shutdown).await.map(|_| ())
     }
 
     pub async fn pause(&self, id: i64) -> Result<(), AppError> {
@@ -410,5 +473,66 @@ mod tests {
             Some(c.join(name))
         );
         assert_eq!(find_program(None, None, None), None);
+    }
+}
+
+/// Files that run code when opened (programs, scripts, installers, shortcuts, macros).
+pub fn is_risky(path: &std::path::Path) -> bool {
+    const RISKY: &[&str] = &[
+        "exe", "com", "scr", "msi", "msp", "msix", "appx", "bat", "cmd", "ps1", "psm1", "vbs",
+        "vbe", "js", "jse", "wsf", "wsh", "hta", "lnk", "url", "reg", "dll", "cpl", "msc", "pif",
+        "jar", "sh", "bash", "command", "app", "apk", "dmg", "pkg", "deb", "rpm", "appimage",
+        "docm", "xlsm", "pptm", "gadget", "inf", "scf", "chm",
+    ];
+    // The extension is whatever follows the last dot, and a trailing dot or
+    // space (which Windows ignores) does not hide it.
+    let name = path
+        .file_name()
+        .map(|n| {
+            n.to_string_lossy()
+                .trim_end_matches(['.', ' '])
+                .to_lowercase()
+        })
+        .unwrap_or_default();
+    match name.rsplit_once('.') {
+        Some((_, ext)) => RISKY.contains(&ext),
+        None => false,
+    }
+}
+
+#[cfg(test)]
+mod risk_tests {
+    use super::is_risky;
+    use std::path::Path;
+
+    #[test]
+    fn programs_and_scripts_are_risky_documents_and_media_are_not() {
+        for bad in [
+            "a.exe",
+            "A.EXE",
+            "setup.msi",
+            "x.bat",
+            "run.ps1",
+            "x.lnk",
+            "photo.jpg.exe",
+            "a.exe.",
+            "a.exe ",
+            "m.docm",
+            "x.AppImage",
+        ] {
+            assert!(is_risky(Path::new(bad)), "{bad}");
+        }
+        for fine in [
+            "a.zip",
+            "movie.mp4",
+            "report.pdf",
+            "notes.txt",
+            "readme",
+            "exe",
+            "a.exe.txt",
+            ".bashrc2",
+        ] {
+            assert!(!is_risky(Path::new(fine)), "{fine}");
+        }
     }
 }

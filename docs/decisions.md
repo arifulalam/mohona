@@ -506,3 +506,13 @@ A `401` now becomes its own error (`NetError::Unauthorized`) that names the kind
 **Browser settings in the app.** The settings page edits the same `extension.settings` text the browsers sync (ADR-0047): the app keeps fields it does not know, writes the ones it does, cleans site names the way the extension does, and gives the text an `updated` time strictly newer than what was there, so every browser takes the change over at its next check.
 
 **Not included.** A folder picker (needs a dialog plugin; the folder is typed for now), proxy and connection settings, notifications, language.
+
+## ADR-0051: Tray, messages and "Open" are done by the Rust part of the app, and never start programs
+
+**Tray and closing.** The app has a tray icon (left click: show the window; menu: Open Mohona, Quit (downloads keep going), Quit and stop Mohona). Closing the window hides it to the tray unless the person switched "Keep Mohona in the tray" off; the Rust part decides this when the close request arrives, not the page, so a hung page cannot keep the app alive or stop it from closing. The engine is a separate process, so downloads continue either way; only "Quit and stop Mohona" stops it (running downloads are paused and resume next time).
+
+**Messages.** The Rust part looks at the engine's list every two seconds (the page may be hidden) and shows a system message when a download finishes or fails. The first list after the app starts, or after the engine was away, only sets the starting point, so old downloads are never announced again. A failed download whose link expired says so in words. The switch "Show a message…" lives in the engine's settings (default on).
+
+**Open and Show in folder.** Both take only the download's number; the path is looked up in the engine's own list, must belong to a finished download and must still exist. "Open" refuses programs, installers, scripts, shortcuts and macro documents (`exe`, `msi`, `bat`, `ps1`, `lnk`, `docm` and others; a trailing dot or space does not hide the type) with a reason, because a downloaded file should never be started by one click by mistake; "Show in folder" works for every file.
+
+**Limits.** Messages on Windows show under the app's name only after it is installed (in development they appear under another name); no sound, no click-to-open yet.
