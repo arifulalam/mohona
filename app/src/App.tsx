@@ -2,6 +2,8 @@ import { useEffect, useMemo, useState } from "react";
 import { AddDialog, Modal } from "./AddDialog";
 import { allowed, counts, FILTERS, matches, type Filter } from "./filters";
 import { List } from "./List";
+import { ScheduleDialog } from "./ScheduleDialog";
+import { actionName } from "./schedule";
 import { SettingsDialog } from "./SettingsDialog";
 import { applyTheme, loadTheme, nextTheme, saveTheme, type Theme } from "./theme";
 import type { Api } from "./types";
@@ -16,6 +18,7 @@ export function App({ api, every }: { api: Api; every?: number }) {
   const [adding, setAdding] = useState(false);
   const [removing, setRemoving] = useState(false);
   const [settings, setSettings] = useState(false);
+  const [schedule, setSchedule] = useState(false);
   const [deleteFiles, setDeleteFiles] = useState(false);
   const [theme, setTheme] = useState<Theme>(loadTheme());
 
@@ -70,6 +73,9 @@ export function App({ api, every }: { api: Api; every?: number }) {
           {d.engine === null ? "Connecting…" : running ? `Engine running${d.engine.version ? ` (${d.engine.version})` : ""}` : "Engine stopped"}
         </span>
         <div className="flex-1" />
+        <button className="btn" onClick={() => setSchedule(true)} disabled={!running}>
+          Schedule
+        </button>
         <button className="btn" onClick={() => setSettings(true)} disabled={!running}>
           Settings
         </button>
@@ -85,6 +91,30 @@ export function App({ api, every }: { api: Api; every?: number }) {
           <button className="btn btn-primary" onClick={() => void d.startEngine()}>
             Start Mohona
           </button>
+        </div>
+      )}
+      {d.plan?.windows.length ? (
+        !d.plan.openNow && (
+          <div role="status" className="border-b border-[var(--line)] px-4 py-1 text-[12px] muted">
+            Outside the scheduled hours: downloads wait for the next window.
+          </div>
+        )
+      ) : null}
+      {d.plan?.action && (
+        <div role="status" className="flex items-center gap-3 border-b border-[var(--line)] bg-[var(--selected)] px-4 py-2">
+          <span>
+            {d.plan.countdown !== null
+              ? `${actionName(d.plan.action)} in ${d.plan.countdown} s.`
+              : `When all downloads are done: ${actionName(d.plan.action).toLowerCase()}.`}
+          </span>
+          <button className="btn" onClick={() => void d.act(() => api.cancelAction())}>
+            Cancel
+          </button>
+        </div>
+      )}
+      {d.plan?.message && !d.plan.action && (
+        <div role="status" className="border-b border-[var(--line)] px-4 py-1 text-[12px] muted">
+          {d.plan.message}
         </div>
       )}
       {d.error && (
@@ -139,6 +169,7 @@ export function App({ api, every }: { api: Api; every?: number }) {
         </main>
       </div>
 
+      {schedule && <ScheduleDialog api={api} onClose={() => setSchedule(false)} />}
       {settings && <SettingsDialog api={api} onClose={() => setSettings(false)} />}
       {adding && <AddDialog onAdd={addAll} onClose={() => setAdding(false)} />}
       {removing && (

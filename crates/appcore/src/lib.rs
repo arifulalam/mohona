@@ -84,6 +84,55 @@ pub struct ConfigChange {
     pub keep_in_tray: Option<bool>,
 }
 
+/// One time window of the schedule, as the page shows it.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PlanWindow {
+    /// `mon` to `sun`; empty means every day.
+    pub days: Vec<String>,
+    /// `HH:MM`
+    pub start: String,
+    /// `HH:MM`; earlier than `start` means after midnight.
+    pub end: String,
+    /// Bytes per second while this window is open; none: the usual limit.
+    pub speed_limit: Option<u64>,
+}
+
+/// The schedule and the armed end-of-downloads action.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Plan {
+    pub windows: Vec<PlanWindow>,
+    pub open_now: bool,
+    /// `sleep`, `hibernate` or `shutdown`.
+    pub action: Option<String>,
+    /// Seconds left while the countdown runs.
+    pub countdown: Option<u32>,
+    pub message: Option<String>,
+}
+
+impl From<mohona_manager::Window> for PlanWindow {
+    fn from(w: mohona_manager::Window) -> Self {
+        PlanWindow {
+            days: w.days,
+            start: w.start,
+            end: w.end,
+            speed_limit: w.speed_limit,
+        }
+    }
+}
+
+impl From<PlanWindow> for mohona_manager::Window {
+    fn from(w: PlanWindow) -> Self {
+        mohona_manager::Window {
+            days: w.days,
+            start: w.start,
+            end: w.end,
+            speed_limit: w.speed_limit,
+        }
+    }
+}
+
 /// The settings key the browser extension and the app share.
 const EXTENSION_KEY: &str = "extension.settings";
 
@@ -307,6 +356,55 @@ impl Engine {
         })
         .await?;
         Ok(ExtensionSettings::from_text(Some(&text)))
+    }
+
+    pub async fn plan(&self) -> Result<Plan, AppError> {
+        Self::plan_from(self.call(Call::GetPlan).await?)
+    }
+
+    /// Replaces the schedule (an empty list: downloads may run at any time).
+    pub async fn set_plan(&self, windows: Vec<PlanWindow>) -> Result<Plan, AppError> {
+        let windows = windows.into_iter().map(Into::into).collect();
+        Self::plan_from(self.call(Call::SetPlan { windows }).await?)
+    }
+
+    /// Arms `sleep`, `hibernate` or `shutdown` for when the downloads are done
+    /// (after a countdown that can be cancelled), or disarms with `None`.
+    pub async fn set_after_action(
+        &self,
+        action: Option<String>,
+        countdown_seconds: Option<u32>,
+    ) -> Result<Plan, AppError> {
+        Self::plan_from(
+            self.call(Call::SetAfterAction {
+                action,
+                countdown_seconds,
+            })
+            .await?,
+        )
+    }
+
+    pub async fn cancel_action(&self) -> Result<Plan, AppError> {
+        Self::plan_from(self.call(Call::CancelAction).await?)
+    }
+
+    fn plan_from(response: Response) -> Result<Plan, AppError> {
+        match response {
+            Response::Plan {
+                windows,
+                open_now,
+                action,
+                countdown,
+                message,
+            } => Ok(Plan {
+                windows: windows.into_iter().map(Into::into).collect(),
+                open_now,
+                action,
+                countdown,
+                message,
+            }),
+            _ => Err(AppError::Engine("unexpected answer from the engine".into())),
+        }
     }
 
     /// The file of a finished download, for "Open" and "Show in folder". The

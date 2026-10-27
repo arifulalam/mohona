@@ -608,3 +608,114 @@ async fn the_app_can_read_and_change_the_engines_settings() {
     d.shutdown.notify_one();
     d.task.await.unwrap().unwrap();
 }
+
+#[tokio::test]
+async fn the_schedule_and_the_end_action_can_be_set_and_are_checked() {
+    use mohona_manager::Window;
+    let dir = tempfile::tempdir().unwrap();
+    let server = files().await;
+    let d = start(dir.path()).await;
+
+    let Response::Plan {
+        windows,
+        open_now,
+        action,
+        ..
+    } = d.client.call(Call::GetPlan).await.unwrap()
+    else {
+        panic!()
+    };
+    assert!(windows.is_empty() && open_now && action.is_none());
+
+    // A window that is open all day, every day: saved and shown, and downloads still run.
+    let all_day = Window {
+        days: vec![],
+        start: "00:00".into(),
+        end: "23:59".into(),
+        speed_limit: Some(1_000_000),
+    };
+    let Response::Plan { windows, .. } = d
+        .client
+        .call(Call::SetPlan {
+            windows: vec![all_day.clone()],
+        })
+        .await
+        .unwrap()
+    else {
+        panic!()
+    };
+    assert_eq!(windows, vec![all_day]);
+    // A nonsense window is refused and the old one stays.
+    let bad = Window {
+        days: vec!["funday".into()],
+        start: "25:00".into(),
+        end: "01:00".into(),
+        speed_limit: None,
+    };
+    assert!(matches!(
+        d.client
+            .call(Call::SetPlan { windows: vec![bad] })
+            .await
+            .unwrap(),
+        Response::Error { .. }
+    ));
+    let Response::Plan { windows, .. } = d.client.call(Call::GetPlan).await.unwrap() else {
+        panic!()
+    };
+    assert_eq!(windows.len(), 1);
+
+    // Only sleep, hibernate and shutdown can be armed; nothing that starts a program.
+    for bad in ["run:calc.exe", "exit", "reboot", ""] {
+        let call = Call::SetAfterAction {
+            action: Some(bad.into()),
+            countdown_seconds: None,
+        };
+        assert!(
+            matches!(d.client.call(call).await.unwrap(), Response::Error { .. }),
+            "{bad}"
+        );
+    }
+    let too_short = Call::SetAfterAction {
+        action: Some("sleep".into()),
+        countdown_seconds: Some(1),
+    };
+    assert!(matches!(
+        d.client.call(too_short).await.unwrap(),
+        Response::Error { .. }
+    ));
+
+    // Armed with a long countdown, a finished download starts the countdown; cancelling disarms.
+    let arm = Call::SetAfterAction {
+        action: Some("shutdown".into()),
+        countdown_seconds: Some(3000),
+    };
+    let Response::Plan { action, .. } = d.client.call(arm).await.unwrap() else {
+        panic!()
+    };
+    assert_eq!(action.as_deref(), Some("shutdown"));
+    let url = format!("http://{server}/file?size=10000&seed=4");
+    let Response::Added { id } = d.client.call(add(&url)).await.unwrap() else {
+        panic!()
+    };
+    wait_for_status(&d.client, id, "completed").await;
+    let started = Instant::now();
+    loop {
+        let Response::Plan { countdown, .. } = d.client.call(Call::GetPlan).await.unwrap() else {
+            panic!()
+        };
+        if countdown.is_some_and(|c| c <= 3000) {
+            break;
+        }
+        assert!(started.elapsed() < Duration::from_secs(8), "no countdown");
+        tokio::time::sleep(Duration::from_millis(100)).await;
+    }
+    let Response::Plan {
+        action, countdown, ..
+    } = d.client.call(Call::CancelAction).await.unwrap()
+    else {
+        panic!()
+    };
+    assert!(action.is_none() && countdown.is_none());
+    d.shutdown.notify_one();
+    d.task.await.unwrap().unwrap();
+}

@@ -1,4 +1,4 @@
-import type { Api, Config, ConfigChange, EngineStatus, ExtensionSettings, Row } from "./types";
+import type { Api, Config, ConfigChange, EngineStatus, ExtensionSettings, Plan, PlanWindow, Row } from "./types";
 
 /** True inside the Tauri window; false in a plain browser (development, tests). */
 export function insideTauri(): boolean {
@@ -25,6 +25,10 @@ function tauriApi(): Api {
     remove: (id, deleteFile) => call<void>("remove_download", { id, deleteFile }),
     open: (id) => call<void>("open_download", { id }),
     show: (id) => call<void>("show_download", { id }),
+    plan: () => call<Plan>("get_plan"),
+    setPlan: (windows) => call<Plan>("set_plan", { windows }),
+    setAfterAction: (action, countdownSeconds) => call<Plan>("set_after_action", { action, countdownSeconds }),
+    cancelAction: () => call<Plan>("cancel_action"),
     config: () => call<Config>("get_config"),
     setConfig: (change) => call<Config>("set_config", { change }),
     extensionSettings: () => call<ExtensionSettings>("get_extension_settings"),
@@ -53,6 +57,7 @@ export function demoApi(tick = 1000): Api {
   }, tick);
   let config: Config = { downloadFolder: "C:\\Users\\you\\Downloads", defaultFolder: "C:\\Users\\you\\Downloads", speedLimit: null, maxActive: 4, notifications: true, keepInTray: true };
   let ext: ExtensionSettings = { intercept: true, minSizeBytes: 0, excludedHosts: [], videoButton: true, buttonHiddenHosts: [], autoRefresh: true };
+  let plan: Plan = { windows: [], openNow: true, action: null, countdown: null, message: null };
   const status = (): EngineStatus => ({ running, version: running ? "demo" : null, message: null });
   const need = () => {
     if (!running) throw new Error("Mohona is not running");
@@ -80,6 +85,14 @@ export function demoApi(tick = 1000): Api {
       if (/\.(exe|msi|bat|cmd|ps1|lnk)$/i.test(rows.find((r) => r.id === id)?.name ?? "")) throw new Error("for safety, programs and scripts are not opened from here; use \"Show in folder\"");
     },
     show: async () => need(),
+    plan: async () => (need(), plan),
+    setPlan: async (windows: PlanWindow[]) => {
+      need();
+      if (windows.some((w) => w.start === w.end)) throw new Error("a window must not start and end at the same time");
+      return (plan = { ...plan, windows });
+    },
+    setAfterAction: async (action) => (need(), (plan = { ...plan, action, countdown: null, message: null })),
+    cancelAction: async () => (need(), (plan = { ...plan, action: null, countdown: null })),
     config: async () => (need(), config),
     setConfig: async (c: ConfigChange) => {
       need();

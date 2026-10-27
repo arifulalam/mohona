@@ -1,7 +1,10 @@
 use std::path::PathBuf;
 use std::sync::Arc;
 
-use mohona_manager::{AddRequest, AddResult, DuplicatePolicy, Manager, ManagerError, SpeedTarget};
+use mohona_manager::{
+    AddRequest, AddResult, AfterAction, DuplicatePolicy, Manager, ManagerError, ManagerEvent,
+    Moment, Schedule, SpeedTarget,
+};
 use mohona_net::RequestContext;
 use tokio::io::{AsyncBufReadExt, AsyncReadExt, AsyncWriteExt, BufReader};
 use tokio::net::{TcpListener, TcpStream};
@@ -34,6 +37,15 @@ struct State {
     shutdown: Arc<Notify>,
     streams: crate::streams::Streams,
     receiver: crate::receive::Receiver,
+    action: std::sync::Mutex<ActionState>,
+}
+
+/// What the person armed for the end of the downloads, and how far it is.
+#[derive(Default)]
+struct ActionState {
+    armed: Option<String>,
+    countdown: Option<u32>,
+    message: Option<String>,
 }
 
 /// Runs the API until shutdown, then stops the manager and removes the info
@@ -64,7 +76,9 @@ pub async fn serve(manager: Manager, config: ServerConfig) -> std::io::Result<()
         shutdown: config.shutdown.clone(),
         streams: crate::streams::Streams::new(config.stream_program),
         receiver: crate::receive::Receiver::default(),
+        action: std::sync::Mutex::new(ActionState::default()),
     });
+    watch_action(&state);
     loop {
         tokio::select! {
             accepted = listener.accept() => {
@@ -81,6 +95,120 @@ pub async fn serve(manager: Manager, config: ServerConfig) -> std::io::Result<()
     let _ = std::fs::remove_file(&config.info_path);
     state.manager.shutdown().await;
     Ok(())
+}
+
+/// Follows what the manager says about the end-of-downloads action.
+fn watch_action(state: &Arc<State>) {
+    let mut events = state.manager.subscribe();
+    let state = Arc::clone(state);
+    tokio::spawn(async move {
+        loop {
+            let event = match events.recv().await {
+                Ok(event) => event,
+                Err(tokio::sync::broadcast::error::RecvError::Lagged(_)) => continue,
+                Err(_) => return,
+            };
+            let mut a = state.action.lock().unwrap_or_else(|e| e.into_inner());
+            match event {
+                ManagerEvent::ActionCountdown { seconds_left, .. } => {
+                    a.countdown = Some(seconds_left)
+                }
+                ManagerEvent::ActionCancelled { still_armed } => {
+                    a.countdown = None;
+                    if !still_armed {
+                        a.armed = None;
+                    }
+                }
+                ManagerEvent::ActionDone { action } => {
+                    a.countdown = None;
+                    a.armed = None;
+                    a.message = Some(format!("Done: {}", action.describe()));
+                }
+                ManagerEvent::ActionFailed { message } => {
+                    a.countdown = None;
+                    a.armed = None;
+                    a.message = Some(format!("It did not work: {message}"));
+                }
+                _ => {}
+            }
+        }
+    });
+}
+
+/// The actions a client may arm: nothing that starts programs.
+fn client_action(text: &str) -> Result<AfterAction, String> {
+    match AfterAction::parse(text)? {
+        a @ (AfterAction::Sleep | AfterAction::Hibernate | AfterAction::Shutdown) => Ok(a),
+        _ => Err("use sleep, hibernate or shutdown".into()),
+    }
+}
+
+async fn plan(state: &State) -> Response {
+    let queues = match state.manager.queues().await {
+        Ok(q) => q,
+        Err(e) => return error(e),
+    };
+    let schedule = queues
+        .first()
+        .and_then(|q| q.schedule_json.as_deref())
+        .and_then(|j| Schedule::from_json(j).ok());
+    let windows = schedule
+        .as_ref()
+        .map(|s| s.windows.clone())
+        .unwrap_or_default();
+    let open_now = schedule
+        .as_ref()
+        .is_none_or(|s| s.open_window(Moment::now()).is_some());
+    let a = state.action.lock().unwrap_or_else(|e| e.into_inner());
+    Response::Plan {
+        windows,
+        open_now,
+        action: a.armed.clone(),
+        countdown: a.countdown,
+        message: a.message.clone(),
+    }
+}
+
+async fn set_plan(state: &State, windows: Vec<mohona_manager::Window>) -> Response {
+    let queue = match state.manager.queues().await {
+        Ok(q) => match q.first() {
+            Some(q) => q.id,
+            None => return error("there is no queue"),
+        },
+        Err(e) => return error(e),
+    };
+    let schedule = (!windows.is_empty()).then_some(Schedule { windows });
+    if let Err(e) = state.manager.set_schedule(queue, schedule).await {
+        return error(e);
+    }
+    plan(state).await
+}
+
+async fn set_after_action(state: &State, action: Option<String>, seconds: Option<u32>) -> Response {
+    let (action, seconds) = match action {
+        None => (None, 0),
+        Some(text) => {
+            let seconds = seconds.unwrap_or(60);
+            if !(5..=3600).contains(&seconds) {
+                return error("the countdown must be between 5 and 3600 seconds");
+            }
+            match client_action(&text) {
+                Ok(a) => (Some(a), seconds),
+                Err(e) => return error(e),
+            }
+        }
+    };
+    let name = action.as_ref().map(|a| a.name().to_string());
+    if let Err(e) = state.manager.set_after_action(action, seconds).await {
+        return error(e);
+    }
+    {
+        let mut a = state.action.lock().unwrap_or_else(|e| e.into_inner());
+        a.armed = name;
+        a.countdown = None;
+        a.message = None;
+    }
+    plan(state).await
 }
 
 /// Same answer in the same time whether the token is nearly right or not.
@@ -305,6 +433,13 @@ async fn handle(state: &State, call: Call) -> Response {
                 )
                 .await,
         ),
+        Call::GetPlan => plan(state).await,
+        Call::SetPlan { windows } => set_plan(state, windows).await,
+        Call::SetAfterAction {
+            action,
+            countdown_seconds,
+        } => set_after_action(state, action, countdown_seconds).await,
+        Call::CancelAction => set_after_action(state, None, None).await,
         Call::GetConfig => config(state).await,
         Call::SetConfig {
             download_folder,

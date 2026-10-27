@@ -516,3 +516,13 @@ A `401` now becomes its own error (`NetError::Unauthorized`) that names the kind
 **Open and Show in folder.** Both take only the download's number; the path is looked up in the engine's own list, must belong to a finished download and must still exist. "Open" refuses programs, installers, scripts, shortcuts and macro documents (`exe`, `msi`, `bat`, `ps1`, `lnk`, `docm` and others; a trailing dot or space does not hide the type) with a reason, because a downloaded file should never be started by one click by mistake; "Show in folder" works for every file.
 
 **Limits.** Messages on Windows show under the app's name only after it is installed (in development they appear under another name); no sound, no click-to-open yet.
+
+## ADR-0052: The app sets the main queue's schedule and one end-of-downloads action; clients can never start programs
+
+**Schedule.** The app edits the schedule of the default queue ("Main"): any number of windows (days, from, to, an optional speed limit while the window is open), windows may cross midnight, and an empty list means "always". The engine already applied schedules (queue closed outside windows, progress kept); the daemon gets `get_plan` and `set_plan`, which check every window before saving (a refused list changes nothing). Several queues, and choosing a queue per download, are later work: the engine has the pieces, the page does not.
+
+**End action.** `set_after_action` arms `sleep`, `hibernate` or `shutdown` with a countdown of 5 to 3600 seconds (default 60) that starts when the last download finishes and can be cancelled; it applies once and only to downloads that finish after it was armed (as in the engine). The daemon follows the manager's events to tell the page the armed action, the seconds left, and how it ended (done, or why it failed). `run:<program>` and `exit` exist in the engine and the command line but are refused from the daemon's API: a program that can be reached by a local client, however good its token, must not be able to name a program to start.
+
+**The page** shows the schedule's state ("outside the scheduled hours"), a banner with the armed action and its countdown with a Cancel button, and the last outcome.
+
+**Not tested here:** the real sleep, hibernate and shutdown calls (the engine's tests replace the runner); see the manual tests.

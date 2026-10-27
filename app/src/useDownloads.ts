@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import type { Api, EngineStatus, Row } from "./types";
+import type { Api, EngineStatus, Plan, Row } from "./types";
 
 export interface Downloads {
   rows: Row[];
+  plan: Plan | null;
   engine: EngineStatus | null;
   /** The last error as text, until dismissed. */
   error: string | null;
@@ -15,6 +16,7 @@ export interface Downloads {
 /** Keeps the list and the engine's state fresh (every `every` ms). */
 export function useDownloads(api: Api, every = 1000): Downloads {
   const [rows, setRows] = useState<Row[]>([]);
+  const [plan, setPlan] = useState<Plan | null>(null);
   const [engine, setEngine] = useState<EngineStatus | null>(null);
   const [error, setError] = useState<string | null>(null);
   const busy = useRef(false);
@@ -25,7 +27,10 @@ export function useDownloads(api: Api, every = 1000): Downloads {
     try {
       const status = await api.status();
       setEngine(status);
-      if (status.running) setRows(await api.list());
+      if (status.running) {
+        setRows(await api.list());
+        setPlan(await api.plan());
+      }
     } catch (e) {
       setEngine({ running: false, version: null, message: String((e as Error).message ?? e) });
     } finally {
@@ -59,5 +64,5 @@ export function useDownloads(api: Api, every = 1000): Downloads {
     await act(() => api.start());
   }, [act, api]);
 
-  return { rows, engine, error, dismissError: () => setError(null), startEngine, act };
+  return { rows, plan, engine, error, dismissError: () => setError(null), startEngine, act };
 }

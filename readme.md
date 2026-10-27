@@ -177,7 +177,7 @@ mohona get webdavs://cloud.example.com/remote.php/dav/files/alice/report.pdf -u 
 
 ## Desktop app (early)
 
-`app/` holds the desktop window (Tauri 2, React, Tailwind): download list with progress, speed and time left, add, pause, resume, cancel, remove, filters, settings, open and show in folder, a tray icon, messages when downloads finish or fail, light and dark themes. It uses the same engine as the command line and the browser extension. See `app/README.md`; a first look in any browser needs only `cd app && npm install && npm run dev`.
+`app/` holds the desktop window (Tauri 2, React, Tailwind): download list with progress, speed and time left, add, pause, resume, cancel, remove, filters, settings, a schedule with time windows and a "when done" action (sleep, hibernate, shut down), open and show in folder, a tray icon, messages when downloads finish or fail, light and dark themes. It uses the same engine as the command line and the browser extension. See `app/README.md`; a first look in any browser needs only `cd app && npm install && npm run dev`.
 
 ## Browser extension (early)
 

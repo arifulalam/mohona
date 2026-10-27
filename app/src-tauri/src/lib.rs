@@ -6,8 +6,8 @@
 use std::time::Duration;
 
 use mohona_appcore::{
-    AppError, Config, ConfigChange, Engine, EngineStatus, ExtensionSettings, Row, SpeedTracker,
-    Watcher,
+    AppError, Config, ConfigChange, Engine, EngineStatus, ExtensionSettings, Plan, PlanWindow, Row,
+    SpeedTracker, Watcher,
 };
 use tauri::menu::{Menu, MenuItem};
 use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
@@ -105,6 +105,30 @@ async fn set_extension_settings(
     settings: ExtensionSettings,
 ) -> Result<ExtensionSettings> {
     app.engine.set_extension_settings(settings).await
+}
+
+#[tauri::command]
+async fn get_plan(app: State<'_, App>) -> Result<Plan> {
+    app.engine.plan().await
+}
+
+#[tauri::command]
+async fn set_plan(app: State<'_, App>, windows: Vec<PlanWindow>) -> Result<Plan> {
+    app.engine.set_plan(windows).await
+}
+
+#[tauri::command]
+async fn set_after_action(
+    app: State<'_, App>,
+    action: Option<String>,
+    countdown_seconds: Option<u32>,
+) -> Result<Plan> {
+    app.engine.set_after_action(action, countdown_seconds).await
+}
+
+#[tauri::command]
+async fn cancel_action(app: State<'_, App>) -> Result<Plan> {
+    app.engine.cancel_action().await
 }
 
 fn show_window(handle: &AppHandle) {
@@ -244,6 +268,10 @@ pub fn run() {
             set_config,
             get_extension_settings,
             set_extension_settings,
+            get_plan,
+            set_plan,
+            set_after_action,
+            cancel_action,
         ])
         .run(tauri::generate_context!())
         .expect("the Mohona window could not start");

@@ -240,3 +240,44 @@ async fn the_switches_for_messages_and_the_tray_are_kept() {
     assert!(c.notifications && !c.keep_in_tray);
     shutdown.notify_one();
 }
+
+#[tokio::test]
+async fn the_schedule_and_the_end_action_go_through_the_app() {
+    use mohona_appcore::PlanWindow;
+    let dir = tempfile::tempdir().unwrap();
+    let (engine, shutdown) = engine(dir.path()).await;
+    let plan = engine.plan().await.unwrap();
+    assert!(plan.windows.is_empty() && plan.open_now && plan.action.is_none());
+
+    let night = PlanWindow {
+        days: vec!["mon".into(), "tue".into()],
+        start: "23:00".into(),
+        end: "06:00".into(),
+        speed_limit: None,
+    };
+    let plan = engine.set_plan(vec![night.clone()]).await.unwrap();
+    assert_eq!(plan.windows, vec![night]);
+    let refused = engine
+        .set_plan(vec![PlanWindow {
+            days: vec![],
+            start: "10:00".into(),
+            end: "10:00".into(),
+            speed_limit: None,
+        }])
+        .await;
+    assert!(refused.is_err(), "a window that starts and ends together");
+    assert_eq!(engine.plan().await.unwrap().windows.len(), 1);
+    assert!(engine.set_plan(vec![]).await.unwrap().windows.is_empty());
+
+    let plan = engine
+        .set_after_action(Some("sleep".into()), Some(600))
+        .await
+        .unwrap();
+    assert_eq!(plan.action.as_deref(), Some("sleep"));
+    assert!(engine
+        .set_after_action(Some("run:calc".into()), None)
+        .await
+        .is_err());
+    assert_eq!(engine.cancel_action().await.unwrap().action, None);
+    shutdown.notify_one();
+}

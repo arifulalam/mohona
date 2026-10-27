@@ -396,6 +396,8 @@ Starts the engine that the browser extension (through `mohona-host`) talks to. I
 
 The folder chosen in the app's Settings (if any) replaces `--folder` for downloads that name no folder. The app (and any other program with the token from the info file) can read and change the engine's settings with the daemon calls `get_config` and `set_config` (one JSON line each, see `crates/daemon/src/protocol.rs`): `{"type":"set_config","download_folder":"D:\\Mohona","speed_limit":500000,"max_active":3,"notifications":true,"keep_in_tray":true}` answers `{"type":"config","download_folder":"D:\\Mohona","default_folder":"...","speed_limit":500000,"max_active":3,"notifications":true,"keep_in_tray":true}`; a refused value answers `{"type":"error","message":"simultaneous downloads must be between 1 and 32"}` and changes nothing. `speed_limit` 0 removes the limit; an empty `download_folder` goes back to the default.
 
+The schedule and the end-of-downloads action have daemon calls too: `get_plan`, `set_plan` (`{"type":"set_plan","windows":[{"days":["mon","tue"],"start":"23:00","end":"06:00","speed_limit":null}]}`; an empty list means always), `set_after_action` (`{"type":"set_after_action","action":"shutdown","countdown_seconds":60}`; `null` disarms) and `cancel_action`; all answer `{"type":"plan","windows":[...],"open_now":true,"action":"shutdown","countdown":null,"message":null}`. Only `sleep`, `hibernate` and `shutdown` can be armed this way, with 5 to 3600 seconds of countdown; a refused value changes nothing.
+
 Expected: `Mohona is running. Press Ctrl-C to stop it. (Details for other programs: ...)`.
 
 Errors:

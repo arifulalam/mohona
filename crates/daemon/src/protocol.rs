@@ -1,3 +1,4 @@
+use mohona_manager::Window;
 use serde::{Deserialize, Serialize};
 
 /// What a client asks. One per line, as JSON: `{"token":"...","call":{"type":"ping"}}`.
@@ -41,6 +42,22 @@ pub enum Call {
         #[serde(default)]
         keep_in_tray: Option<bool>,
     },
+    /// The default queue's schedule and the armed "when everything is done" action.
+    GetPlan,
+    /// Give the default queue a schedule (an empty list: it runs at any time).
+    SetPlan {
+        windows: Vec<Window>,
+    },
+    /// Arm an action for when the downloads are finished (`sleep`,
+    /// `hibernate` or `shutdown`), or disarm with `None`. A countdown (default
+    /// 60 seconds, 5 to 3600) runs first and can be cancelled.
+    SetAfterAction {
+        action: Option<String>,
+        #[serde(default)]
+        countdown_seconds: Option<u32>,
+    },
+    /// Stop a running countdown and disarm the action.
+    CancelAction,
     /// Add a download. It starts when its queue has a free slot.
     Add {
         url: String,
@@ -210,6 +227,17 @@ pub enum Response {
         max_active: u32,
         notifications: bool,
         keep_in_tray: bool,
+    },
+    Plan {
+        windows: Vec<Window>,
+        /// Whether the schedule lets downloads run right now.
+        open_now: bool,
+        /// The armed action, if any.
+        action: Option<String>,
+        /// Seconds until the action happens, while a countdown runs.
+        countdown: Option<u32>,
+        /// What happened last with the action (done or failed), for the person to read.
+        message: Option<String>,
     },
     /// The value of a setting, if there is one.
     Setting {

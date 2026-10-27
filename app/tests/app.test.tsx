@@ -2,7 +2,7 @@ import { cleanup, render, screen, waitFor, within } from "@testing-library/react
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { App } from "../src/App";
-import type { Api, Config, ConfigChange, EngineStatus, ExtensionSettings, Row } from "../src/types";
+import type { Api, Config, ConfigChange, EngineStatus, ExtensionSettings, Plan, PlanWindow, Row } from "../src/types";
 
 const row = (id: number, name: string, status: string, extra: Partial<Row> = {}): Row => ({
   id, name, url: `https://x.test/${name}`, status, downloaded: 50, size: 100, percent: 50, speed: 0, eta: null,
@@ -12,6 +12,7 @@ const row = (id: number, name: string, status: string, extra: Partial<Row> = {})
 function fake(initial: Row[], running = true) {
   let rows = initial;
   let engine = running;
+  let plan: Plan = { windows: [], openNow: true, action: null, countdown: null, message: null };
   let cfg: Config = { downloadFolder: "C:\\Dl", defaultFolder: "C:\\Dl", speedLimit: null, maxActive: 4, notifications: true, keepInTray: true };
   let ext: ExtensionSettings = { intercept: true, minSizeBytes: 0, excludedHosts: [], videoButton: true, buttonHiddenHosts: [], autoRefresh: true };
   const status = (): EngineStatus => ({ running: engine, version: engine ? "9.9" : null, message: null });
@@ -32,6 +33,10 @@ function fake(initial: Row[], running = true) {
       if (id === 7) throw new Error("for safety, programs and scripts are not opened from here");
     }),
     show: vi.fn(async () => undefined),
+    plan: vi.fn(async () => plan),
+    setPlan: vi.fn(async (windows: PlanWindow[]) => (plan = { ...plan, windows })),
+    setAfterAction: vi.fn(async (action: string | null) => (plan = { ...plan, action, countdown: null })),
+    cancelAction: vi.fn(async () => (plan = { ...plan, action: null, countdown: null })),
     config: vi.fn(async () => cfg),
     setConfig: vi.fn(async (c: ConfigChange) => {
       if (c.maxActive === 13) throw new Error("the engine refused this");
@@ -169,5 +174,43 @@ describe("App", () => {
     await userEvent.click(screen.getByRole("button", { name: "Open setup.exe" }));
     expect((await screen.findByRole("alert")).textContent).toContain("programs and scripts");
     expect(screen.queryByRole("button", { name: "Open b.iso" })).toBeNull();
+  });
+
+  it("saves a schedule window and the end action", async () => {
+    const api = fake([]);
+    render(<App api={api} every={50} />);
+    await userEvent.click(await screen.findByRole("button", { name: "Schedule" }));
+    const dialog = await screen.findByRole("dialog");
+    await userEvent.click(await within(dialog).findByRole("button", { name: "Add window" }));
+    expect(within(dialog).getByText("Every day 23:00–06:00")).toBeTruthy();
+    await userEvent.selectOptions(within(dialog).getByLabelText("When everything is done"), "shutdown");
+    await userEvent.click(within(dialog).getByRole("button", { name: "Save" }));
+    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+    expect(api.setPlan).toHaveBeenCalledWith([{ days: [], start: "23:00", end: "06:00", speedLimit: null }]);
+    expect(api.setAfterAction).toHaveBeenCalledWith("shutdown", 60);
+  });
+
+  it("refuses a bad window with a reason and keeps the dialog open", async () => {
+    const api = fake([]);
+    render(<App api={api} every={50} />);
+    await userEvent.click(await screen.findByRole("button", { name: "Schedule" }));
+    const dialog = await screen.findByRole("dialog");
+    const end = await within(dialog).findByLabelText("Window end");
+    await userEvent.clear(end);
+    await userEvent.type(end, "23:00");
+    await userEvent.click(within(dialog).getByRole("button", { name: "Add window" }));
+    expect((await within(dialog).findByRole("alert")).textContent).toContain("same time");
+    expect(api.setPlan).not.toHaveBeenCalled();
+  });
+
+  it("shows the countdown and lets the person cancel it", async () => {
+    const api = fake([]);
+    await api.setAfterAction("shutdown");
+    await api.plan();
+    api.plan.mockImplementation(async () => ({ windows: [], openNow: true, action: "shutdown", countdown: 42, message: null }));
+    render(<App api={api} every={50} />);
+    expect(await screen.findByText(/Shut the computer down in 42 s/)).toBeTruthy();
+    await userEvent.click(screen.getAllByRole("button", { name: "Cancel" }).find((b) => b.closest("[role=status]"))!);
+    await waitFor(() => expect(api.cancelAction).toHaveBeenCalled());
   });
 });

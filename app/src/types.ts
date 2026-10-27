@@ -40,6 +40,26 @@ export interface ConfigChange {
   keepInTray?: boolean;
 }
 
+/** One time window of the schedule. */
+export interface PlanWindow {
+  /** mon … sun; empty means every day. */
+  days: string[];
+  start: string;
+  end: string;
+  /** Bytes per second while the window is open; null keeps the usual limit. */
+  speedLimit: number | null;
+}
+
+export interface Plan {
+  windows: PlanWindow[];
+  openNow: boolean;
+  /** sleep, hibernate or shutdown, when armed. */
+  action: string | null;
+  /** Seconds left while the countdown runs. */
+  countdown: number | null;
+  message: string | null;
+}
+
 /** What the browser extension keeps (shared with the browsers through the engine). */
 export interface ExtensionSettings {
   intercept: boolean;
@@ -62,6 +82,10 @@ export interface Api {
   remove(id: number, deleteFile: boolean): Promise<void>;
   open(id: number): Promise<void>;
   show(id: number): Promise<void>;
+  plan(): Promise<Plan>;
+  setPlan(windows: PlanWindow[]): Promise<Plan>;
+  setAfterAction(action: string | null, countdownSeconds?: number): Promise<Plan>;
+  cancelAction(): Promise<Plan>;
   config(): Promise<Config>;
   setConfig(change: ConfigChange): Promise<Config>;
   extensionSettings(): Promise<ExtensionSettings>;

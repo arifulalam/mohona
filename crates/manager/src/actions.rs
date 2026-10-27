@@ -52,6 +52,17 @@ impl AfterAction {
         ))
     }
 
+    /// The word that [`AfterAction::parse`] reads back (`run` actions keep only the program).
+    pub fn name(&self) -> &str {
+        match self {
+            AfterAction::Exit => "exit",
+            AfterAction::Sleep => "sleep",
+            AfterAction::Hibernate => "hibernate",
+            AfterAction::Shutdown => "shutdown",
+            AfterAction::Run { .. } => "run",
+        }
+    }
+
     /// A short phrase for the countdown ("shutting down").
     pub fn describe(&self) -> String {
         match self {

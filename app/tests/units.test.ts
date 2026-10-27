@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { allowed, counts, matches } from "../src/filters";
 import * as fmt from "../src/format";
 import { parseHosts, parseLimit, parseMegabytes, splitLimit } from "../src/limits";
+import { describeWindow, normalTime, windowFrom } from "../src/schedule";
 import { applyTheme, nextTheme } from "../src/theme";
 import type { Row } from "../src/types";
 
@@ -68,5 +69,18 @@ describe("limits", () => {
     expect(splitLimit(null)).toEqual({ text: "", unit: "MB" });
     expect(splitLimit(3 * 1024 * 1024)).toEqual({ text: "3", unit: "MB" });
     expect(splitLimit(1536)).toEqual({ text: "1.5", unit: "KB" });
+  });
+});
+
+describe("schedule", () => {
+  it("reads times and builds windows", () => {
+    expect(normalTime("7:30")).toBe("07:30");
+    expect(normalTime("24:00")).toBeNull();
+    expect(normalTime("abc")).toBeNull();
+    expect(windowFrom(["mon", "tue"], "23:00", "6:00", "")).toEqual({ days: ["mon", "tue"], start: "23:00", end: "06:00", speedLimit: null });
+    expect(windowFrom(["sun", "mon", "tue", "wed", "thu", "fri", "sat"], "1:00", "2:00", "512")).toEqual({ days: [], start: "01:00", end: "02:00", speedLimit: 524288 });
+    expect(windowFrom([], "10:00", "10:00", "")).toMatch(/same time/);
+    expect(windowFrom([], "10:00", "11:00", "x")).toMatch(/number/);
+    expect(describeWindow({ days: ["sat", "sun"], start: "00:00", end: "08:00", speedLimit: 1024 })).toBe("Sat, Sun 00:00–08:00, up to 1 KB/s");
   });
 });
