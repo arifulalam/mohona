@@ -491,6 +491,7 @@ async fn the_app_can_read_and_change_the_engines_settings() {
         max_active: active,
         notifications: None,
         keep_in_tray: None,
+        sort_by_type: None,
     };
 
     let first = d.client.call(Call::GetConfig).await.unwrap();
@@ -501,6 +502,7 @@ async fn the_app_can_read_and_change_the_engines_settings() {
         max_active,
         notifications,
         keep_in_tray,
+        ..
     } = first
     else {
         panic!("{first:?}")
@@ -595,6 +597,7 @@ async fn the_app_can_read_and_change_the_engines_settings() {
         max_active: None,
         notifications: Some(false),
         keep_in_tray: None,
+        sort_by_type: None,
     };
     let Response::Config {
         notifications,
@@ -716,6 +719,94 @@ async fn the_schedule_and_the_end_action_can_be_set_and_are_checked() {
         panic!()
     };
     assert!(action.is_none() && countdown.is_none());
+    d.shutdown.notify_one();
+    d.task.await.unwrap().unwrap();
+}
+
+#[tokio::test]
+async fn categories_are_checked_and_can_sort_finished_downloads() {
+    let dir = tempfile::tempdir().unwrap();
+    let server = files().await;
+    let d = start(dir.path()).await;
+    let new = |name: &str, ext: &[&str], folder: Option<&str>| Call::AddCategory {
+        name: name.into(),
+        extensions: ext.iter().map(|e| e.to_string()).collect(),
+        folder: folder.map(Into::into),
+    };
+
+    let Response::Categories { categories } = d.client.call(Call::GetCategories).await.unwrap()
+    else {
+        panic!()
+    };
+    assert!(categories.iter().any(|c| c.name == "Compressed"));
+
+    for (bad, why) in [
+        (new("", &["x1"], None), "empty name"),
+        (new("a/b", &["x1"], None), "slash in name"),
+        (new("Fine", &[], None), "no types"),
+        (new("Fine", &["a b"], None), "bad type"),
+        (new("Fine", &["zip"], None), "type taken"),
+        (new("compressed", &["x1"], None), "name taken"),
+        (new("Fine", &["x1"], Some("../escape")), "climbing folder"),
+    ] {
+        assert!(
+            matches!(d.client.call(bad).await.unwrap(), Response::Error { .. }),
+            "{why}"
+        );
+    }
+
+    let Response::Categories { categories } = d
+        .client
+        .call(new("Blobs", &[".BIN"], Some("blob files")))
+        .await
+        .unwrap()
+    else {
+        panic!()
+    };
+    let blobs = categories
+        .iter()
+        .find(|c| c.name == "Blobs")
+        .unwrap()
+        .clone();
+    assert_eq!(blobs.extensions, ["bin"]);
+
+    // Sorting is off until switched on; then a finished download lands in its category's folder.
+    let on = Call::SetConfig {
+        download_folder: None,
+        speed_limit: None,
+        max_active: None,
+        notifications: None,
+        keep_in_tray: None,
+        sort_by_type: Some(true),
+    };
+    let Response::Config { sort_by_type, .. } = d.client.call(on).await.unwrap() else {
+        panic!()
+    };
+    assert!(sort_by_type);
+    let url = format!("http://{server}/file?size=10000&seed=8");
+    let Response::Added { id } = d.client.call(add(&url)).await.unwrap() else {
+        panic!()
+    };
+    wait_for_status(&d.client, id, "completed").await;
+    let Response::Downloads { downloads } = d.client.call(Call::List).await.unwrap() else {
+        panic!()
+    };
+    let path = downloads
+        .iter()
+        .find(|r| r.id == id)
+        .and_then(|r| r.path.clone())
+        .unwrap();
+    assert!(path.contains("blob files"), "{path}");
+
+    let Response::Categories { categories } = d
+        .client
+        .call(Call::RemoveCategory { id: blobs.id })
+        .await
+        .unwrap()
+    else {
+        panic!()
+    };
+    assert!(!categories.iter().any(|c| c.name == "Blobs"));
     d.shutdown.notify_one();
     d.task.await.unwrap().unwrap();
 }

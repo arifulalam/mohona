@@ -1,4 +1,4 @@
-import type { Api, Config, ConfigChange, EngineStatus, ExtensionSettings, Plan, PlanWindow, Row } from "./types";
+import type { Api, Category, Config, ConfigChange, EngineStatus, ExtensionSettings, Plan, PlanWindow, Row } from "./types";
 
 /** True inside the Tauri window; false in a plain browser (development, tests). */
 export function insideTauri(): boolean {
@@ -29,6 +29,10 @@ function tauriApi(): Api {
     setPlan: (windows) => call<Plan>("set_plan", { windows }),
     setAfterAction: (action, countdownSeconds) => call<Plan>("set_after_action", { action, countdownSeconds }),
     cancelAction: () => call<Plan>("cancel_action"),
+    pickFolder: () => call<string | null>("pick_folder"),
+    categories: () => call<Category[]>("get_categories"),
+    addCategory: (name, extensions, folder) => call<Category[]>("add_category", { name, extensions, folder }),
+    removeCategory: (id) => call<Category[]>("remove_category", { id }),
     config: () => call<Config>("get_config"),
     setConfig: (change) => call<Config>("set_config", { change }),
     extensionSettings: () => call<ExtensionSettings>("get_extension_settings"),
@@ -55,8 +59,13 @@ export function demoApi(tick = 1000): Api {
         : { ...r, downloaded, percent: (downloaded / r.size) * 100, eta: Math.ceil((r.size - downloaded) / r.speed) };
     });
   }, tick);
-  let config: Config = { downloadFolder: "C:\\Users\\you\\Downloads", defaultFolder: "C:\\Users\\you\\Downloads", speedLimit: null, maxActive: 4, notifications: true, keepInTray: true };
+  let config: Config = { downloadFolder: "C:\\Users\\you\\Downloads", defaultFolder: "C:\\Users\\you\\Downloads", speedLimit: null, maxActive: 4, notifications: true, keepInTray: true, sortByType: false };
   let ext: ExtensionSettings = { intercept: true, minSizeBytes: 0, excludedHosts: [], videoButton: true, buttonHiddenHosts: [], autoRefresh: true };
+  let cats: Category[] = [
+    { id: 1, name: "Compressed", extensions: ["zip", "rar", "7z"], folder: null },
+    { id: 2, name: "Video", extensions: ["mp4", "mkv", "webm"], folder: null },
+  ];
+  let nextCat = 10;
   let plan: Plan = { windows: [], openNow: true, action: null, countdown: null, message: null };
   const status = (): EngineStatus => ({ running, version: running ? "demo" : null, message: null });
   const need = () => {
@@ -93,6 +102,16 @@ export function demoApi(tick = 1000): Api {
     },
     setAfterAction: async (action) => (need(), (plan = { ...plan, action, countdown: null, message: null })),
     cancelAction: async () => (need(), (plan = { ...plan, action: null, countdown: null })),
+    pickFolder: async () => window.prompt("Folder (the real app opens a folder dialog here):", "C:\\Users\\you\\Downloads\\Videos"),
+    categories: async () => (need(), cats),
+    addCategory: async (name, extensions, folder) => {
+      need();
+      const taken = cats.find((c) => c.extensions.some((e) => extensions.includes(e)));
+      if (taken) throw new Error(`"${taken.extensions.find((e) => extensions.includes(e))}" already belongs to ${taken.name}`);
+      cats = [...cats, { id: nextCat++, name, extensions, folder }];
+      return cats;
+    },
+    removeCategory: async (id) => (need(), (cats = cats.filter((c) => c.id !== id))),
     config: async () => (need(), config),
     setConfig: async (c: ConfigChange) => {
       need();
@@ -104,6 +123,7 @@ export function demoApi(tick = 1000): Api {
         maxActive: c.maxActive ?? config.maxActive,
         notifications: c.notifications ?? config.notifications,
         keepInTray: c.keepInTray ?? config.keepInTray,
+        sortByType: c.sortByType ?? config.sortByType,
       };
       return config;
     },

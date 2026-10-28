@@ -526,3 +526,13 @@ A `401` now becomes its own error (`NetError::Unauthorized`) that names the kind
 **The page** shows the schedule's state ("outside the scheduled hours"), a banner with the armed action and its countdown with a Cancel button, and the last outcome.
 
 **Not tested here:** the real sleep, hibernate and shutdown calls (the engine's tests replace the runner); see the manual tests.
+
+## ADR-0053: Categories, "sort by type" and the folder dialog in the app
+
+**Categories.** The app lists, adds and removes the categories that sort finished downloads into folders by file type (the engine's categories, the same as `mohona queue categories`). The daemon checks a category before saving it: a plain name of 1 to 40 characters without `\ / : * ? " < > |`; at least one file type, letters and digits only; no file type that another category already has (the message names that category, so one file type can never mean two folders); no name used twice (ignoring case); and a folder that is a full path or a name inside the download folder, never one that climbs out with `..`. Removing a category leaves the files already sorted where they are.
+
+**Sorting is a setting.** "Sort finished downloads into folders by type" is a switch in the engine (default off). When it is on, every download that has no folder of its own is sorted, including those the browser extension sends. A download added with an explicit folder in the app's Add dialog goes to exactly that folder.
+
+**Folders are chosen with the system's dialog.** Settings and the Add dialog have a "Browse…" button that opens the operating system's folder dialog through Tauri's dialog plugin; the typed path still works. A cancelled dialog changes nothing.
+
+**Not included.** Editing a category (remove and add again), several queues, per-site folder rules.

@@ -6,12 +6,13 @@
 use std::time::Duration;
 
 use mohona_appcore::{
-    AppError, Config, ConfigChange, Engine, EngineStatus, ExtensionSettings, Plan, PlanWindow, Row,
-    SpeedTracker, Watcher,
+    AppError, Category, Config, ConfigChange, Engine, EngineStatus, ExtensionSettings, Plan,
+    PlanWindow, Row, SpeedTracker, Watcher,
 };
 use tauri::menu::{Menu, MenuItem};
 use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
 use tauri::{AppHandle, Manager, State, WindowEvent};
+use tauri_plugin_dialog::DialogExt;
 use tauri_plugin_notification::NotificationExt;
 use tauri_plugin_opener::OpenerExt;
 use tokio::sync::Mutex;
@@ -131,6 +132,41 @@ async fn cancel_action(app: State<'_, App>) -> Result<Plan> {
     app.engine.cancel_action().await
 }
 
+/// Asks the person for a folder (the system's own dialog); `None` when cancelled.
+#[tauri::command]
+async fn pick_folder(handle: AppHandle) -> Result<Option<String>> {
+    let (tx, rx) = tokio::sync::oneshot::channel();
+    handle.dialog().file().pick_folder(move |picked| {
+        let _ = tx.send(picked);
+    });
+    let picked = rx
+        .await
+        .map_err(|_| AppError::Engine("the folder dialog was closed".into()))?;
+    Ok(picked
+        .and_then(|p| p.into_path().ok())
+        .map(|p| p.to_string_lossy().into_owned()))
+}
+
+#[tauri::command]
+async fn get_categories(app: State<'_, App>) -> Result<Vec<Category>> {
+    app.engine.categories().await
+}
+
+#[tauri::command]
+async fn add_category(
+    app: State<'_, App>,
+    name: String,
+    extensions: Vec<String>,
+    folder: Option<String>,
+) -> Result<Vec<Category>> {
+    app.engine.add_category(&name, extensions, folder).await
+}
+
+#[tauri::command]
+async fn remove_category(app: State<'_, App>, id: i64) -> Result<Vec<Category>> {
+    app.engine.remove_category(id).await
+}
+
 fn show_window(handle: &AppHandle) {
     if let Some(window) = handle.get_webview_window("main") {
         let _ = window.show();
@@ -224,6 +260,7 @@ fn watch_downloads(handle: AppHandle) {
 
 pub fn run() {
     tauri::Builder::default()
+        .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_notification::init())
         .plugin(tauri_plugin_opener::init())
         .manage(App {
@@ -272,6 +309,10 @@ pub fn run() {
             set_plan,
             set_after_action,
             cancel_action,
+            pick_folder,
+            get_categories,
+            add_category,
+            remove_category,
         ])
         .run(tauri::generate_context!())
         .expect("the Mohona window could not start");

@@ -29,6 +29,7 @@ export interface Config {
   maxActive: number;
   notifications: boolean;
   keepInTray: boolean;
+  sortByType: boolean;
 }
 
 export interface ConfigChange {
@@ -38,6 +39,16 @@ export interface ConfigChange {
   maxActive?: number;
   notifications?: boolean;
   keepInTray?: boolean;
+  sortByType?: boolean;
+}
+
+/** A group of file types sorted into its own folder. */
+export interface Category {
+  id: number;
+  name: string;
+  extensions: string[];
+  /** As set; null means a folder named like the category. */
+  folder: string | null;
 }
 
 /** One time window of the schedule. */
@@ -86,6 +97,10 @@ export interface Api {
   setPlan(windows: PlanWindow[]): Promise<Plan>;
   setAfterAction(action: string | null, countdownSeconds?: number): Promise<Plan>;
   cancelAction(): Promise<Plan>;
+  pickFolder(): Promise<string | null>;
+  categories(): Promise<Category[]>;
+  addCategory(name: string, extensions: string[], folder: string | null): Promise<Category[]>;
+  removeCategory(id: number): Promise<Category[]>;
   config(): Promise<Config>;
   setConfig(change: ConfigChange): Promise<Config>;
   extensionSettings(): Promise<ExtensionSettings>;

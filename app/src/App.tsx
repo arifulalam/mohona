@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { AddDialog, Modal } from "./AddDialog";
+import { CategoriesDialog } from "./CategoriesDialog";
 import { allowed, counts, FILTERS, matches, type Filter } from "./filters";
 import { List } from "./List";
 import { ScheduleDialog } from "./ScheduleDialog";
@@ -19,6 +20,8 @@ export function App({ api, every }: { api: Api; every?: number }) {
   const [removing, setRemoving] = useState(false);
   const [settings, setSettings] = useState(false);
   const [schedule, setSchedule] = useState(false);
+  const [categories, setCategories] = useState(false);
+  const [defaultFolder, setDefaultFolder] = useState("");
   const [deleteFiles, setDeleteFiles] = useState(false);
   const [theme, setTheme] = useState<Theme>(loadTheme());
 
@@ -52,11 +55,11 @@ export function App({ api, every }: { api: Api; every?: number }) {
 
   const each = (rows: typeof chosen, call: (id: number) => Promise<void>) => d.act(() => Promise.all(rows.map((r) => call(r.id))));
 
-  async function addAll(urls: string[]): Promise<string | null> {
+  async function addAll(urls: string[], folder: string | null): Promise<string | null> {
     const problems: string[] = [];
     for (const url of urls) {
       try {
-        await api.add(url, null);
+        await api.add(url, folder);
       } catch (e) {
         problems.push(`${url}: ${(e as Error).message}`);
       }
@@ -73,6 +76,9 @@ export function App({ api, every }: { api: Api; every?: number }) {
           {d.engine === null ? "Connecting…" : running ? `Engine running${d.engine.version ? ` (${d.engine.version})` : ""}` : "Engine stopped"}
         </span>
         <div className="flex-1" />
+        <button className="btn" onClick={() => setCategories(true)} disabled={!running}>
+          Categories
+        </button>
         <button className="btn" onClick={() => setSchedule(true)} disabled={!running}>
           Schedule
         </button>
@@ -127,7 +133,14 @@ export function App({ api, every }: { api: Api; every?: number }) {
       )}
 
       <div className="flex items-center gap-2 border-b border-[var(--line)] bg-[var(--panel)] px-4 py-2" role="toolbar" aria-label="Actions">
-        <button className="btn btn-primary" onClick={() => setAdding(true)} disabled={!running}>
+        <button
+          className="btn btn-primary"
+          onClick={() => {
+            setAdding(true);
+            api.config().then((c) => setDefaultFolder(c.downloadFolder)).catch(() => undefined);
+          }}
+          disabled={!running}
+        >
           + Add
         </button>
         <button className="btn" disabled={!can.pause} onClick={() => void each(chosen, api.pause)}>
@@ -169,9 +182,10 @@ export function App({ api, every }: { api: Api; every?: number }) {
         </main>
       </div>
 
+      {categories && <CategoriesDialog api={api} onClose={() => setCategories(false)} />}
       {schedule && <ScheduleDialog api={api} onClose={() => setSchedule(false)} />}
       {settings && <SettingsDialog api={api} onClose={() => setSettings(false)} />}
-      {adding && <AddDialog onAdd={addAll} onClose={() => setAdding(false)} />}
+      {adding && <AddDialog onAdd={addAll} onBrowse={() => api.pickFolder()} defaultFolder={defaultFolder} onClose={() => setAdding(false)} />}
       {removing && (
         <Modal title="Remove from the list" onClose={() => setRemoving(false)}>
           <p className="mt-0">

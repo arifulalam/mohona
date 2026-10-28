@@ -41,6 +41,9 @@ pub enum Call {
         /// Closing the app's window leaves it in the tray.
         #[serde(default)]
         keep_in_tray: Option<bool>,
+        /// Move finished downloads into the folder of their category (also for the browser's).
+        #[serde(default)]
+        sort_by_type: Option<bool>,
     },
     /// The default queue's schedule and the armed "when everything is done" action.
     GetPlan,
@@ -58,6 +61,19 @@ pub enum Call {
     },
     /// Stop a running countdown and disarm the action.
     CancelAction,
+    /// The categories that sort finished downloads into folders by file type.
+    GetCategories,
+    AddCategory {
+        name: String,
+        /// File types without dots, such as `["zip", "7z"]`.
+        extensions: Vec<String>,
+        /// A full path, or a folder name inside the download folder; empty uses the name.
+        #[serde(default)]
+        folder: Option<String>,
+    },
+    RemoveCategory {
+        id: i64,
+    },
     /// Add a download. It starts when its queue has a free slot.
     Add {
         url: String,
@@ -176,6 +192,15 @@ pub struct DownloadInfo {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct CategoryInfo {
+    pub id: i64,
+    pub name: String,
+    pub extensions: Vec<String>,
+    /// As set; `None` means a folder with the category's name.
+    pub folder: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct JobInfo {
     pub id: u64,
     pub url: String,
@@ -227,6 +252,10 @@ pub enum Response {
         max_active: u32,
         notifications: bool,
         keep_in_tray: bool,
+        sort_by_type: bool,
+    },
+    Categories {
+        categories: Vec<CategoryInfo>,
     },
     Plan {
         windows: Vec<Window>,

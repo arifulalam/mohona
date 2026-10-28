@@ -11,7 +11,7 @@ use tokio::net::{TcpListener, TcpStream};
 use tokio::sync::Notify;
 
 use crate::info::DaemonInfo;
-use crate::protocol::{Call, DownloadInfo, Request, Response};
+use crate::protocol::{Call, CategoryInfo, DownloadInfo, Request, Response};
 use crate::streams::StreamJob;
 
 /// The longest request line accepted.
@@ -286,7 +286,7 @@ async fn handle(state: &State, call: Call) -> Response {
                 }
             };
             let mut request = AddRequest::new(url, folder_or_default(state, dest_dir).await);
-            request.sort_into_categories = sort;
+            request.sort_into_categories = sort || sorting_is_on(state).await;
             request.duplicates = policy;
             // Only what a browser session legitimately carries: nothing that
             // weakens certificate checks or names proxies or key files.
@@ -433,6 +433,16 @@ async fn handle(state: &State, call: Call) -> Response {
                 )
                 .await,
         ),
+        Call::GetCategories => categories(state).await,
+        Call::AddCategory {
+            name,
+            extensions,
+            folder,
+        } => add_category(state, name, extensions, folder).await,
+        Call::RemoveCategory { id } => match manager.remove_category(id).await {
+            Ok(()) => categories(state).await,
+            Err(e) => error(e),
+        },
         Call::GetPlan => plan(state).await,
         Call::SetPlan { windows } => set_plan(state, windows).await,
         Call::SetAfterAction {
@@ -447,8 +457,10 @@ async fn handle(state: &State, call: Call) -> Response {
             max_active,
             notifications,
             keep_in_tray,
+            sort_by_type,
         } => {
             let change = ConfigChange {
+                sort_by_type,
                 download_folder,
                 speed_limit,
                 max_active,
@@ -465,12 +477,98 @@ async fn handle(state: &State, call: Call) -> Response {
     }
 }
 
+async fn sorting_is_on(state: &State) -> bool {
+    matches!(state.manager.setting(SORT_KEY).await, Ok(Some(v)) if v == "1")
+}
+
+async fn categories(state: &State) -> Response {
+    match state.manager.categories().await {
+        Ok(rows) => Response::Categories {
+            categories: rows
+                .into_iter()
+                .map(|c| CategoryInfo {
+                    id: c.id,
+                    name: c.name,
+                    extensions: c.extensions,
+                    folder: c.folder,
+                })
+                .collect(),
+        },
+        Err(e) => error(e),
+    }
+}
+
+/// A category is checked before it is saved: a plain name, file types that
+/// no other category already has, and a folder that cannot climb out of the
+/// download folder.
+async fn add_category(
+    state: &State,
+    name: String,
+    extensions: Vec<String>,
+    folder: Option<String>,
+) -> Response {
+    let name = name.trim().to_string();
+    if name.is_empty()
+        || name.chars().count() > 40
+        || name
+            .chars()
+            .any(|c| c.is_control() || "\\/:*?\"<>|".contains(c))
+    {
+        return error("the name must be 1 to 40 characters and not contain \\ / : * ? \" < > |");
+    }
+    let extensions: Vec<String> = extensions
+        .iter()
+        .map(|e| e.trim().trim_start_matches('.').to_ascii_lowercase())
+        .filter(|e| !e.is_empty())
+        .collect();
+    if extensions.is_empty() {
+        return error("give at least one file type, such as zip");
+    }
+    if let Some(bad) = extensions
+        .iter()
+        .find(|e| e.len() > 12 || !e.bytes().all(|b| b.is_ascii_alphanumeric()))
+    {
+        return error(format!(
+            "\"{bad}\" is not a file type (letters and digits only)"
+        ));
+    }
+    let folder = folder
+        .map(|f| f.trim().to_string())
+        .filter(|f| !f.is_empty());
+    if let Some(f) = &folder {
+        let path = std::path::Path::new(f);
+        let climbs = path
+            .components()
+            .any(|c| matches!(c, std::path::Component::ParentDir));
+        if f.chars().any(char::is_control) || climbs {
+            return error("the folder must be a full path, or a folder name without \"..\"");
+        }
+    }
+    let existing = match state.manager.categories().await {
+        Ok(c) => c,
+        Err(e) => return error(e),
+    };
+    if existing.iter().any(|c| c.name.eq_ignore_ascii_case(&name)) {
+        return error(format!("there is already a category named {name}"));
+    }
+    for e in &extensions {
+        if let Some(other) = existing.iter().find(|c| c.extensions.contains(e)) {
+            return error(format!("\"{e}\" already belongs to {}", other.name));
+        }
+    }
+    match state.manager.add_category(name, extensions, folder).await {
+        Ok(_) => categories(state).await,
+        Err(e) => error(e),
+    }
+}
+
 /// The settings key of the folder downloads go to.
 const FOLDER_KEY: &str = "download_folder";
 /// The settings key of the global speed limit (the manager's own).
 const SPEED_KEY: &str = "speed_limit";
 const NOTIFY_KEY: &str = "notifications";
 const TRAY_KEY: &str = "keep_in_tray";
+const SORT_KEY: &str = "sort_by_type";
 
 /// The folder a client named, else the folder the person chose, else the default.
 async fn folder_or_default(state: &State, named: Option<String>) -> PathBuf {
@@ -509,6 +607,7 @@ async fn config(state: &State) -> Response {
         max_active,
         notifications: flag(state, NOTIFY_KEY).await,
         keep_in_tray: flag(state, TRAY_KEY).await,
+        sort_by_type: matches!(state.manager.setting(SORT_KEY).await, Ok(Some(v)) if v == "1"),
     }
 }
 
@@ -518,6 +617,7 @@ struct ConfigChange {
     max_active: Option<u32>,
     notifications: Option<bool>,
     keep_in_tray: Option<bool>,
+    sort_by_type: Option<bool>,
 }
 
 async fn set_config(state: &State, change: ConfigChange) -> Response {
@@ -527,6 +627,7 @@ async fn set_config(state: &State, change: ConfigChange) -> Response {
         max_active,
         notifications,
         keep_in_tray,
+        sort_by_type,
     } = change;
     let manager = &state.manager;
     // Check everything first, so a refused value changes nothing.
@@ -565,7 +666,11 @@ async fn set_config(state: &State, change: ConfigChange) -> Response {
             return error(e);
         }
     }
-    for (key, value) in [(NOTIFY_KEY, notifications), (TRAY_KEY, keep_in_tray)] {
+    for (key, value) in [
+        (NOTIFY_KEY, notifications),
+        (TRAY_KEY, keep_in_tray),
+        (SORT_KEY, sort_by_type),
+    ] {
         if let Some(on) = value {
             if let Err(e) = manager.set_setting(key, if on { "1" } else { "0" }).await {
                 return error(e);

@@ -70,6 +70,8 @@ pub struct Config {
     pub notifications: bool,
     /// Closing the window leaves the app in the tray.
     pub keep_in_tray: bool,
+    /// Finished downloads move into the folder of their category.
+    pub sort_by_type: bool,
 }
 
 /// What may be changed; what is `None` stays as it is.
@@ -82,6 +84,17 @@ pub struct ConfigChange {
     pub max_active: Option<u32>,
     pub notifications: Option<bool>,
     pub keep_in_tray: Option<bool>,
+    pub sort_by_type: Option<bool>,
+}
+
+/// A group of file types that is sorted into its own folder.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct Category {
+    pub id: i64,
+    pub name: String,
+    pub extensions: Vec<String>,
+    /// As set; none means a folder with the category's name.
+    pub folder: Option<String>,
 }
 
 /// One time window of the schedule, as the page shows it.
@@ -276,6 +289,7 @@ impl Engine {
                 max_active,
                 notifications,
                 keep_in_tray,
+                sort_by_type,
             } => Ok(Config {
                 download_folder,
                 default_folder,
@@ -283,6 +297,7 @@ impl Engine {
                 max_active,
                 notifications,
                 keep_in_tray,
+                sort_by_type,
             }),
             _ => Err(AppError::Engine("unexpected answer from the engine".into())),
         }
@@ -296,6 +311,7 @@ impl Engine {
                 max_active: change.max_active,
                 notifications: change.notifications,
                 keep_in_tray: change.keep_in_tray,
+                sort_by_type: change.sort_by_type,
             })
             .await?
         {
@@ -306,6 +322,7 @@ impl Engine {
                 max_active,
                 notifications,
                 keep_in_tray,
+                sort_by_type,
             } => Ok(Config {
                 download_folder,
                 default_folder,
@@ -313,6 +330,7 @@ impl Engine {
                 max_active,
                 notifications,
                 keep_in_tray,
+                sort_by_type,
             }),
             _ => Err(AppError::Engine("unexpected answer from the engine".into())),
         }
@@ -356,6 +374,45 @@ impl Engine {
         })
         .await?;
         Ok(ExtensionSettings::from_text(Some(&text)))
+    }
+
+    pub async fn categories(&self) -> Result<Vec<Category>, AppError> {
+        Self::categories_from(self.call(Call::GetCategories).await?)
+    }
+
+    pub async fn add_category(
+        &self,
+        name: &str,
+        extensions: Vec<String>,
+        folder: Option<String>,
+    ) -> Result<Vec<Category>, AppError> {
+        Self::categories_from(
+            self.call(Call::AddCategory {
+                name: name.to_string(),
+                extensions,
+                folder,
+            })
+            .await?,
+        )
+    }
+
+    pub async fn remove_category(&self, id: i64) -> Result<Vec<Category>, AppError> {
+        Self::categories_from(self.call(Call::RemoveCategory { id }).await?)
+    }
+
+    fn categories_from(response: Response) -> Result<Vec<Category>, AppError> {
+        match response {
+            Response::Categories { categories } => Ok(categories
+                .into_iter()
+                .map(|c| Category {
+                    id: c.id,
+                    name: c.name,
+                    extensions: c.extensions,
+                    folder: c.folder,
+                })
+                .collect()),
+            _ => Err(AppError::Engine("unexpected answer from the engine".into())),
+        }
     }
 
     pub async fn plan(&self) -> Result<Plan, AppError> {

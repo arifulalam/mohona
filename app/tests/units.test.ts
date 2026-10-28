@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { allowed, counts, matches } from "../src/filters";
 import * as fmt from "../src/format";
 import { parseHosts, parseLimit, parseMegabytes, splitLimit } from "../src/limits";
+import { parseTypes } from "../src/CategoriesDialog";
 import { describeWindow, normalTime, windowFrom } from "../src/schedule";
 import { applyTheme, nextTheme } from "../src/theme";
 import type { Row } from "../src/types";
@@ -82,5 +83,12 @@ describe("schedule", () => {
     expect(windowFrom([], "10:00", "10:00", "")).toMatch(/same time/);
     expect(windowFrom([], "10:00", "11:00", "x")).toMatch(/number/);
     expect(describeWindow({ days: ["sat", "sun"], start: "00:00", end: "08:00", speedLimit: 1024 })).toBe("Sat, Sun 00:00–08:00, up to 1 KB/s");
+  });
+});
+
+describe("categories", () => {
+  it("reads file types as typed", () => {
+    expect(parseTypes("zip, .7z  RAR;tar")).toEqual(["zip", "7z", "rar", "tar"]);
+    expect(parseTypes("  ")).toEqual([]);
   });
 });

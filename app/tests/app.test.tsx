@@ -2,7 +2,7 @@ import { cleanup, render, screen, waitFor, within } from "@testing-library/react
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { App } from "../src/App";
-import type { Api, Config, ConfigChange, EngineStatus, ExtensionSettings, Plan, PlanWindow, Row } from "../src/types";
+import type { Api, Category, Config, ConfigChange, EngineStatus, ExtensionSettings, Plan, PlanWindow, Row } from "../src/types";
 
 const row = (id: number, name: string, status: string, extra: Partial<Row> = {}): Row => ({
   id, name, url: `https://x.test/${name}`, status, downloaded: 50, size: 100, percent: 50, speed: 0, eta: null,
@@ -12,8 +12,9 @@ const row = (id: number, name: string, status: string, extra: Partial<Row> = {})
 function fake(initial: Row[], running = true) {
   let rows = initial;
   let engine = running;
+  let cats: Category[] = [{ id: 1, name: "Compressed", extensions: ["zip"], folder: null }];
   let plan: Plan = { windows: [], openNow: true, action: null, countdown: null, message: null };
-  let cfg: Config = { downloadFolder: "C:\\Dl", defaultFolder: "C:\\Dl", speedLimit: null, maxActive: 4, notifications: true, keepInTray: true };
+  let cfg: Config = { downloadFolder: "C:\\Dl", defaultFolder: "C:\\Dl", speedLimit: null, maxActive: 4, notifications: true, keepInTray: true, sortByType: false };
   let ext: ExtensionSettings = { intercept: true, minSizeBytes: 0, excludedHosts: [], videoButton: true, buttonHiddenHosts: [], autoRefresh: true };
   const status = (): EngineStatus => ({ running: engine, version: engine ? "9.9" : null, message: null });
   const api = {
@@ -37,6 +38,14 @@ function fake(initial: Row[], running = true) {
     setPlan: vi.fn(async (windows: PlanWindow[]) => (plan = { ...plan, windows })),
     setAfterAction: vi.fn(async (action: string | null) => (plan = { ...plan, action, countdown: null })),
     cancelAction: vi.fn(async () => (plan = { ...plan, action: null, countdown: null })),
+    pickFolder: vi.fn(async () => "D:\\Picked"),
+    categories: vi.fn(async () => cats),
+    addCategory: vi.fn(async (name: string, extensions: string[], folder: string | null) => {
+      if (extensions.includes("zip")) throw new Error("\"zip\" already belongs to Compressed");
+      cats = [...cats, { id: 2, name, extensions, folder }];
+      return cats;
+    }),
+    removeCategory: vi.fn(async (id: number) => (cats = cats.filter((c) => c.id !== id))),
     config: vi.fn(async () => cfg),
     setConfig: vi.fn(async (c: ConfigChange) => {
       if (c.maxActive === 13) throw new Error("the engine refused this");
@@ -96,11 +105,11 @@ describe("App", () => {
     render(<App api={api} every={50} />);
     await userEvent.click(await screen.findByRole("button", { name: "+ Add" }));
     const dialog = screen.getByRole("dialog");
-    await userEvent.type(within(dialog).getByRole("textbox"), "ftp-bad-address");
+    await userEvent.type(within(dialog).getByRole("textbox", { name: "Addresses (one per line)" }), "ftp-bad-address");
     await userEvent.click(within(dialog).getByRole("button", { name: "Download" }));
     expect((await within(dialog).findByRole("alert")).textContent).toContain("must start with http");
-    await userEvent.clear(within(dialog).getByRole("textbox"));
-    await userEvent.type(within(dialog).getByRole("textbox"), "https://x.test/new.zip");
+    await userEvent.clear(within(dialog).getByRole("textbox", { name: "Addresses (one per line)" }));
+    await userEvent.type(within(dialog).getByRole("textbox", { name: "Addresses (one per line)" }), "https://x.test/new.zip");
     await userEvent.click(within(dialog).getByRole("button", { name: "Download" }));
     await waitFor(() => expect(api.add).toHaveBeenCalledWith("https://x.test/new.zip", null));
     await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
@@ -140,7 +149,7 @@ describe("App", () => {
     await userEvent.click(within(dialog).getByRole("checkbox", { name: /tray/ }));
     await userEvent.click(within(dialog).getByRole("button", { name: "Save" }));
     await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
-    expect(api.setConfig).toHaveBeenCalledWith({ downloadFolder: "", speedLimit: 2 * 1024 * 1024, maxActive: 6, notifications: true, keepInTray: false });
+    expect(api.setConfig).toHaveBeenCalledWith({ downloadFolder: "", speedLimit: 2 * 1024 * 1024, maxActive: 6, notifications: true, keepInTray: false, sortByType: false });
     expect(api.setExtensionSettings).toHaveBeenCalledWith(
       expect.objectContaining({ minSizeBytes: 5 * 1024 * 1024, excludedHosts: ["bank.example"], videoButton: false }),
     );
@@ -212,5 +221,37 @@ describe("App", () => {
     expect(await screen.findByText(/Shut the computer down in 42 s/)).toBeTruthy();
     await userEvent.click(screen.getAllByRole("button", { name: "Cancel" }).find((b) => b.closest("[role=status]"))!);
     await waitFor(() => expect(api.cancelAction).toHaveBeenCalled());
+  });
+
+  it("adds to a chosen folder with the folder dialog", async () => {
+    const api = fake([]);
+    render(<App api={api} every={50} />);
+    await userEvent.click(await screen.findByRole("button", { name: "+ Add" }));
+    const dialog = await screen.findByRole("dialog");
+    await userEvent.click(within(dialog).getByRole("button", { name: "Browse…" }));
+    await waitFor(() => expect((within(dialog).getByLabelText("Save in folder") as HTMLInputElement).value).toBe("D:\\Picked"));
+    await userEvent.type(within(dialog).getByRole("textbox", { name: "Addresses (one per line)" }), "https://x.test/a.zip");
+    await userEvent.click(within(dialog).getByRole("button", { name: "Download" }));
+    await waitFor(() => expect(api.add).toHaveBeenCalledWith("https://x.test/a.zip", "D:\\Picked"));
+  });
+
+  it("lists, adds and removes categories, and shows why one is refused", async () => {
+    const api = fake([]);
+    render(<App api={api} every={50} />);
+    await userEvent.click(await screen.findByRole("button", { name: "Categories" }));
+    const dialog = await screen.findByRole("dialog");
+    expect(await within(dialog).findByText("Compressed")).toBeTruthy();
+    await userEvent.type(within(dialog).getByLabelText("Category name"), "Archives");
+    await userEvent.type(within(dialog).getByLabelText("File types"), ".ZIP, tar");
+    await userEvent.click(within(dialog).getByRole("button", { name: "Add category" }));
+    expect((await within(dialog).findByRole("alert")).textContent).toContain("already belongs to Compressed");
+    const types = within(dialog).getByLabelText("File types");
+    await userEvent.clear(types);
+    await userEvent.type(types, "7z tar");
+    await userEvent.click(within(dialog).getByRole("button", { name: "Add category" }));
+    await waitFor(() => expect(api.addCategory).toHaveBeenLastCalledWith("Archives", ["7z", "tar"], null));
+    expect(await within(dialog).findByText("Archives")).toBeTruthy();
+    await userEvent.click(within(dialog).getByRole("button", { name: "Remove category Archives" }));
+    await waitFor(() => expect(within(dialog).queryByText("Archives")).toBeNull());
   });
 });

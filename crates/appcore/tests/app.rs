@@ -281,3 +281,33 @@ async fn the_schedule_and_the_end_action_go_through_the_app() {
     assert_eq!(engine.cancel_action().await.unwrap().action, None);
     shutdown.notify_one();
 }
+
+#[tokio::test]
+async fn categories_can_be_listed_added_and_removed_through_the_app() {
+    let dir = tempfile::tempdir().unwrap();
+    let (engine, shutdown) = engine(dir.path()).await;
+    let first = engine.categories().await.unwrap();
+    assert!(first.iter().any(|c| c.name == "Video"));
+    let after = engine
+        .add_category("Photos", vec!["JPG".into(), ".png".into()], None)
+        .await
+        .unwrap();
+    let photos = after.iter().find(|c| c.name == "Photos").unwrap();
+    assert_eq!(photos.extensions, ["jpg", "png"]);
+    let taken = engine
+        .add_category("More photos", vec!["png".into()], None)
+        .await
+        .unwrap_err();
+    assert!(
+        taken.to_string().contains("already belongs to Photos"),
+        "{taken}"
+    );
+    let id = photos.id;
+    assert!(!engine
+        .remove_category(id)
+        .await
+        .unwrap()
+        .iter()
+        .any(|c| c.name == "Photos"));
+    shutdown.notify_one();
+}

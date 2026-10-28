@@ -14,6 +14,7 @@ export function SettingsDialog({ api, onClose }: { api: Api; onClose(): void }) 
   const [excluded, setExcluded] = useState("");
   const [notify, setNotify] = useState(true);
   const [tray, setTray] = useState(true);
+  const [sort, setSort] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -31,6 +32,7 @@ export function SettingsDialog({ api, onClose }: { api: Api; onClose(): void }) 
         setActive(String(c.maxActive));
         setNotify(c.notifications);
         setTray(c.keepInTray);
+        setSort(c.sortByType);
         setMinMb(e.minSizeBytes ? String(Math.round(e.minSizeBytes / 1024 / 1024)) : "");
         setExcluded(e.excludedHosts.join("\n"));
       })
@@ -57,6 +59,7 @@ export function SettingsDialog({ api, onClose }: { api: Api; onClose(): void }) 
         maxActive: simultaneous,
         notifications: notify,
         keepInTray: tray,
+        sortByType: sort,
       });
       await api.setExtensionSettings({ ...ext, minSizeBytes: min, excludedHosts: parseHosts(excluded) });
       onClose();
@@ -81,7 +84,12 @@ export function SettingsDialog({ api, onClose }: { api: Api; onClose(): void }) 
             <legend className="mb-1 font-semibold">Downloads</legend>
             <label className="flex flex-col gap-1">
               <span>Save files in</span>
-              <input className={`${field} font-mono text-[13px]`} value={folder} onChange={(e) => setFolder(e.target.value)} spellCheck={false} />
+              <span className="flex gap-2">
+                <input className={`${field} min-w-0 flex-1 font-mono text-[13px]`} value={folder} onChange={(e) => setFolder(e.target.value)} spellCheck={false} aria-label="Download folder" />
+                <button type="button" className="btn" onClick={() => void api.pickFolder().then((f) => f && setFolder(f)).catch((e: Error) => setError(e.message))}>
+                  Browse…
+                </button>
+              </span>
               <small className="muted">A full path. Empty goes back to {config.defaultFolder}.</small>
             </label>
             <div className="flex flex-wrap items-end gap-4">
@@ -100,6 +108,7 @@ export function SettingsDialog({ api, onClose }: { api: Api; onClose(): void }) 
                 <input className={`${field} w-20`} inputMode="numeric" value={active} onChange={(e) => setActive(e.target.value)} aria-label="Simultaneous downloads" />
               </label>
             </div>
+            <Check label="Sort finished downloads into folders by file type (see Categories)" value={sort} onChange={setSort} />
             <Check label="Show a message when a download finishes or fails" value={notify} onChange={setNotify} />
             <Check label="Keep Mohona in the tray when the window is closed" value={tray} onChange={setTray} />
           </fieldset>

@@ -398,6 +398,8 @@ The folder chosen in the app's Settings (if any) replaces `--folder` for downloa
 
 The schedule and the end-of-downloads action have daemon calls too: `get_plan`, `set_plan` (`{"type":"set_plan","windows":[{"days":["mon","tue"],"start":"23:00","end":"06:00","speed_limit":null}]}`; an empty list means always), `set_after_action` (`{"type":"set_after_action","action":"shutdown","countdown_seconds":60}`; `null` disarms) and `cancel_action`; all answer `{"type":"plan","windows":[...],"open_now":true,"action":"shutdown","countdown":null,"message":null}`. Only `sleep`, `hibernate` and `shutdown` can be armed this way, with 5 to 3600 seconds of countdown; a refused value changes nothing.
 
+Categories have daemon calls too: `get_categories`, `add_category` (`{"type":"add_category","name":"Books","extensions":["epub","mobi"],"folder":null}`) and `remove_category` (`{"type":"remove_category","id":6}`), all answering `{"type":"categories","categories":[{"id":6,"name":"Books","extensions":["epub","mobi"],"folder":null}]}`; a refused category answers `{"type":"error","message":"\"zip\" already belongs to Compressed"}`. `set_config` also takes `"sort_by_type":true` (move finished downloads into their category's folder, also for the browser's).
+
 Expected: `Mohona is running. Press Ctrl-C to stop it. (Details for other programs: ...)`.
 
 Errors:
