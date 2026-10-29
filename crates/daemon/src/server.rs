@@ -11,7 +11,7 @@ use tokio::net::{TcpListener, TcpStream};
 use tokio::sync::Notify;
 
 use crate::info::DaemonInfo;
-use crate::protocol::{Call, CategoryInfo, DownloadInfo, Request, Response};
+use crate::protocol::{Call, CategoryInfo, DownloadInfo, QueueInfo, Request, Response};
 use crate::streams::StreamJob;
 
 /// The longest request line accepted.
@@ -95,6 +95,85 @@ pub async fn serve(manager: Manager, config: ServerConfig) -> std::io::Result<()
     let _ = std::fs::remove_file(&config.info_path);
     state.manager.shutdown().await;
     Ok(())
+}
+
+fn check_queue_name(name: &str) -> Result<String, String> {
+    let name = name.trim();
+    if name.is_empty() || name.chars().count() > 40 || name.chars().any(|c| c.is_control()) {
+        return Err("a queue's name must be 1 to 40 characters".into());
+    }
+    Ok(name.to_string())
+}
+
+async fn queues(state: &State) -> Response {
+    let rows = match state.manager.queues().await {
+        Ok(q) => q,
+        Err(e) => return error(e),
+    };
+    let now = Moment::now();
+    Response::Queues {
+        queues: rows
+            .into_iter()
+            .map(|q| {
+                let schedule = q
+                    .schedule_json
+                    .as_deref()
+                    .and_then(|j| Schedule::from_json(j).ok());
+                QueueInfo {
+                    id: q.id,
+                    name: q.name,
+                    max_active: q.max_active,
+                    speed_limit: q.speed_limit,
+                    open_now: schedule
+                        .as_ref()
+                        .is_none_or(|s| s.open_window(now).is_some()),
+                    windows: schedule.map(|s| s.windows).unwrap_or_default(),
+                }
+            })
+            .collect(),
+    }
+}
+
+/// Everything is checked before anything changes, so a refused change is never half applied.
+async fn set_queue(
+    state: &State,
+    id: i64,
+    max_active: Option<u32>,
+    speed_limit: Option<u64>,
+    windows: Option<Vec<mohona_manager::Window>>,
+) -> Response {
+    let manager = &state.manager;
+    match manager.queues().await {
+        Ok(q) if q.iter().any(|q| q.id == id) => {}
+        Ok(_) => return error("there is no such queue"),
+        Err(e) => return error(e),
+    }
+    if max_active.is_some_and(|n| !(1..=32).contains(&n)) {
+        return error("simultaneous downloads must be between 1 and 32");
+    }
+    let schedule = windows.map(|w| (!w.is_empty()).then_some(Schedule { windows: w }));
+    if let Some(Some(s)) = &schedule {
+        if let Err(e) = s.check() {
+            return error(e);
+        }
+    }
+    if let Some(n) = max_active {
+        if let Err(e) = manager.set_queue_limit(id, n).await {
+            return error(e);
+        }
+    }
+    if let Some(limit) = speed_limit {
+        let value = (limit > 0).then_some(limit);
+        if let Err(e) = manager.set_speed_limit(SpeedTarget::Queue(id), value).await {
+            return error(e);
+        }
+    }
+    if let Some(schedule) = schedule {
+        if let Err(e) = manager.set_schedule(id, schedule).await {
+            return error(e);
+        }
+    }
+    queues(state).await
 }
 
 /// Follows what the manager says about the end-of-downloads action.
@@ -274,6 +353,7 @@ async fn handle(state: &State, call: Call) -> Response {
             headers,
             sort,
             duplicates,
+            queue,
         } => {
             let policy = match duplicates.as_deref() {
                 None | Some("ask") => DuplicatePolicy::Ask,
@@ -288,6 +368,7 @@ async fn handle(state: &State, call: Call) -> Response {
             let mut request = AddRequest::new(url, folder_or_default(state, dest_dir).await);
             request.sort_into_categories = sort || sorting_is_on(state).await;
             request.duplicates = policy;
+            request.queue_id = queue;
             // Only what a browser session legitimately carries: nothing that
             // weakens certificate checks or names proxies or key files.
             request.context = RequestContext {
@@ -443,6 +524,31 @@ async fn handle(state: &State, call: Call) -> Response {
             Ok(()) => categories(state).await,
             Err(e) => error(e),
         },
+        Call::GetQueues => queues(state).await,
+        Call::AddQueue { name } => match check_queue_name(&name) {
+            Err(message) => Response::Error { message },
+            Ok(name) => match manager.add_queue(name).await {
+                Ok(_) => queues(state).await,
+                Err(e) => error(e),
+            },
+        },
+        Call::RenameQueue { id, name } => match check_queue_name(&name) {
+            Err(message) => Response::Error { message },
+            Ok(name) => match manager.rename_queue(id, name).await {
+                Ok(()) => queues(state).await,
+                Err(e) => error(e),
+            },
+        },
+        Call::RemoveQueue { id } => match manager.remove_queue(id).await {
+            Ok(()) => queues(state).await,
+            Err(e) => error(e),
+        },
+        Call::SetQueue {
+            id,
+            max_active,
+            speed_limit,
+            windows,
+        } => set_queue(state, id, max_active, speed_limit, windows).await,
         Call::GetPlan => plan(state).await,
         Call::SetPlan { windows } => set_plan(state, windows).await,
         Call::SetAfterAction {

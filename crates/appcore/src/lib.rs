@@ -111,6 +111,29 @@ pub struct PlanWindow {
     pub speed_limit: Option<u64>,
 }
 
+/// One download queue, as the page shows it.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Queue {
+    pub id: i64,
+    pub name: String,
+    pub max_active: u32,
+    pub speed_limit: Option<u64>,
+    pub windows: Vec<PlanWindow>,
+    pub open_now: bool,
+}
+
+/// What may be changed in a queue; what is `None` stays.
+#[derive(Debug, Clone, Default, serde::Deserialize)]
+#[serde(rename_all = "camelCase", default)]
+pub struct QueueChange {
+    pub max_active: Option<u32>,
+    /// Bytes per second; 0 removes the limit.
+    pub speed_limit: Option<u64>,
+    /// An empty list means any time.
+    pub windows: Option<Vec<PlanWindow>>,
+}
+
 /// The schedule and the armed end-of-downloads action.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -247,6 +270,16 @@ impl Engine {
 
     /// Adds one address; returns the new download's id.
     pub async fn add(&self, url: &str, folder: Option<&str>) -> Result<i64, AppError> {
+        self.add_to(url, folder, None).await
+    }
+
+    /// Like [`Engine::add`], into a chosen queue (`None`: the main queue).
+    pub async fn add_to(
+        &self,
+        url: &str,
+        folder: Option<&str>,
+        queue: Option<i64>,
+    ) -> Result<i64, AppError> {
         let url = url.trim();
         if url.is_empty() || url.chars().any(char::is_control) {
             return Err(AppError::Input("type or paste an address".into()));
@@ -271,6 +304,7 @@ impl Engine {
                 headers: Vec::new(),
                 sort: false,
                 duplicates: Some("skip".into()),
+                queue,
             })
             .await?
         {
@@ -409,6 +443,60 @@ impl Engine {
                     name: c.name,
                     extensions: c.extensions,
                     folder: c.folder,
+                })
+                .collect()),
+            _ => Err(AppError::Engine("unexpected answer from the engine".into())),
+        }
+    }
+
+    pub async fn queues(&self) -> Result<Vec<Queue>, AppError> {
+        Self::queues_from(self.call(Call::GetQueues).await?)
+    }
+
+    pub async fn add_queue(&self, name: &str) -> Result<Vec<Queue>, AppError> {
+        Self::queues_from(self.call(Call::AddQueue { name: name.into() }).await?)
+    }
+
+    pub async fn rename_queue(&self, id: i64, name: &str) -> Result<Vec<Queue>, AppError> {
+        Self::queues_from(
+            self.call(Call::RenameQueue {
+                id,
+                name: name.into(),
+            })
+            .await?,
+        )
+    }
+
+    /// The main queue cannot be removed; the downloads of a removed queue move to it.
+    pub async fn remove_queue(&self, id: i64) -> Result<Vec<Queue>, AppError> {
+        Self::queues_from(self.call(Call::RemoveQueue { id }).await?)
+    }
+
+    pub async fn set_queue(&self, id: i64, change: QueueChange) -> Result<Vec<Queue>, AppError> {
+        Self::queues_from(
+            self.call(Call::SetQueue {
+                id,
+                max_active: change.max_active,
+                speed_limit: change.speed_limit,
+                windows: change
+                    .windows
+                    .map(|w| w.into_iter().map(Into::into).collect()),
+            })
+            .await?,
+        )
+    }
+
+    fn queues_from(response: Response) -> Result<Vec<Queue>, AppError> {
+        match response {
+            Response::Queues { queues } => Ok(queues
+                .into_iter()
+                .map(|q| Queue {
+                    id: q.id,
+                    name: q.name,
+                    max_active: q.max_active,
+                    speed_limit: q.speed_limit,
+                    windows: q.windows.into_iter().map(Into::into).collect(),
+                    open_now: q.open_now,
                 })
                 .collect()),
             _ => Err(AppError::Engine("unexpected answer from the engine".into())),

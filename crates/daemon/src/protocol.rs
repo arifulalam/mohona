@@ -74,6 +74,33 @@ pub enum Call {
     RemoveCategory {
         id: i64,
     },
+    /// Every queue, with its limits and schedule.
+    GetQueues,
+    /// A new queue (a unique name of 1 to 40 characters).
+    AddQueue {
+        name: String,
+    },
+    RenameQueue {
+        id: i64,
+        name: String,
+    },
+    /// Remove a queue; its downloads move to the main queue, which cannot be removed.
+    RemoveQueue {
+        id: i64,
+    },
+    /// Change a queue; what is left out stays.
+    SetQueue {
+        id: i64,
+        /// How many of its downloads run at once (1 to 32).
+        #[serde(default)]
+        max_active: Option<u32>,
+        /// Bytes per second for the queue together; 0 removes the limit.
+        #[serde(default)]
+        speed_limit: Option<u64>,
+        /// The times it may run; an empty list means any time.
+        #[serde(default)]
+        windows: Option<Vec<Window>>,
+    },
     /// Add a download. It starts when its queue has a free slot.
     Add {
         url: String,
@@ -96,6 +123,9 @@ pub enum Call {
         /// `ask` (default), `skip` or `rename`.
         #[serde(default)]
         duplicates: Option<String>,
+        /// The queue to put it in; default: the main queue.
+        #[serde(default)]
+        queue: Option<i64>,
     },
     /// Download an HLS or DASH stream by running `mohona stream` for it.
     Stream {
@@ -201,6 +231,18 @@ pub struct CategoryInfo {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct QueueInfo {
+    pub id: i64,
+    pub name: String,
+    pub max_active: u32,
+    /// Bytes per second; `None` for no limit.
+    pub speed_limit: Option<u64>,
+    pub windows: Vec<Window>,
+    /// Whether its schedule lets it run right now.
+    pub open_now: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct JobInfo {
     pub id: u64,
     pub url: String,
@@ -256,6 +298,9 @@ pub enum Response {
     },
     Categories {
         categories: Vec<CategoryInfo>,
+    },
+    Queues {
+        queues: Vec<QueueInfo>,
     },
     Plan {
         windows: Vec<Window>,

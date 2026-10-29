@@ -71,6 +71,24 @@ export interface Plan {
   message: string | null;
 }
 
+/** One download queue. */
+export interface Queue {
+  id: number;
+  name: string;
+  maxActive: number;
+  /** Bytes per second for the queue together; null for no limit. */
+  speedLimit: number | null;
+  windows: PlanWindow[];
+  openNow: boolean;
+}
+
+export interface QueueChange {
+  maxActive?: number;
+  /** Bytes per second; 0 removes the limit. */
+  speedLimit?: number;
+  windows?: PlanWindow[];
+}
+
 /** What the browser extension keeps (shared with the browsers through the engine). */
 export interface ExtensionSettings {
   intercept: boolean;
@@ -86,7 +104,12 @@ export interface Api {
   status(): Promise<EngineStatus>;
   start(): Promise<EngineStatus>;
   list(): Promise<Row[]>;
-  add(url: string, folder: string | null): Promise<number>;
+  add(url: string, folder: string | null, queue?: number): Promise<number>;
+  queues(): Promise<Queue[]>;
+  addQueue(name: string): Promise<Queue[]>;
+  renameQueue(id: number, name: string): Promise<Queue[]>;
+  removeQueue(id: number): Promise<Queue[]>;
+  setQueue(id: number, change: QueueChange): Promise<Queue[]>;
   pause(id: number): Promise<void>;
   resume(id: number): Promise<void>;
   cancel(id: number): Promise<void>;

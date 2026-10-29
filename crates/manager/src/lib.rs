@@ -52,6 +52,9 @@ pub enum ManagerError {
     /// The schedule is not valid.
     #[error("{0}")]
     BadSchedule(String),
+    /// A queue could not be added, renamed or removed (the reason is the text).
+    #[error("{0}")]
+    Queue(String),
     /// A fresh link was refused: it could not be checked, or it is not the same file.
     #[error("{0}")]
     Link(String),
@@ -220,6 +223,8 @@ pub struct AddRequest {
     pub sort_into_categories: bool,
     /// What to do about duplicates.
     pub duplicates: DuplicatePolicy,
+    /// The queue to put it in; `None` is the first (main) queue.
+    pub queue_id: Option<i64>,
     /// Cookies, referrer, user agent and headers to send. Saved with the
     /// download (in the database, in plain text).
     pub context: RequestContext,
@@ -233,6 +238,7 @@ impl AddRequest {
             dest_dir: dest_dir.into(),
             sort_into_categories: false,
             duplicates: DuplicatePolicy::Ask,
+            queue_id: None,
             context: RequestContext::default(),
         }
     }
@@ -337,6 +343,9 @@ enum Command {
     /// A tick of the countdown with this generation number.
     CountdownTick(u64),
     Queues(oneshot::Sender<Result<Vec<QueueRow>, ManagerError>>),
+    AddQueue(String, oneshot::Sender<Result<i64, ManagerError>>),
+    RenameQueue(i64, String, Reply),
+    RemoveQueue(i64, Reply),
     /// Which speed limit to change, and to what (`None` removes it).
     SetSpeed(SpeedTarget, Option<u64>, Reply),
     Shutdown(oneshot::Sender<()>),
@@ -794,6 +803,23 @@ impl Manager {
             .await
     }
 
+    /// Add a queue; returns its id.
+    pub async fn add_queue(&self, name: impl Into<String>) -> Result<i64, ManagerError> {
+        let name = name.into();
+        self.ask(|r| Command::AddQueue(name, r)).await
+    }
+
+    /// Rename a queue.
+    pub async fn rename_queue(&self, id: i64, name: impl Into<String>) -> Result<(), ManagerError> {
+        let name = name.into();
+        self.ask(|r| Command::RenameQueue(id, name, r)).await
+    }
+
+    /// Remove a queue; what it holds moves to the main queue (which cannot be removed).
+    pub async fn remove_queue(&self, id: i64) -> Result<(), ManagerError> {
+        self.ask(|r| Command::RemoveQueue(id, r)).await
+    }
+
     /// All queues, with their limits and schedules.
     pub async fn queues(&self) -> Result<Vec<QueueRow>, ManagerError> {
         self.ask(Command::Queues).await
@@ -916,6 +942,11 @@ impl Actor {
         if request.context.credentials.is_none() {
             request.context.credentials = from_address;
         }
+        if let Some(queue) = request.queue_id {
+            if !self.store.queues()?.iter().any(|q| q.id == queue) {
+                return Err(ManagerError::Queue(format!("there is no queue {queue}")));
+            }
+        }
         let duplicate = find_duplicate(&self.store, &request);
         match (duplicate, request.duplicates) {
             (Some(found), DuplicatePolicy::Ask) => return Err(ManagerError::Duplicate(found)),
@@ -926,7 +957,7 @@ impl Actor {
         let id = self.store.add_download_with(
             request.url.trim(),
             &request.dest_dir.to_string_lossy(),
-            None,
+            request.queue_id,
             request.sort_into_categories,
         )?;
         if !request.context.is_empty() {
@@ -1281,6 +1312,15 @@ impl Actor {
             Command::Queues(reply) => {
                 let _ = reply.send(self.store.queues().map_err(Into::into));
             }
+            Command::AddQueue(name, reply) => {
+                let _ = reply.send(self.add_queue(&name));
+            }
+            Command::RenameQueue(id, name, reply) => {
+                let _ = reply.send(self.rename_queue(id, &name));
+            }
+            Command::RemoveQueue(id, reply) => {
+                let _ = reply.send(self.remove_queue(id));
+            }
             Command::SetSpeed(target, limit, reply) => {
                 let _ = reply.send(self.set_speed(target, limit));
             }
@@ -1319,6 +1359,62 @@ impl Actor {
                 }
             }
         }
+    }
+
+    fn check_queue_name(&self, name: &str, except: Option<i64>) -> Result<String, ManagerError> {
+        let name = name.trim();
+        if name.is_empty() || name.chars().count() > 40 || name.chars().any(char::is_control) {
+            return Err(ManagerError::Queue(
+                "a queue's name must be 1 to 40 characters".into(),
+            ));
+        }
+        let taken = self
+            .store
+            .queues()?
+            .iter()
+            .any(|q| Some(q.id) != except && q.name.eq_ignore_ascii_case(name));
+        if taken {
+            return Err(ManagerError::Queue(format!(
+                "there is already a queue named {name}"
+            )));
+        }
+        Ok(name.to_string())
+    }
+
+    fn add_queue(&mut self, name: &str) -> Result<i64, ManagerError> {
+        let name = self.check_queue_name(name, None)?;
+        Ok(self.store.add_queue(&name)?)
+    }
+
+    fn rename_queue(&mut self, id: i64, name: &str) -> Result<(), ManagerError> {
+        if !self.store.queues()?.iter().any(|q| q.id == id) {
+            return Err(ManagerError::Queue(format!("there is no queue {id}")));
+        }
+        let name = self.check_queue_name(name, Some(id))?;
+        Ok(self.store.rename_queue(id, &name)?)
+    }
+
+    /// Removes a queue. What it held goes to the main queue; what it was
+    /// running is put back in line first.
+    fn remove_queue(&mut self, id: i64) -> Result<(), ManagerError> {
+        let queues = self.store.queues()?;
+        let Some(first) = queues.first().map(|q| q.id) else {
+            return Err(ManagerError::Queue("there is no queue".into()));
+        };
+        if !queues.iter().any(|q| q.id == id) {
+            return Err(ManagerError::Queue(format!("there is no queue {id}")));
+        }
+        if id == first {
+            return Err(ManagerError::Queue(
+                "the main queue cannot be removed".into(),
+            ));
+        }
+        self.close_queue(id);
+        self.store.remove_queue(id)?;
+        self.queue_open.remove(&id);
+        self.queue_limits.remove(&id);
+        self.pump();
+        Ok(())
     }
 
     fn set_schedule(

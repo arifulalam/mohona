@@ -2,7 +2,7 @@ import { cleanup, render, screen, waitFor, within } from "@testing-library/react
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { App } from "../src/App";
-import type { Api, Category, Config, ConfigChange, EngineStatus, ExtensionSettings, Plan, PlanWindow, Row } from "../src/types";
+import type { Api, Category, Config, ConfigChange, EngineStatus, ExtensionSettings, Plan, PlanWindow, Queue, Row } from "../src/types";
 
 const row = (id: number, name: string, status: string, extra: Partial<Row> = {}): Row => ({
   id, name, url: `https://x.test/${name}`, status, downloaded: 50, size: 100, percent: 50, speed: 0, eta: null,
@@ -16,12 +16,13 @@ function fake(initial: Row[], running = true) {
   let plan: Plan = { windows: [], openNow: true, action: null, countdown: null, message: null };
   let cfg: Config = { downloadFolder: "C:\\Dl", defaultFolder: "C:\\Dl", speedLimit: null, maxActive: 4, notifications: true, keepInTray: true, sortByType: false };
   let ext: ExtensionSettings = { intercept: true, minSizeBytes: 0, excludedHosts: [], videoButton: true, buttonHiddenHosts: [], autoRefresh: true };
+  let queues: Queue[] = [{ id: 1, name: "Main", maxActive: 4, speedLimit: null, windows: [], openNow: true }];
   const status = (): EngineStatus => ({ running: engine, version: engine ? "9.9" : null, message: null });
   const api = {
     status: vi.fn(async () => status()),
     start: vi.fn(async () => ((engine = true), status())),
     list: vi.fn(async () => rows),
-    add: vi.fn(async (url: string) => {
+    add: vi.fn(async (url: string, _folder?: string | null, _queue?: number) => {
       if (url.includes("bad")) throw new Error("the address must start with http://");
       rows = [...rows, row(99, "new.zip", "downloading")];
       return 99;
@@ -34,6 +35,15 @@ function fake(initial: Row[], running = true) {
       if (id === 7) throw new Error("for safety, programs and scripts are not opened from here");
     }),
     show: vi.fn(async () => undefined),
+    queues: vi.fn(async () => queues),
+    addQueue: vi.fn(async (name: string) => {
+      if (name === "Main") throw new Error("there is already a queue with that name");
+      return (queues = [...queues, { id: 2, name, maxActive: 3, speedLimit: null, windows: [], openNow: true }]);
+    }),
+    renameQueue: vi.fn(async (id: number, name: string) => (queues = queues.map((q) => (q.id === id ? { ...q, name } : q)))),
+    removeQueue: vi.fn(async (id: number) => (queues = queues.filter((q) => q.id !== id))),
+    setQueue: vi.fn(async (id: number, c: { maxActive?: number; speedLimit?: number }) =>
+      (queues = queues.map((q) => (q.id === id ? { ...q, maxActive: c.maxActive ?? q.maxActive, speedLimit: c.speedLimit || null } : q)))),
     plan: vi.fn(async () => plan),
     setPlan: vi.fn(async (windows: PlanWindow[]) => (plan = { ...plan, windows })),
     setAfterAction: vi.fn(async (action: string | null) => (plan = { ...plan, action, countdown: null })),
@@ -253,5 +263,33 @@ describe("App", () => {
     expect(await within(dialog).findByText("Archives")).toBeTruthy();
     await userEvent.click(within(dialog).getByRole("button", { name: "Remove category Archives" }));
     await waitFor(() => expect(within(dialog).queryByText("Archives")).toBeNull());
+  });
+
+  it("adds a queue, changes its limits, and sends new downloads to it", async () => {
+    const api = fake([]);
+    render(<App api={api} every={50} />);
+    await userEvent.click(await screen.findByRole("button", { name: "Queues" }));
+    let dialog = await screen.findByRole("dialog");
+    await userEvent.type(await within(dialog).findByLabelText("New queue name"), "Main");
+    await userEvent.click(within(dialog).getByRole("button", { name: "Add" }));
+    expect((await within(dialog).findByRole("alert")).textContent).toContain("already a queue");
+    await userEvent.clear(within(dialog).getByLabelText("New queue name"));
+    await userEvent.type(within(dialog).getByLabelText("New queue name"), "Night");
+    await userEvent.click(within(dialog).getByRole("button", { name: "Add" }));
+    await waitFor(() => expect(api.addQueue).toHaveBeenLastCalledWith("Night"));
+    const active = await within(dialog).findByLabelText("Queue simultaneous downloads");
+    await userEvent.clear(active);
+    await userEvent.type(active, "2");
+    await userEvent.type(within(dialog).getByLabelText("Queue speed limit"), "1");
+    await userEvent.click(within(dialog).getByRole("button", { name: "Save" }));
+    await waitFor(() => expect(api.setQueue).toHaveBeenCalledWith(2, expect.objectContaining({ maxActive: 2, speedLimit: 1024 * 1024 })));
+    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+
+    await userEvent.click(screen.getByRole("button", { name: "+ Add" }));
+    dialog = await screen.findByRole("dialog");
+    await userEvent.selectOptions(await within(dialog).findByLabelText("Queue"), "Night");
+    await userEvent.type(within(dialog).getByRole("textbox", { name: "Addresses (one per line)" }), "https://x.test/a.zip");
+    await userEvent.click(within(dialog).getByRole("button", { name: "Download" }));
+    await waitFor(() => expect(api.add).toHaveBeenCalledWith("https://x.test/a.zip", null, 2));
   });
 });

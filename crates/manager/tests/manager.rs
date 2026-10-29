@@ -1578,3 +1578,82 @@ async fn a_download_that_is_running_or_finished_cannot_be_given_a_new_link() {
         .await
         .is_err());
 }
+
+#[tokio::test]
+async fn queues_can_be_added_renamed_and_removed_and_downloads_can_be_put_in_one() {
+    let server = start_server().await;
+    let dir = tempfile::tempdir().unwrap();
+    let manager = manager_at(&dir.path().join("q.db"));
+    let main = manager.queues().await.unwrap()[0].id;
+
+    let night = manager.add_queue("Night").await.unwrap();
+    assert!(
+        manager.add_queue("night").await.is_err(),
+        "names are unique, ignoring case"
+    );
+    assert!(manager.add_queue("  ").await.is_err());
+    assert!(manager.add_queue("x".repeat(41)).await.is_err());
+    manager.rename_queue(night, "Overnight").await.unwrap();
+    assert!(manager.rename_queue(night, "Main").await.is_err());
+    assert!(manager.rename_queue(999, "Nope").await.is_err());
+    assert_eq!(manager.queues().await.unwrap().len(), 2);
+
+    // A paused queue (closed schedule) keeps what is put in it waiting.
+    let mut request = AddRequest::new(
+        format!("http://{server}/file?size=10000&seed=1"),
+        dir.path(),
+    );
+    request.queue_id = Some(night);
+    manager
+        .set_schedule(
+            night,
+            Some(Schedule {
+                windows: vec![Window {
+                    days: vec![],
+                    start: "00:00".into(),
+                    end: "00:01".into(),
+                    speed_limit: None,
+                }],
+            }),
+        )
+        .await
+        .ok();
+    let AddResult::Added(id) = manager.add_checked(request).await.unwrap() else {
+        panic!()
+    };
+    let row = manager
+        .list()
+        .await
+        .unwrap()
+        .into_iter()
+        .find(|r| r.id == id)
+        .unwrap();
+    assert_eq!(row.queue_id, night);
+
+    // A request for a queue that does not exist is refused.
+    let mut bad = AddRequest::new(
+        format!("http://{server}/file?size=10000&seed=2"),
+        dir.path(),
+    );
+    bad.queue_id = Some(12345);
+    assert!(manager.add_checked(bad).await.is_err());
+
+    // Removing the queue moves its download to the main queue, where it finishes.
+    assert!(
+        manager.remove_queue(main).await.is_err(),
+        "the main queue stays"
+    );
+    manager.remove_queue(night).await.unwrap();
+    let row = manager
+        .list()
+        .await
+        .unwrap()
+        .into_iter()
+        .find(|r| r.id == id)
+        .unwrap();
+    assert_eq!(row.queue_id, main);
+    wait_for(&manager, id, Status::Completed).await;
+    assert_eq!(manager.queues().await.unwrap().len(), 1);
+    assert!(manager.remove_queue(night).await.is_err());
+    manager.shutdown().await;
+}

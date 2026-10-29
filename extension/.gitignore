@@ -1,2 +1,25 @@
+# Browser extension: build and debug output
+
 node_modules/
+# Built extensions (npm run build) and store packages (npm run package)
 dist/
+*.zip
+*.crx
+*.xpi
+*.pem
+
+coverage/
+.vite/
+*.tsbuildinfo
+npm-debug.log*
+
+# Test output and temporary browser profiles
+playwright-report/
+test-results/
+e2e/.tmp/
+e2e/profile*/
+*.log
+
+# Local files
+.env
+.env.*

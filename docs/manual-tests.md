@@ -213,7 +213,8 @@ The window cannot be built where the tests run (it needs the system web view), s
 16. Folders and categories: in the Add dialog press "Browse…": Windows' folder dialog opens; the chosen folder appears in the box; a download added there lands in that folder. Cancelling the dialog leaves the box as it was. Same button in Settings for the default folder.
 17. "Categories": the standard ones are listed. Add "Books" with `epub, mobi`: it appears. Add "Archives" with `zip`: refused with "already belongs to Compressed". A name like `a/b`, file types like `z!p`, or a folder like `..\\x` are refused with a reason. Remove "Books".
 18. Sorting: tick "Sort finished downloads into folders by type" in Settings, download a `.zip` and a `.mp4` (also one from the browser): the files end up in `Compressed` and `Video` folders inside the download folder. Untick: new downloads stay in the download folder.
-19. `npm run tauri build` makes an installer in `app\src-tauri\target\release\bundle`. (The installer does not include `mohona.exe` yet: Phase 8.)
+19. Queues: press "Queues", add "Night": it appears in the list. Adding "night" again is refused. Select Night, set "Downloads at once" to 1 and a speed limit of 200 KB/s, Save. In "+ Add" a "Queue" choice appears; add two large downloads to Night: one runs, one waits, and the speed stays near 200 KB/s while Main downloads are not limited. Give Night a window that is closed now: its downloads wait ("queued") while Main's run. Remove Night: its downloads continue in Main. Main has no working "Remove queue" button.
+20. `npm run tauri build` makes an installer in `app\src-tauri\target\release\bundle`. (The installer does not include `mohona.exe` yet: Phase 8.)
 
 ## Store packaging
 

@@ -1,17 +1,68 @@
-# Rust
-/target
+# ---- Rust build output ----
+/target/
+**/target/
+# Tauri generated files (schemas, capabilities cache)
+app/src-tauri/gen/
+# Windows debug symbols and build leftovers
+*.pdb
+*.ilk
+*.exp
+*.rlib
+*.rmeta
+**/*.rs.bk
+# Cargo.lock is kept: this repository builds programs, not only a library
 
-# Node
+# ---- Node / web build output ----
 node_modules/
 dist/
+extension/dist/
+app/dist/
+coverage/
+*.tsbuildinfo
+.vite/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+*.tgz
 
-# Editors and systems
+# ---- Packaged files made for stores or releases ----
+*.zip
+*.crx
+*.xpi
+*.msi
+*.nsis
+app/src-tauri/target/release/bundle/
+
+# ---- Tests ----
+playwright-report/
+test-results/
+e2e/.tmp/
+*.log
+
+# ---- Local data and secrets: never commit ----
+.env
+.env.*
+!.env.example
+daemon.json
+*.db
+*.db-wal
+*.db-shm
+*.sqlite
+*.sqlite3
+*.pem
+*.key
+
+# ---- Downloads made while testing ----
+*.part
+/downloads/
+/Downloads/
+
+# ---- Editors and systems ----
 .idea/
 .vscode/
 *.swp
+*.swo
+*~
 .DS_Store
 Thumbs.db
-
-# Downloads made while testing
-*.part
-/downloads/
+desktop.ini

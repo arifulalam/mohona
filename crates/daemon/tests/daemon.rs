@@ -94,6 +94,7 @@ fn add_with(url: &str, cookies: Option<&str>, duplicates: Option<&str>) -> Call 
         headers: vec![],
         sort: false,
         duplicates: duplicates.map(Into::into),
+        queue: None,
     }
 }
 
@@ -364,6 +365,7 @@ async fn a_failed_expired_download_says_so_and_can_continue_from_a_fresh_link() 
             headers: vec![],
             sort: false,
             duplicates: None,
+            queue: None,
         })
         .await
         .unwrap()
@@ -807,6 +809,145 @@ async fn categories_are_checked_and_can_sort_finished_downloads() {
         panic!()
     };
     assert!(!categories.iter().any(|c| c.name == "Blobs"));
+    d.shutdown.notify_one();
+    d.task.await.unwrap().unwrap();
+}
+
+#[tokio::test]
+async fn queues_can_be_made_changed_and_used_and_bad_changes_change_nothing() {
+    use mohona_manager::Window;
+    let dir = tempfile::tempdir().unwrap();
+    let server = files().await;
+    let d = start(dir.path()).await;
+    let queues = |r: Response| match r {
+        Response::Queues { queues } => queues,
+        other => panic!("{other:?}"),
+    };
+
+    let list = queues(d.client.call(Call::GetQueues).await.unwrap());
+    assert_eq!(list.len(), 1);
+    let main = list[0].id;
+
+    let list = queues(
+        d.client
+            .call(Call::AddQueue {
+                name: " Night ".into(),
+            })
+            .await
+            .unwrap(),
+    );
+    assert_eq!(list.len(), 2);
+    let night = list.iter().find(|q| q.name == "Night").unwrap().id;
+    for bad in ["", "   ", "night", &"x".repeat(41), "bad\u{7}name"] {
+        let r = d
+            .client
+            .call(Call::AddQueue { name: bad.into() })
+            .await
+            .unwrap();
+        assert!(matches!(r, Response::Error { .. }), "{bad:?}");
+    }
+    let list = queues(
+        d.client
+            .call(Call::RenameQueue {
+                id: night,
+                name: "Overnight".into(),
+            })
+            .await
+            .unwrap(),
+    );
+    assert!(list.iter().any(|q| q.name == "Overnight"));
+
+    // A bad change is refused as a whole.
+    let bad_window = Window {
+        days: vec![],
+        start: "10:00".into(),
+        end: "10:00".into(),
+        speed_limit: None,
+    };
+    let refused = d
+        .client
+        .call(Call::SetQueue {
+            id: night,
+            max_active: Some(2),
+            speed_limit: Some(1000),
+            windows: Some(vec![bad_window]),
+        })
+        .await
+        .unwrap();
+    assert!(matches!(refused, Response::Error { .. }));
+    let list = queues(d.client.call(Call::GetQueues).await.unwrap());
+    let q = list.iter().find(|q| q.id == night).unwrap();
+    assert_eq!((q.max_active, q.speed_limit, q.windows.len()), (3, None, 0));
+    for bad in [
+        Call::SetQueue {
+            id: 999,
+            max_active: Some(2),
+            speed_limit: None,
+            windows: None,
+        },
+        Call::SetQueue {
+            id: night,
+            max_active: Some(40),
+            speed_limit: None,
+            windows: None,
+        },
+    ] {
+        assert!(matches!(
+            d.client.call(bad).await.unwrap(),
+            Response::Error { .. }
+        ));
+    }
+
+    // A good change is kept.
+    let list = queues(
+        d.client
+            .call(Call::SetQueue {
+                id: night,
+                max_active: Some(2),
+                speed_limit: Some(500_000),
+                windows: Some(vec![Window {
+                    days: vec!["sat".into()],
+                    start: "23:00".into(),
+                    end: "06:00".into(),
+                    speed_limit: None,
+                }]),
+            })
+            .await
+            .unwrap(),
+    );
+    let q = list.iter().find(|q| q.id == night).unwrap();
+    assert_eq!((q.max_active, q.speed_limit), (2, Some(500_000)));
+    assert_eq!(q.windows.len(), 1);
+
+    // Downloads can be put in a queue; the main queue cannot be removed; removing
+    // another moves what it holds to the main queue.
+    let mut call = add(&format!("http://{server}/file?size=10000&seed=7"));
+    if let Call::Add { queue, .. } = &mut call {
+        *queue = Some(night);
+    }
+    let Response::Added { id } = d.client.call(call).await.unwrap() else {
+        panic!()
+    };
+    let mut call = add("http://127.0.0.1:1/never");
+    if let Call::Add { queue, .. } = &mut call {
+        *queue = Some(31337);
+    }
+    assert!(matches!(
+        d.client.call(call).await.unwrap(),
+        Response::Error { .. }
+    ));
+    assert!(matches!(
+        d.client.call(Call::RemoveQueue { id: main }).await.unwrap(),
+        Response::Error { .. }
+    ));
+    let list = queues(
+        d.client
+            .call(Call::RemoveQueue { id: night })
+            .await
+            .unwrap(),
+    );
+    assert_eq!(list.len(), 1);
+    wait_for_status(&d.client, id, "completed").await;
     d.shutdown.notify_one();
     d.task.await.unwrap().unwrap();
 }

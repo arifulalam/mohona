@@ -3,6 +3,7 @@ import { AddDialog, Modal } from "./AddDialog";
 import { CategoriesDialog } from "./CategoriesDialog";
 import { allowed, counts, FILTERS, matches, type Filter } from "./filters";
 import { List } from "./List";
+import { QueuesDialog } from "./QueuesDialog";
 import { ScheduleDialog } from "./ScheduleDialog";
 import { actionName } from "./schedule";
 import { SettingsDialog } from "./SettingsDialog";
@@ -20,6 +21,8 @@ export function App({ api, every }: { api: Api; every?: number }) {
   const [removing, setRemoving] = useState(false);
   const [settings, setSettings] = useState(false);
   const [schedule, setSchedule] = useState(false);
+  const [queuesOpen, setQueuesOpen] = useState(false);
+  const [queueList, setQueueList] = useState<{ id: number; name: string }[]>([]);
   const [categories, setCategories] = useState(false);
   const [defaultFolder, setDefaultFolder] = useState("");
   const [deleteFiles, setDeleteFiles] = useState(false);
@@ -55,11 +58,11 @@ export function App({ api, every }: { api: Api; every?: number }) {
 
   const each = (rows: typeof chosen, call: (id: number) => Promise<void>) => d.act(() => Promise.all(rows.map((r) => call(r.id))));
 
-  async function addAll(urls: string[], folder: string | null): Promise<string | null> {
+  async function addAll(urls: string[], folder: string | null, queue: number | null): Promise<string | null> {
     const problems: string[] = [];
     for (const url of urls) {
       try {
-        await api.add(url, folder);
+        await (queue === null ? api.add(url, folder) : api.add(url, folder, queue));
       } catch (e) {
         problems.push(`${url}: ${(e as Error).message}`);
       }
@@ -78,6 +81,9 @@ export function App({ api, every }: { api: Api; every?: number }) {
         <div className="flex-1" />
         <button className="btn" onClick={() => setCategories(true)} disabled={!running}>
           Categories
+        </button>
+        <button className="btn" onClick={() => setQueuesOpen(true)} disabled={!running}>
+          Queues
         </button>
         <button className="btn" onClick={() => setSchedule(true)} disabled={!running}>
           Schedule
@@ -138,6 +144,7 @@ export function App({ api, every }: { api: Api; every?: number }) {
           onClick={() => {
             setAdding(true);
             api.config().then((c) => setDefaultFolder(c.downloadFolder)).catch(() => undefined);
+            api.queues().then(setQueueList).catch(() => undefined);
           }}
           disabled={!running}
         >
@@ -183,9 +190,10 @@ export function App({ api, every }: { api: Api; every?: number }) {
       </div>
 
       {categories && <CategoriesDialog api={api} onClose={() => setCategories(false)} />}
+      {queuesOpen && <QueuesDialog api={api} onClose={() => setQueuesOpen(false)} />}
       {schedule && <ScheduleDialog api={api} onClose={() => setSchedule(false)} />}
       {settings && <SettingsDialog api={api} onClose={() => setSettings(false)} />}
-      {adding && <AddDialog onAdd={addAll} onBrowse={() => api.pickFolder()} defaultFolder={defaultFolder} onClose={() => setAdding(false)} />}
+      {adding && <AddDialog onAdd={addAll} queues={queueList} onBrowse={() => api.pickFolder()} defaultFolder={defaultFolder} onClose={() => setAdding(false)} />}
       {removing && (
         <Modal title="Remove from the list" onClose={() => setRemoving(false)}>
           <p className="mt-0">

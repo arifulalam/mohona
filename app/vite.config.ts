@@ -6,7 +6,8 @@ import { defineConfig } from "vitest/config";
 export default defineConfig({
   plugins: [react(), tailwind()],
   clearScreen: false,
-  server: { port: 1420, strictPort: true },
+  // Tauri builds into src-tauri\target; Vite must not watch those files (Windows locks them while they build).
+  server: { port: 1420, strictPort: true, watch: { ignored: ["**/src-tauri/**"] } },
   build: { target: "es2022", sourcemap: false },
   test: { environment: "happy-dom", include: ["tests/**/*.test.ts", "tests/**/*.test.tsx"] },
 });

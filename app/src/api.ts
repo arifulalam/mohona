@@ -1,4 +1,4 @@
-import type { Api, Category, Config, ConfigChange, EngineStatus, ExtensionSettings, Plan, PlanWindow, Row } from "./types";
+import type { Api, Category, Config, ConfigChange, EngineStatus, ExtensionSettings, Plan, PlanWindow, Queue, Row } from "./types";
 
 /** True inside the Tauri window; false in a plain browser (development, tests). */
 export function insideTauri(): boolean {
@@ -18,7 +18,12 @@ function tauriApi(): Api {
     status: () => call<EngineStatus>("engine_status"),
     start: () => call<EngineStatus>("start_engine"),
     list: () => call<Row[]>("list_downloads"),
-    add: (url, folder) => call<number>("add_download", { url, folder }),
+    add: (url, folder, queue) => call<number>("add_download", { url, folder, queue }),
+    queues: () => call<Queue[]>("get_queues"),
+    addQueue: (name) => call<Queue[]>("add_queue", { name }),
+    renameQueue: (id, name) => call<Queue[]>("rename_queue", { id, name }),
+    removeQueue: (id) => call<Queue[]>("remove_queue", { id }),
+    setQueue: (id, change) => call<Queue[]>("set_queue", { id, change }),
     pause: (id) => call<void>("pause_download", { id }),
     resume: (id) => call<void>("resume_download", { id }),
     cancel: (id) => call<void>("cancel_download", { id }),
@@ -66,6 +71,14 @@ export function demoApi(tick = 1000): Api {
     { id: 2, name: "Video", extensions: ["mp4", "mkv", "webm"], folder: null },
   ];
   let nextCat = 10;
+  let queueList: Queue[] = [{ id: 1, name: "Main", maxActive: 4, speedLimit: null, windows: [], openNow: true }];
+  let nextQueue = 2;
+  const checkName = (name: string) => {
+    const n = name.trim();
+    if (!n || n.length > 40) throw new Error("a queue's name must be 1 to 40 characters");
+    if (queueList.some((q) => q.name.toLowerCase() === n.toLowerCase())) throw new Error("there is already a queue with that name");
+    return n;
+  };
   let plan: Plan = { windows: [], openNow: true, action: null, countdown: null, message: null };
   const status = (): EngineStatus => ({ running, version: running ? "demo" : null, message: null });
   const need = () => {
@@ -94,6 +107,19 @@ export function demoApi(tick = 1000): Api {
       if (/\.(exe|msi|bat|cmd|ps1|lnk)$/i.test(rows.find((r) => r.id === id)?.name ?? "")) throw new Error("for safety, programs and scripts are not opened from here; use \"Show in folder\"");
     },
     show: async () => need(),
+    queues: async () => (need(), queueList),
+    addQueue: async (name) => (need(), (queueList = [...queueList, { id: nextQueue++, name: checkName(name), maxActive: 3, speedLimit: null, windows: [], openNow: true }])),
+    renameQueue: async (id, name) => (need(), (queueList = queueList.map((q) => (q.id === id ? { ...q, name: checkName(name) } : q)))),
+    removeQueue: async (id) => {
+      need();
+      if (id === queueList[0]?.id) throw new Error("the main queue cannot be removed");
+      return (queueList = queueList.filter((q) => q.id !== id));
+    },
+    setQueue: async (id, c) => {
+      need();
+      if (c.maxActive !== undefined && (c.maxActive < 1 || c.maxActive > 32)) throw new Error("simultaneous downloads must be between 1 and 32");
+      return (queueList = queueList.map((q) => (q.id === id ? { ...q, maxActive: c.maxActive ?? q.maxActive, speedLimit: c.speedLimit === undefined ? q.speedLimit : c.speedLimit || null, windows: c.windows ?? q.windows } : q)));
+    },
     plan: async () => (need(), plan),
     setPlan: async (windows: PlanWindow[]) => {
       need();

@@ -311,3 +311,48 @@ async fn categories_can_be_listed_added_and_removed_through_the_app() {
         .any(|c| c.name == "Photos"));
     shutdown.notify_one();
 }
+
+#[tokio::test]
+async fn queues_are_managed_and_downloads_can_go_into_one() {
+    use mohona_appcore::{PlanWindow, QueueChange};
+    let dir = tempfile::tempdir().unwrap();
+    let server = files().await;
+    let (engine, shutdown) = engine(dir.path()).await;
+    let list = engine.add_queue("Night").await.unwrap();
+    assert_eq!(list.len(), 2);
+    let night = list.iter().find(|q| q.name == "Night").unwrap().id;
+    assert!(engine.add_queue("night").await.is_err());
+    let list = engine
+        .set_queue(
+            night,
+            QueueChange {
+                max_active: Some(1),
+                speed_limit: Some(100_000),
+                windows: Some(vec![PlanWindow {
+                    days: vec![],
+                    start: "01:00".into(),
+                    end: "02:00".into(),
+                    speed_limit: None,
+                }]),
+            },
+        )
+        .await
+        .unwrap();
+    let q = list.iter().find(|q| q.id == night).unwrap();
+    assert_eq!(
+        (q.max_active, q.speed_limit, q.windows.len()),
+        (1, Some(100_000), 1)
+    );
+    let list = engine.rename_queue(night, "Overnight").await.unwrap();
+    assert!(list.iter().any(|q| q.name == "Overnight"));
+    let url = format!("http://{server}/file?size=10000&seed=9");
+    engine.add_to(&url, None, Some(night)).await.unwrap();
+    assert!(engine
+        .add_to("http://x.test/a", None, Some(777))
+        .await
+        .is_err());
+    let list = engine.remove_queue(night).await.unwrap();
+    assert_eq!(list.len(), 1);
+    assert!(engine.remove_queue(list[0].id).await.is_err());
+    shutdown.notify_one();
+}

@@ -7,7 +7,7 @@ use std::time::Duration;
 
 use mohona_appcore::{
     AppError, Category, Config, ConfigChange, Engine, EngineStatus, ExtensionSettings, Plan,
-    PlanWindow, Row, SpeedTracker, Watcher,
+    PlanWindow, Queue, QueueChange, Row, SpeedTracker, Watcher,
 };
 use tauri::menu::{Menu, MenuItem};
 use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
@@ -41,8 +41,13 @@ async fn list_downloads(app: State<'_, App>) -> Result<Vec<Row>> {
 }
 
 #[tauri::command]
-async fn add_download(app: State<'_, App>, url: String, folder: Option<String>) -> Result<i64> {
-    app.engine.add(&url, folder.as_deref()).await
+async fn add_download(
+    app: State<'_, App>,
+    url: String,
+    folder: Option<String>,
+    queue: Option<i64>,
+) -> Result<i64> {
+    app.engine.add_to(&url, folder.as_deref(), queue).await
 }
 
 #[tauri::command]
@@ -165,6 +170,31 @@ async fn add_category(
 #[tauri::command]
 async fn remove_category(app: State<'_, App>, id: i64) -> Result<Vec<Category>> {
     app.engine.remove_category(id).await
+}
+
+#[tauri::command]
+async fn get_queues(app: State<'_, App>) -> Result<Vec<Queue>> {
+    app.engine.queues().await
+}
+
+#[tauri::command]
+async fn add_queue(app: State<'_, App>, name: String) -> Result<Vec<Queue>> {
+    app.engine.add_queue(&name).await
+}
+
+#[tauri::command]
+async fn rename_queue(app: State<'_, App>, id: i64, name: String) -> Result<Vec<Queue>> {
+    app.engine.rename_queue(id, &name).await
+}
+
+#[tauri::command]
+async fn remove_queue(app: State<'_, App>, id: i64) -> Result<Vec<Queue>> {
+    app.engine.remove_queue(id).await
+}
+
+#[tauri::command]
+async fn set_queue(app: State<'_, App>, id: i64, change: QueueChange) -> Result<Vec<Queue>> {
+    app.engine.set_queue(id, change).await
 }
 
 fn show_window(handle: &AppHandle) {
@@ -305,6 +335,11 @@ pub fn run() {
             set_config,
             get_extension_settings,
             set_extension_settings,
+            get_queues,
+            add_queue,
+            rename_queue,
+            remove_queue,
+            set_queue,
             get_plan,
             set_plan,
             set_after_action,

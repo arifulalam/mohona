@@ -536,3 +536,11 @@ A `401` now becomes its own error (`NetError::Unauthorized`) that names the kind
 **Folders are chosen with the system's dialog.** Settings and the Add dialog have a "Browse…" button that opens the operating system's folder dialog through Tauri's dialog plugin; the typed path still works. A cancelled dialog changes nothing.
 
 **Not included.** Editing a category (remove and add again), several queues, per-site folder rules.
+
+## ADR-0054: Several queues in the app
+
+**Queues.** The app lists, adds, renames, removes and sets queues through new daemon calls (`get_queues`, `add_queue`, `rename_queue`, `remove_queue`, `set_queue`). Each queue has its own number of simultaneous downloads (1 to 32), an optional speed limit shared by the queue, and its own schedule windows (the same editor as the main schedule). The first ("Main") queue cannot be removed; removing another moves its downloads to Main. A name is 1 to 40 characters and unique ignoring case. Every change is checked before it is applied, so a refused change leaves the queue as it was.
+
+**Choosing a queue.** The Add dialog shows a "Queue" choice only when there is more than one queue; without a choice the download goes to Main, as the browser extension's downloads do. `add` in the daemon takes an optional `queue`.
+
+**Not included.** Moving an existing download to another queue, and reordering downloads inside a queue (the command line can).

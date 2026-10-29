@@ -478,6 +478,44 @@ impl Store {
         Ok(rows)
     }
 
+    /// Add a queue (the name must be new). New queues run 3 downloads at once.
+    pub fn add_queue(&self, name: &str) -> Result<i64, StoreError> {
+        self.conn.execute(
+            "INSERT INTO queues (name, max_active) VALUES (?1, 3)",
+            [name.trim()],
+        )?;
+        Ok(self.conn.last_insert_rowid())
+    }
+
+    /// Give a queue another name (the name must be new).
+    pub fn rename_queue(&self, queue_id: i64, name: &str) -> Result<(), StoreError> {
+        self.conn.execute(
+            "UPDATE queues SET name=?2 WHERE id=?1",
+            params![queue_id, name.trim()],
+        )?;
+        Ok(())
+    }
+
+    /// Remove a queue; its downloads move to the first queue, at the end of its line.
+    /// (The caller makes sure it is not the first queue itself.)
+    pub fn remove_queue(&self, queue_id: i64) -> Result<(), StoreError> {
+        let first: i64 = self
+            .conn
+            .query_row("SELECT MIN(id) FROM queues", [], |r| r.get(0))?;
+        let base: i64 = self.conn.query_row(
+            "SELECT COALESCE(MAX(position),0) FROM downloads WHERE queue_id=?1",
+            [first],
+            |r| r.get(0),
+        )?;
+        self.conn.execute(
+            "UPDATE downloads SET queue_id=?2, position=position+?3 WHERE queue_id=?1",
+            params![queue_id, first, base],
+        )?;
+        self.conn
+            .execute("DELETE FROM queues WHERE id=?1", [queue_id])?;
+        Ok(())
+    }
+
     /// Change how many downloads a queue may run at once (at least 1).
     pub fn set_queue_max_active(&self, queue_id: i64, max_active: u32) -> Result<(), StoreError> {
         self.conn.execute(

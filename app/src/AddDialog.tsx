@@ -1,7 +1,9 @@
 import { useEffect, useRef, useState } from "react";
 
 interface Props {
-  onAdd(urls: string[], folder: string | null): Promise<string | null>;
+  onAdd(urls: string[], folder: string | null, queue: number | null): Promise<string | null>;
+  /** The queues to choose from; the choice is shown only when there is more than one. */
+  queues: { id: number; name: string }[];
   /** Opens the system's folder dialog; null when cancelled. */
   onBrowse(): Promise<string | null>;
   /** Where files go when no folder is chosen. */
@@ -10,7 +12,8 @@ interface Props {
 }
 
 /** One address per line. */
-export function AddDialog({ onAdd, onBrowse, defaultFolder, onClose }: Props) {
+export function AddDialog({ onAdd, onBrowse, queues, defaultFolder, onClose }: Props) {
+  const [queue, setQueue] = useState<number | null>(null);
   const [folder, setFolder] = useState("");
   const [text, setText] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -33,7 +36,7 @@ export function AddDialog({ onAdd, onBrowse, defaultFolder, onClose }: Props) {
     const urls = text.split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
     if (urls.length === 0) return setError("Type or paste an address.");
     setBusy(true);
-    const problem = await onAdd(urls, folder.trim() || null);
+    const problem = await onAdd(urls, folder.trim() || null, queue);
     setBusy(false);
     if (problem) setError(problem);
     else onClose();
@@ -70,6 +73,23 @@ export function AddDialog({ onAdd, onBrowse, defaultFolder, onClose }: Props) {
             </button>
           </span>
         </div>
+        {queues.length > 1 && (
+          <label className="flex items-center gap-2">
+            <span>Queue</span>
+            <select
+              className="rounded-md border border-[var(--line)] bg-[var(--bg)] px-2 py-1"
+              value={queue ?? queues[0]?.id}
+              onChange={(e) => setQueue(Number(e.target.value))}
+              aria-label="Queue"
+            >
+              {queues.map((q) => (
+                <option key={q.id} value={q.id}>
+                  {q.name}
+                </option>
+              ))}
+            </select>
+          </label>
+        )}
         {error && (
           <p role="alert" className="whitespace-pre-wrap text-[var(--bad)]">
             {error}

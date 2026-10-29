@@ -1,0 +1,25 @@
+# Desktop app (React page + Tauri shell): build and debug output
+
+node_modules/
+dist/
+coverage/
+.vite/
+*.tsbuildinfo
+npm-debug.log*
+
+# Tauri / Rust shell
+src-tauri/target/
+src-tauri/gen/
+*.pdb
+*.ilk
+*.exp
+
+# Installers made by `npm run tauri build`
+*.msi
+*.exe
+*.nsis
+
+# Local files
+.env
+.env.*
+*.log

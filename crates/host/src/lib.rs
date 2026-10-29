@@ -256,6 +256,7 @@ impl Host {
             headers: d.headers,
             sort: true,
             duplicates: Some("skip".into()),
+            queue: None,
         });
         match answer {
             Ok(Response::Added { id }) => json!({"type": "added", "id": id}),
