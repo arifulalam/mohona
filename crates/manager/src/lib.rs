@@ -87,6 +87,13 @@ pub enum ManagerEvent {
         /// Size, if known.
         total: Option<u64>,
     },
+    /// Where the parts of a segmented download are (about twice a second).
+    Parts {
+        /// Its id.
+        id: i64,
+        /// One entry per connection's part.
+        parts: Vec<mohona_core::Part>,
+    },
     /// A download failed.
     Error {
         /// Its id.
@@ -1813,6 +1820,9 @@ async fn run_download(
                         last_save = Instant::now();
                         let _ = commands.send(Command::Saved { id, downloaded }).await;
                     }
+                }
+                Event::Parts(parts) => {
+                    let _ = events.send(ManagerEvent::Parts { id, parts });
                 }
                 _ => {}
             },

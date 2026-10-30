@@ -11,7 +11,9 @@ use tokio::net::{TcpListener, TcpStream};
 use tokio::sync::Notify;
 
 use crate::info::DaemonInfo;
-use crate::protocol::{Call, CategoryInfo, DownloadInfo, QueueInfo, Request, Response};
+use crate::protocol::{
+    Call, CategoryInfo, ConnectionInfo, DownloadInfo, QueueInfo, Request, Response,
+};
 use crate::streams::StreamJob;
 
 /// The longest request line accepted.
@@ -38,6 +40,26 @@ struct State {
     streams: crate::streams::Streams,
     receiver: crate::receive::Receiver,
     action: std::sync::Mutex<ActionState>,
+    live: std::sync::Mutex<std::collections::HashMap<i64, Live>>,
+}
+
+/// The newest numbers about a running download, from the manager's events.
+struct Live {
+    downloaded: u64,
+    parts: Vec<LivePart>,
+    at: std::time::Instant,
+    /// Bytes per second over the last seconds, all connections.
+    speed: f64,
+    seen: (std::time::Instant, u64),
+}
+
+struct LivePart {
+    start: u64,
+    end: u64,
+    position: u64,
+    speed: f64,
+    moved_at: std::time::Instant,
+    sampled: std::time::Instant,
 }
 
 /// What the person armed for the end of the downloads, and how far it is.
@@ -77,6 +99,7 @@ pub async fn serve(manager: Manager, config: ServerConfig) -> std::io::Result<()
         streams: crate::streams::Streams::new(config.stream_program),
         receiver: crate::receive::Receiver::default(),
         action: std::sync::Mutex::new(ActionState::default()),
+        live: std::sync::Mutex::new(std::collections::HashMap::new()),
     });
     watch_action(&state);
     loop {
@@ -187,6 +210,7 @@ fn watch_action(state: &Arc<State>) {
                 Err(tokio::sync::broadcast::error::RecvError::Lagged(_)) => continue,
                 Err(_) => return,
             };
+            track(&state, &event);
             let mut a = state.action.lock().unwrap_or_else(|e| e.into_inner());
             match event {
                 ManagerEvent::ActionCountdown { seconds_left, .. } => {
@@ -212,6 +236,140 @@ fn watch_action(state: &Arc<State>) {
             }
         }
     });
+}
+
+/// The newest byte count of a download that is running, if there is one.
+fn live_bytes(state: &State, id: i64, status: &mohona_store::Status) -> Option<u64> {
+    if *status != mohona_store::Status::Downloading {
+        return None;
+    }
+    let live = state.live.lock().unwrap_or_else(|e| e.into_inner());
+    live.get(&id).map(|l| l.downloaded)
+}
+
+async fn details(state: &State, id: i64) -> Response {
+    let rows = match state.manager.list().await {
+        Ok(rows) => rows,
+        Err(e) => return error(e),
+    };
+    let Some(row) = rows.into_iter().find(|r| r.id == id) else {
+        return Response::Error {
+            message: "there is no such download".into(),
+        };
+    };
+    let live = state.live.lock().unwrap_or_else(|e| e.into_inner());
+    let now = std::time::Instant::now();
+    let recent = live
+        .get(&id)
+        .filter(|l| now.duration_since(l.at).as_secs() < 5);
+    let downloaded = recent.map_or(row.downloaded, |l| l.downloaded.max(row.downloaded));
+    let speed = recent.map_or(0, |l| l.speed as u64);
+    let connections = recent
+        .map(|l| {
+            l.parts
+                .iter()
+                .enumerate()
+                .map(|(i, p)| {
+                    let done = p.position >= p.end;
+                    let active = !done && now.duration_since(p.moved_at).as_secs() < 3;
+                    ConnectionInfo {
+                        number: i as u32 + 1,
+                        start: p.start,
+                        end: p.end,
+                        received: p.position.min(p.end).saturating_sub(p.start),
+                        speed: if active { p.speed as u64 } else { 0 },
+                        state: if done {
+                            "done"
+                        } else if active {
+                            "active"
+                        } else {
+                            "waiting"
+                        }
+                        .into(),
+                    }
+                })
+                .collect()
+        })
+        .unwrap_or_default();
+    Response::Details {
+        id,
+        status: row.status.as_str().to_string(),
+        downloaded,
+        size: row.size,
+        speed,
+        connections,
+    }
+}
+
+/// Keeps the newest progress and connection numbers of running downloads.
+fn track(state: &State, event: &ManagerEvent) {
+    use std::time::Instant;
+    let mut live = state.live.lock().unwrap_or_else(|e| e.into_inner());
+    let now = Instant::now();
+    match event {
+        ManagerEvent::Progress { id, downloaded, .. } => {
+            let l = live.entry(*id).or_insert_with(|| Live {
+                downloaded: *downloaded,
+                parts: Vec::new(),
+                at: now,
+                speed: 0.0,
+                seen: (now, *downloaded),
+            });
+            l.downloaded = *downloaded;
+            l.at = now;
+            let seconds = now.duration_since(l.seen.0).as_secs_f64();
+            if seconds >= 1.0 {
+                let rate = downloaded.saturating_sub(l.seen.1) as f64 / seconds;
+                l.speed = if l.speed == 0.0 {
+                    rate
+                } else {
+                    l.speed * 0.5 + rate * 0.5
+                };
+                l.seen = (now, *downloaded);
+            }
+        }
+        ManagerEvent::Parts { id, parts } => {
+            let Some(l) = live.get_mut(id) else { return };
+            let mut next = Vec::with_capacity(parts.len());
+            for part in parts {
+                // The same part as before is the one that began at the same byte.
+                let old = l.parts.iter().find(|o| o.start == part.start);
+                let (speed, moved_at) = match old {
+                    Some(o) => {
+                        let gained = part.position.saturating_sub(o.position);
+                        let dt = now.duration_since(o.sampled).as_secs_f64().max(0.001);
+                        let rate = gained as f64 / dt;
+                        (
+                            o.speed * 0.5 + rate * 0.5,
+                            if gained > 0 { now } else { o.moved_at },
+                        )
+                    }
+                    None => (0.0, now),
+                };
+                next.push(LivePart {
+                    start: part.start,
+                    end: part.end,
+                    position: part.position,
+                    speed,
+                    moved_at,
+                    sampled: now,
+                });
+            }
+            l.parts = next;
+        }
+        ManagerEvent::State { id, status }
+            if !matches!(
+                status,
+                mohona_store::Status::Downloading | mohona_store::Status::Probing
+            ) =>
+        {
+            live.remove(id);
+        }
+        ManagerEvent::Removed { id } => {
+            live.remove(id);
+        }
+        _ => {}
+    }
 }
 
 /// The actions a client may arm: nothing that starts programs.
@@ -460,6 +618,7 @@ async fn handle(state: &State, call: Call) -> Response {
             },
             Ok(()) => done(manager.set_setting(&key, &value).await),
         },
+        Call::GetDetails { id } => details(state, id).await,
         Call::List => match manager.list().await {
             Ok(rows) => {
                 let mut downloads = Vec::with_capacity(rows.len());
@@ -482,7 +641,8 @@ async fn handle(state: &State, call: Call) -> Response {
                         url: r.url,
                         filename: r.filename,
                         status: r.status.as_str().to_string(),
-                        downloaded: r.downloaded,
+                        downloaded: live_bytes(state, r.id, &r.status)
+                            .map_or(r.downloaded, |l| l.max(r.downloaded)),
                         size: r.size,
                         error: r.error,
                         path: r.path,

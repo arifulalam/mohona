@@ -214,7 +214,17 @@ The window cannot be built where the tests run (it needs the system web view), s
 17. "Categories": the standard ones are listed. Add "Books" with `epub, mobi`: it appears. Add "Archives" with `zip`: refused with "already belongs to Compressed". A name like `a/b`, file types like `z!p`, or a folder like `..\\x` are refused with a reason. Remove "Books".
 18. Sorting: tick "Sort finished downloads into folders by type" in Settings, download a `.zip` and a `.mp4` (also one from the browser): the files end up in `Compressed` and `Video` folders inside the download folder. Untick: new downloads stay in the download folder.
 19. Queues: press "Queues", add "Night": it appears in the list. Adding "night" again is refused. Select Night, set "Downloads at once" to 1 and a speed limit of 200 KB/s, Save. In "+ Add" a "Queue" choice appears; add two large downloads to Night: one runs, one waits, and the speed stays near 200 KB/s while Main downloads are not limited. Give Night a window that is closed now: its downloads wait ("queued") while Main's run. Remove Night: its downloads continue in Main. Main has no working "Remove queue" button.
-20. `npm run tauri build` makes an installer in `app\src-tauri\target\release\bundle`. (The installer does not include `mohona.exe` yet: Phase 8.)
+20. Details: start a large download and press "Details" (or double-click the row): totals, speed and time left update every second; a table lists the connections (usually 2 to 8) with their part of the file, their own progress bar and speed; the bar above it fills in several places at once. Pause the download: the window says the connections show while it is running. Add a small file: finished downloads have no Details button. While a download runs the progress bar must never move backwards.
+21. Categories in the list: every row has a category label. Click "Compressed" (or any) in the sidebar: only its files show; click it again or "All types": all show. The numbers next to the categories follow the status filter ("Finished", ...). "Sort by": Name, Size, Category and type, Status each reorder the list; the choice is still there after restarting the app.
+22. Themes: the box at the top right lists System, Light, Dark, Desert, Forest, Sunny, Orange, Leaf, Earth, Sky & cloud, River, Water. Each one changes the whole window at once, the header text is readable on every one, and the choice is still there after restarting.
+23. `npm run tauri build` makes an installer in `app\src-tauri\target\release\bundle`. (The installer does not include `mohona.exe` yet: Phase 8.)
+
+## Extension popup
+
+1. Open the popup with Mohona running: the header shows "Mohona x.y.z is running" with a green dot; four counters show running, waiting, finished and failed downloads. Start a big download: it appears under "Downloads" with a progress bar, speed and time left, and "Total speed" shows; they update every second or two.
+2. Stop Mohona (`mohona` daemon quit or the tray's Quit): the dot turns yellow, "Start Mohona" shows and works.
+3. The theme box in the header offers the twelve themes; the popup changes at once and keeps the choice after closing it. Check at least one dark theme (Forest, Earth, River) and one light (Sunny, Water): all text readable.
+4. Finished files appear under "Recently finished"; media found on a page under "Media on this page"; "Settings" opens the same options as before.
 
 ## Store packaging
 

@@ -15,5 +15,7 @@ mod streams;
 
 pub use client::{Client, ClientError};
 pub use info::{default_db_path, default_download_dir, default_info_path, DaemonInfo};
-pub use protocol::{Call, CategoryInfo, DownloadInfo, JobInfo, QueueInfo, Request, Response};
+pub use protocol::{
+    Call, CategoryInfo, ConnectionInfo, DownloadInfo, JobInfo, QueueInfo, Request, Response,
+};
 pub use server::{serve, ServerConfig};

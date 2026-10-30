@@ -951,3 +951,51 @@ async fn queues_can_be_made_changed_and_used_and_bad_changes_change_nothing() {
     d.shutdown.notify_one();
     d.task.await.unwrap().unwrap();
 }
+
+#[tokio::test]
+async fn a_running_download_shows_its_connections_and_never_goes_backwards() {
+    let dir = tempfile::tempdir().unwrap();
+    let server = files().await;
+    let d = start(dir.path()).await;
+    let url = format!("http://{server}/file?size=60000000&limit=500000");
+    let Response::Added { id } = d.client.call(add(&url)).await.unwrap() else {
+        panic!("not added");
+    };
+    let started = Instant::now();
+    let mut last = 0;
+    let mut saw_parts = 0;
+    while saw_parts < 2 {
+        assert!(started.elapsed() < Duration::from_secs(20), "no details");
+        let Response::Details {
+            downloaded,
+            size,
+            connections,
+            ..
+        } = d.client.call(Call::GetDetails { id }).await.unwrap()
+        else {
+            panic!("expected details");
+        };
+        assert!(downloaded >= last, "{downloaded} after {last}");
+        last = downloaded;
+        assert!(size.is_none() || size == Some(60_000_000));
+        if !connections.is_empty() {
+            saw_parts += 1;
+            let mut covered: Vec<_> = connections.iter().map(|c| (c.start, c.end)).collect();
+            covered.sort();
+            assert_eq!(covered[0].0, 0);
+            assert_eq!(covered.last().unwrap().1, 60_000_000);
+            for c in &connections {
+                assert!(c.received <= c.end - c.start);
+                assert!(["active", "waiting", "done"].contains(&c.state.as_str()));
+            }
+        }
+        tokio::time::sleep(Duration::from_millis(300)).await;
+    }
+    match d.client.call(Call::GetDetails { id: 999 }).await.unwrap() {
+        Response::Error { message } => assert!(message.contains("no such")),
+        other => panic!("{other:?}"),
+    }
+    d.client.call(Call::Cancel { id }).await.unwrap();
+    d.shutdown.notify_one();
+    d.task.await.unwrap().unwrap();
+}

@@ -67,6 +67,18 @@ impl DownloadRequest {
     }
 }
 
+/// One part of a download that is fetched on its own connection.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct Part {
+    /// First byte of the part.
+    pub start: u64,
+    /// Next byte not yet received.
+    pub position: u64,
+    /// One past the last byte of the part (it can shrink when another
+    /// connection takes the second half).
+    pub end: u64,
+}
+
 /// Something that happened during a download.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Event {
@@ -94,6 +106,9 @@ pub enum Event {
         /// Size in bytes, if known.
         total: Option<u64>,
     },
+    /// Where every part of a segmented download is now (about twice a second).
+    /// May be skipped if the receiver is slow.
+    Parts(Vec<Part>),
     /// The server pushed back (for example with 429 Too Many Requests), so
     /// the download now uses fewer connections.
     Limited {

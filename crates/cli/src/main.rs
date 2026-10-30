@@ -701,6 +701,7 @@ impl Display {
                 }
             }
             Event::Progress { downloaded, total } => self.draw(*downloaded, *total),
+            Event::Parts(_) => {}
             Event::Note(text) => {
                 if self.verbose {
                     if self.drew_line {

@@ -4,7 +4,10 @@ import * as fmt from "../src/format";
 import { parseHosts, parseLimit, parseMegabytes, splitLimit } from "../src/limits";
 import { parseTypes } from "../src/CategoriesDialog";
 import { describeWindow, normalTime, windowFrom } from "../src/schedule";
-import { applyTheme, nextTheme } from "../src/theme";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
+import { applyTheme, THEMES } from "../src/theme";
+import { categoryCounts, categoryOf, extensionOf, sortRows } from "../src/organize";
 import type { Row } from "../src/types";
 
 const row = (id: number, status: string): Row => ({
@@ -43,15 +46,52 @@ describe("filters", () => {
 });
 
 describe("theme", () => {
-  it("cycles and marks the page", () => {
-    expect(nextTheme("system")).toBe("light");
-    expect(nextTheme("light")).toBe("dark");
-    expect(nextTheme("dark")).toBe("system");
+  it("marks the page, and system leaves it to the operating system", () => {
     const el = document.createElement("html");
     applyTheme("dark", el);
     expect(el.getAttribute("data-theme")).toBe("dark");
+    applyTheme("forest", el);
+    expect(el.getAttribute("data-theme")).toBe("forest");
     applyTheme("system", el);
     expect(el.hasAttribute("data-theme")).toBe(false);
+  });
+  it("has a colour block in the style sheet for every named theme", () => {
+    const css = readFileSync(join(process.cwd(), "src", "themes.css"), "utf8");
+    const named = THEMES.filter((t) => !["system", "light", "dark"].includes(t.id));
+    expect(named.map((t) => t.id)).toEqual(["desert", "forest", "sunny", "orange", "leaf", "earth", "sky", "river", "water"]);
+    for (const t of named) expect(css).toContain(`:root[data-theme="${t.id}"]`);
+  });
+});
+
+describe("categories and sorting", () => {
+  const cats = [
+    { id: 1, name: "Compressed", extensions: ["zip", "7z"], folder: null },
+    { id: 2, name: "Video", extensions: ["mp4"], folder: null },
+  ];
+  const r = (id: number, name: string, status = "completed", size: number | null = 100): Row => ({ ...row(id, status), name, size, downloaded: size ?? 0 });
+  it("finds a file's category by its extension, case-blind, else Other", () => {
+    expect(categoryOf("a.ZIP", cats)).toBe("Compressed");
+    expect(categoryOf("clip.mp4", cats)).toBe("Video");
+    expect(categoryOf("notes.txt", cats)).toBe("Other");
+    expect(categoryOf("README", cats)).toBe("Other");
+    expect(categoryOf(".zip", cats)).toBe("Other");
+    expect(extensionOf("a.tar.gz")).toBe("gz");
+  });
+  it("counts rows per category and hides an empty Other", () => {
+    const rows = [r(1, "a.zip"), r(2, "b.7z"), r(3, "c.mp4")];
+    expect(categoryCounts(rows, cats)).toEqual([{ name: "Compressed", count: 2 }, { name: "Video", count: 1 }]);
+    expect(categoryCounts([...rows, r(4, "x.bin")], cats).at(-1)).toEqual({ name: "Other", count: 1 });
+  });
+  it("sorts by name, size, category and status without losing rows", () => {
+    const rows = [r(1, "b.zip", "completed", 5), r(2, "a.mp4", "downloading", 50), r(3, "c.txt", "failed", 20), r(4, "a.zip", "queued", 20)];
+    const names = (k: Parameters<typeof sortRows>[1]) => sortRows(rows, k, cats).map((x) => x.name);
+    expect(names("added")).toEqual(["a.zip", "c.txt", "a.mp4", "b.zip"]);
+    expect(names("name")).toEqual(["a.mp4", "a.zip", "b.zip", "c.txt"]);
+    expect(names("size")).toEqual(["a.mp4", "a.zip", "c.txt", "b.zip"]);
+    expect(names("type")).toEqual(["a.zip", "b.zip", "c.txt", "a.mp4"]);
+    expect(names("status")).toEqual(["a.mp4", "a.zip", "c.txt", "b.zip"]);
+    expect(sortRows(rows, "name", cats)).toHaveLength(4);
+    expect(rows[0]?.name).toBe("b.zip");
   });
 });
 

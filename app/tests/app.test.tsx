@@ -2,7 +2,7 @@ import { cleanup, render, screen, waitFor, within } from "@testing-library/react
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { App } from "../src/App";
-import type { Api, Category, Config, ConfigChange, EngineStatus, ExtensionSettings, Plan, PlanWindow, Queue, Row } from "../src/types";
+import type { Api, Category, Config, ConfigChange, EngineStatus, ExtensionSettings, Details, Plan, PlanWindow, Queue, Row } from "../src/types";
 
 const row = (id: number, name: string, status: string, extra: Partial<Row> = {}): Row => ({
   id, name, url: `https://x.test/${name}`, status, downloaded: 50, size: 100, percent: 50, speed: 0, eta: null,
@@ -35,6 +35,17 @@ function fake(initial: Row[], running = true) {
       if (id === 7) throw new Error("for safety, programs and scripts are not opened from here");
     }),
     show: vi.fn(async () => undefined),
+    details: vi.fn(async (id: number): Promise<Details> => {
+      const r = rows.find((x) => x.id === id);
+      if (!r) throw new Error("there is no such download");
+      return {
+        id, status: r.status, downloaded: 50, size: 100, speed: 2048,
+        connections: [
+          { number: 1, start: 0, end: 50, received: 50, speed: 0, state: "done" },
+          { number: 2, start: 50, end: 100, received: 10, speed: 2048, state: "active" },
+        ],
+      };
+    }),
     queues: vi.fn(async () => queues),
     addQueue: vi.fn(async (name: string) => {
       if (name === "Main") throw new Error("there is already a queue with that name");
@@ -291,5 +302,48 @@ describe("App", () => {
     await userEvent.type(within(dialog).getByRole("textbox", { name: "Addresses (one per line)" }), "https://x.test/a.zip");
     await userEvent.click(within(dialog).getByRole("button", { name: "Download" }));
     await waitFor(() => expect(api.add).toHaveBeenCalledWith("https://x.test/a.zip", null, 2));
+  });
+
+  it("shows each connection of a running download and says so when there are none", async () => {
+    const api = fake([row(1, "big.iso", "downloading"), row(2, "done.zip", "completed")]);
+    render(<App api={api} every={50} />);
+    await userEvent.click(await screen.findByRole("button", { name: "Details of big.iso" }));
+    const dialog = await screen.findByRole("dialog", { name: "Download details" });
+    expect(await within(dialog).findByText("Connections (1 receiving of 2)")).toBeTruthy();
+    expect(within(dialog).getByLabelText("Connection 1 progress")).toBeTruthy();
+    expect(within(dialog).getByText("Receiving")).toBeTruthy();
+    expect(within(dialog).getByText("Done")).toBeTruthy();
+    expect(within(dialog).getAllByText("2.0 KB/s").length).toBeGreaterThan(0);
+    await userEvent.click(within(dialog).getByRole("button", { name: "Close" }));
+    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+    // Finished downloads have no details button.
+    expect(screen.queryByRole("button", { name: "Details of done.zip" })).toBeNull();
+  });
+
+  it("lists downloads by category and sorts them", async () => {
+    const api = fake([row(1, "a.zip", "completed"), row(2, "movie.mp4", "completed"), row(3, "b.zip", "completed"), row(4, "notes.txt", "completed")]);
+    render(<App api={api} every={50} />);
+    const list = async () => within(await screen.findByRole("listbox", { name: "Downloads" })).getAllByRole("option").map((o) => o.textContent ?? "");
+    await waitFor(async () => expect((await list()).length).toBe(4));
+    await userEvent.click(await screen.findByRole("button", { name: "Category Compressed, 2" }));
+    await waitFor(async () => expect((await list()).length).toBe(2));
+    expect((await list()).every((t) => t.includes("zip"))).toBe(true);
+    await userEvent.click(screen.getByRole("button", { name: "Category Compressed, 2" }));
+    await userEvent.click(screen.getByRole("button", { name: /^All types/ }));
+    await userEvent.selectOptions(screen.getByLabelText("Sort by"), "Name");
+    await waitFor(async () => expect((await list())[0]).toContain("a.zip"));
+    expect((await list())[3]).toContain("notes.txt");
+    await userEvent.selectOptions(screen.getByLabelText("Sort by"), "Category and type");
+    await waitFor(async () => expect((await list()).map((t) => t.slice(0, 7))).toEqual(["a.zipCo", "b.zipCo", "movie.m", "notes.t"]));
+  });
+
+  it("changes the colour theme from the list of themes and remembers it", async () => {
+    const api = fake([]);
+    render(<App api={api} every={50} />);
+    await userEvent.selectOptions(await screen.findByLabelText("Colour theme"), "Forest");
+    expect(document.documentElement.getAttribute("data-theme")).toBe("forest");
+    expect(localStorage.getItem("mohona.theme")).toBe("forest");
+    await userEvent.selectOptions(screen.getByLabelText("Colour theme"), "System");
+    expect(document.documentElement.hasAttribute("data-theme")).toBe(false);
   });
 });

@@ -122,6 +122,15 @@ impl Scheduler {
             .collect()
     }
 
+    /// `(start, position, end)` of every segment as handed out now, for
+    /// showing what each connection is doing.
+    pub fn live(&self) -> Vec<(u64, u64, u64)> {
+        self.lock()
+            .iter()
+            .map(|segment| (segment.start, segment.pos, segment.end))
+            .collect()
+    }
+
     /// Bytes that are written to the file.
     pub fn committed_bytes(&self) -> u64 {
         self.lock()

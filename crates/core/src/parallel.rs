@@ -26,7 +26,7 @@ use tokio::task::JoinSet;
 use tokio::time::{interval, sleep, MissedTickBehavior};
 
 use crate::cancel::CancelToken;
-use crate::download::{emit, report_progress, Event};
+use crate::download::{emit, report_progress, Event, Part};
 use crate::ledger::{Ledger, Sink};
 use crate::limiter::Limits;
 use crate::retry::RetryPolicy;
@@ -274,6 +274,7 @@ pub(crate) async fn fetch_segmented(
     let mut throttles_without_progress = 0u32;
     let mut progress_at_last_throttle = 0u64;
 
+    let mut parts_at = Instant::now();
     let mut ticker = interval(PROGRESS_INTERVAL);
     ticker.set_missed_tick_behavior(MissedTickBehavior::Skip);
     let mut tuner = Tuner::new();
@@ -373,6 +374,18 @@ pub(crate) async fn fetch_segmented(
             }
             _ = ticker.tick() => {
                 report_progress(events, shared.downloaded.load(Ordering::Relaxed), Some(total));
+                if parts_at.elapsed() >= Duration::from_millis(500) {
+                    parts_at = Instant::now();
+                    if let Some(sender) = events {
+                        let parts = shared
+                            .scheduler
+                            .live()
+                            .into_iter()
+                            .map(|(start, position, end)| Part { start, position, end })
+                            .collect();
+                        let _ = sender.try_send(Event::Parts(parts));
+                    }
+                }
                 if last_checkpoint.elapsed() >= CHECKPOINT_INTERVAL {
                     if let Err(error) = checkpoint(&shared, ledger, sink).await {
                         emit(events, Event::Note(format!("could not save progress: {error}"))).await;

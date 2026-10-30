@@ -356,3 +356,27 @@ async fn queues_are_managed_and_downloads_can_go_into_one() {
     assert!(engine.remove_queue(list[0].id).await.is_err());
     shutdown.notify_one();
 }
+
+#[tokio::test]
+async fn details_of_a_download_are_readable_and_unknown_ones_are_refused() {
+    let dir = tempfile::tempdir().unwrap();
+    let server = files().await;
+    let (engine, shutdown) = engine(dir.path()).await;
+    let url = format!("http://{server}/file?size=30000000&limit=500000");
+    let id = engine.add(&url, None).await.unwrap();
+    let mut seen = false;
+    for _ in 0..100 {
+        let d = engine.details(id).await.unwrap();
+        assert_eq!(d.id, id);
+        if !d.connections.is_empty() {
+            assert!(d.connections.iter().all(|c| c.received <= c.end - c.start));
+            seen = true;
+            break;
+        }
+        tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+    }
+    assert!(seen, "no connections were reported");
+    assert!(engine.details(9999).await.is_err());
+    engine.cancel(id).await.unwrap();
+    shutdown.notify_one();
+}

@@ -13,6 +13,10 @@ pub struct Request {
 pub enum Call {
     /// Is the daemon there? Answered with [`Response::Pong`].
     Ping,
+    /// What a running download is doing now: its connections and their speed.
+    GetDetails {
+        id: i64,
+    },
     /// A saved setting of the browser extension (key `extension.*`).
     SettingGet {
         key: String,
@@ -221,6 +225,23 @@ pub struct DownloadInfo {
     pub expired: bool,
 }
 
+/// One connection of a running download.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ConnectionInfo {
+    /// Its number, from 1.
+    pub number: u32,
+    /// First byte of its part of the file.
+    pub start: u64,
+    /// One past its last byte.
+    pub end: u64,
+    /// Bytes of its part received.
+    pub received: u64,
+    /// Bytes per second over the last seconds.
+    pub speed: u64,
+    /// `active`, `waiting` (no bytes lately) or `done`.
+    pub state: String,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct CategoryInfo {
     pub id: i64,
@@ -283,6 +304,16 @@ pub enum Response {
     },
     Downloads {
         downloads: Vec<DownloadInfo>,
+    },
+    Details {
+        id: i64,
+        status: String,
+        downloaded: u64,
+        size: Option<u64>,
+        /// Bytes per second, all connections together.
+        speed: u64,
+        /// Empty for a download on a single connection.
+        connections: Vec<ConnectionInfo>,
     },
     Config {
         /// The folder downloads go to unless told otherwise.

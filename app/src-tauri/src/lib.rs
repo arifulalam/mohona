@@ -7,7 +7,7 @@ use std::time::Duration;
 
 use mohona_appcore::{
     AppError, Category, Config, ConfigChange, Engine, EngineStatus, ExtensionSettings, Plan,
-    PlanWindow, Queue, QueueChange, Row, SpeedTracker, Watcher,
+    Details, PlanWindow, Queue, QueueChange, Row, SpeedTracker, Watcher,
 };
 use tauri::menu::{Menu, MenuItem};
 use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
@@ -48,6 +48,11 @@ async fn add_download(
     queue: Option<i64>,
 ) -> Result<i64> {
     app.engine.add_to(&url, folder.as_deref(), queue).await
+}
+
+#[tauri::command]
+async fn get_details(app: State<'_, App>, id: i64) -> Result<Details> {
+    app.engine.details(id).await
 }
 
 #[tauri::command]
@@ -335,6 +340,7 @@ pub fn run() {
             set_config,
             get_extension_settings,
             set_extension_settings,
+            get_details,
             get_queues,
             add_queue,
             rename_queue,

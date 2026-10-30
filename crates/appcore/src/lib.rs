@@ -123,6 +123,34 @@ pub struct Queue {
     pub open_now: bool,
 }
 
+/// One connection of a running download, as the page shows it.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Connection {
+    pub number: u32,
+    pub start: u64,
+    pub end: u64,
+    pub received: u64,
+    /// Bytes per second.
+    pub speed: u64,
+    /// `active`, `waiting` or `done`.
+    pub state: String,
+}
+
+/// What a download is doing now.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Details {
+    pub id: i64,
+    pub status: String,
+    pub downloaded: u64,
+    pub size: Option<u64>,
+    /// Bytes per second, all connections together.
+    pub speed: u64,
+    /// Empty for a download on a single connection.
+    pub connections: Vec<Connection>,
+}
+
 /// What may be changed in a queue; what is `None` stays.
 #[derive(Debug, Clone, Default, serde::Deserialize)]
 #[serde(rename_all = "camelCase", default)]
@@ -595,6 +623,38 @@ impl Engine {
     /// Stops the engine (running downloads are paused and continue next time).
     pub async fn stop(&self) -> Result<(), AppError> {
         self.call(Call::Shutdown).await.map(|_| ())
+    }
+
+    /// Live numbers of one download: its connections and their speed.
+    pub async fn details(&self, id: i64) -> Result<Details, AppError> {
+        match self.call(Call::GetDetails { id }).await? {
+            Response::Details {
+                id,
+                status,
+                downloaded,
+                size,
+                speed,
+                connections,
+            } => Ok(Details {
+                id,
+                status,
+                downloaded,
+                size,
+                speed,
+                connections: connections
+                    .into_iter()
+                    .map(|c| Connection {
+                        number: c.number,
+                        start: c.start,
+                        end: c.end,
+                        received: c.received,
+                        speed: c.speed,
+                        state: c.state,
+                    })
+                    .collect(),
+            }),
+            _ => Err(AppError::Engine("unexpected answer from the engine".into())),
+        }
     }
 
     pub async fn pause(&self, id: i64) -> Result<(), AppError> {

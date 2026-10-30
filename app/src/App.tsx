@@ -1,17 +1,27 @@
 import { useEffect, useMemo, useState } from "react";
 import { AddDialog, Modal } from "./AddDialog";
 import { CategoriesDialog } from "./CategoriesDialog";
+import { DetailsDialog } from "./DetailsDialog";
+import { categoryCounts, categoryOf, SORTS, sortRows, type SortKey } from "./organize";
 import { allowed, counts, FILTERS, matches, type Filter } from "./filters";
 import { List } from "./List";
 import { QueuesDialog } from "./QueuesDialog";
 import { ScheduleDialog } from "./ScheduleDialog";
 import { actionName } from "./schedule";
 import { SettingsDialog } from "./SettingsDialog";
-import { applyTheme, loadTheme, nextTheme, saveTheme, type Theme } from "./theme";
-import type { Api } from "./types";
+import { applyTheme, loadTheme, saveTheme, THEMES, type Theme } from "./theme";
+import type { Api, Category } from "./types";
 import { useDownloads } from "./useDownloads";
 
-const THEME_LABEL: Record<Theme, string> = { system: "Theme: system", light: "Theme: light", dark: "Theme: dark" };
+function loadSort(): SortKey {
+  try {
+    const v = localStorage.getItem("mohona.sort");
+    if (SORTS.some((s) => s.id === v)) return v as SortKey;
+  } catch {
+    /* storage may be unavailable */
+  }
+  return "added";
+}
 
 export function App({ api, every }: { api: Api; every?: number }) {
   const d = useDownloads(api, every);
@@ -24,6 +34,10 @@ export function App({ api, every }: { api: Api; every?: number }) {
   const [queuesOpen, setQueuesOpen] = useState(false);
   const [queueList, setQueueList] = useState<{ id: number; name: string }[]>([]);
   const [categories, setCategories] = useState(false);
+  const [cats, setCats] = useState<Category[]>([]);
+  const [category, setCategory] = useState<string | null>(null);
+  const [sort, setSort] = useState<SortKey>(loadSort());
+  const [detailsId, setDetailsId] = useState<number | null>(null);
   const [defaultFolder, setDefaultFolder] = useState("");
   const [deleteFiles, setDeleteFiles] = useState(false);
   const [theme, setTheme] = useState<Theme>(loadTheme());
@@ -33,11 +47,32 @@ export function App({ api, every }: { api: Api; every?: number }) {
     saveTheme(theme);
   }, [theme]);
 
-  const shown = useMemo(() => d.rows.filter((r) => matches(r, filter)), [d.rows, filter]);
+  const running = d.engine?.running === true;
+  useEffect(() => {
+    if (running && !categories) api.categories().then(setCats).catch(() => undefined);
+  }, [api, running, categories]);
+  useEffect(() => {
+    try {
+      localStorage.setItem("mohona.sort", sort);
+    } catch {
+      /* ignore */
+    }
+  }, [sort]);
+
+  const shown = useMemo(
+    () =>
+      sortRows(
+        d.rows.filter((r) => matches(r, filter) && (category === null || categoryOf(r.name, cats) === category)),
+        sort,
+        cats,
+      ),
+    [d.rows, filter, category, sort, cats],
+  );
+  const inFilter = useMemo(() => d.rows.filter((r) => matches(r, filter)), [d.rows, filter]);
+  const byCategory = useMemo(() => categoryCounts(inFilter, cats), [inFilter, cats]);
   const number = useMemo(() => counts(d.rows), [d.rows]);
   const chosen = useMemo(() => d.rows.filter((r) => selected.has(r.id)), [d.rows, selected]);
   const can = allowed(chosen);
-  const running = d.engine?.running === true;
 
   // Forget selected rows that are gone.
   useEffect(() => {
@@ -73,9 +108,9 @@ export function App({ api, every }: { api: Api; every?: number }) {
 
   return (
     <div className="flex h-full flex-col">
-      <header className="flex items-center gap-3 border-b border-[var(--line)] bg-[var(--panel)] px-4 py-2">
+      <header className="app-header flex items-center gap-3 border-b border-[var(--line)] px-4 py-2">
         <h1 className="m-0 text-base font-semibold">Mohona</h1>
-        <span className="text-[12px] muted" aria-live="polite">
+        <span className="status text-[12px]" aria-live="polite">
           {d.engine === null ? "Connecting…" : running ? `Engine running${d.engine.version ? ` (${d.engine.version})` : ""}` : "Engine stopped"}
         </span>
         <div className="flex-1" />
@@ -91,9 +126,13 @@ export function App({ api, every }: { api: Api; every?: number }) {
         <button className="btn" onClick={() => setSettings(true)} disabled={!running}>
           Settings
         </button>
-        <button className="btn" onClick={() => setTheme(nextTheme(theme))} title="Change the colour theme">
-          {THEME_LABEL[theme]}
-        </button>
+        <select className="btn" value={theme} onChange={(e) => setTheme(e.target.value as Theme)} aria-label="Colour theme" title="Colour theme">
+          {THEMES.map((t) => (
+            <option key={t.id} value={t.id}>
+              {t.label}
+            </option>
+          ))}
+        </select>
       </header>
 
       {!running && d.engine !== null && (
@@ -162,6 +201,17 @@ export function App({ api, every }: { api: Api; every?: number }) {
         <button className="btn btn-danger" disabled={!can.remove} onClick={() => (setDeleteFiles(false), setRemoving(true))}>
           Remove
         </button>
+        <div className="flex-1" />
+        <label className="flex items-center gap-2 text-[12px] muted">
+          Sort by
+          <select className="btn !py-0.5" value={sort} onChange={(e) => setSort(e.target.value as SortKey)} aria-label="Sort by">
+            {SORTS.map((o) => (
+              <option key={o.id} value={o.id}>
+                {o.label}
+              </option>
+            ))}
+          </select>
+        </label>
       </div>
 
       <div className="flex min-h-0 flex-1">
@@ -177,6 +227,27 @@ export function App({ api, every }: { api: Api; every?: number }) {
               <span className="muted">{number[f.id]}</span>
             </button>
           ))}
+          <h2 className="mb-1 mt-4 px-3 text-[11px] font-semibold uppercase tracking-wide muted">Categories</h2>
+          <button
+            onClick={() => setCategory(null)}
+            aria-current={category === null ? "true" : undefined}
+            className="flex w-full items-center justify-between rounded-md border-0 bg-transparent px-3 py-1.5 text-left hover:bg-[var(--hover)] aria-[current=true]:bg-[var(--selected)] aria-[current=true]:font-semibold"
+          >
+            <span>All types</span>
+            <span className="muted">{inFilter.length}</span>
+          </button>
+          {byCategory.map((c) => (
+            <button
+              key={c.name}
+              onClick={() => setCategory(category === c.name ? null : c.name)}
+              aria-current={category === c.name ? "true" : undefined}
+              aria-label={`Category ${c.name}, ${c.count}`}
+              className="flex w-full items-center justify-between rounded-md border-0 bg-transparent px-3 py-1.5 text-left hover:bg-[var(--hover)] aria-[current=true]:bg-[var(--selected)] aria-[current=true]:font-semibold"
+            >
+              <span className="truncate">{c.name}</span>
+              <span className="muted">{c.count}</span>
+            </button>
+          ))}
         </nav>
         <main className="min-w-0 flex-1 overflow-auto bg-[var(--panel)]">
           {shown.length === 0 ? (
@@ -184,11 +255,14 @@ export function App({ api, every }: { api: Api; every?: number }) {
               {d.rows.length === 0 ? (running ? "No downloads yet. Press “+ Add” and paste an address." : "Start Mohona to see your downloads.") : "Nothing here."}
             </div>
           ) : (
-            <List rows={shown} selected={selected} onSelect={select} onPause={(id) => void d.act(() => api.pause(id))} onResume={(id) => void d.act(() => api.resume(id))} onOpen={(id) => void d.act(() => api.open(id))} onShow={(id) => void d.act(() => api.show(id))} />
+            <List rows={shown} selected={selected} onSelect={select} onPause={(id) => void d.act(() => api.pause(id))} onResume={(id) => void d.act(() => api.resume(id))} onOpen={(id) => void d.act(() => api.open(id))} onShow={(id) => void d.act(() => api.show(id))} onDetails={setDetailsId} category={(r) => categoryOf(r.name, cats)} />
           )}
         </main>
       </div>
 
+      {detailsId !== null && d.rows.some((r) => r.id === detailsId) && (
+        <DetailsDialog api={api} row={d.rows.find((r) => r.id === detailsId)!} onClose={() => setDetailsId(null)} />
+      )}
       {categories && <CategoriesDialog api={api} onClose={() => setCategories(false)} />}
       {queuesOpen && <QueuesDialog api={api} onClose={() => setQueuesOpen(false)} />}
       {schedule && <ScheduleDialog api={api} onClose={() => setSchedule(false)} />}

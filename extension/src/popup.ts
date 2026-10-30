@@ -1,6 +1,9 @@
 import type { Reply, Request } from "./messages";
 import type { Outcome } from "./protocol";
 import type { Settings } from "./settings";
+import { ALL_THEMES, applyTheme, loadTheme, saveTheme } from "./popuptheme";
+import type { DownloadRow } from "./protocol";
+import { bytes, eta, isRunning, nameOf, speed, speeds, summarize } from "./summary";
 
 const $ = <T extends HTMLElement>(id: string): T => document.getElementById(id) as T;
 
@@ -28,15 +31,17 @@ async function refresh(): Promise<void> {
   $("last").textContent = reply.last ?? "";
   const s = reply.status;
   const text = $("status");
+  const dot = $("dot");
+  dot.className = `dot ${s.state === "ready" ? "ready" : s.state === "engine_stopped" ? "stopped" : "broken"}`;
   const start = $<HTMLButtonElement>("start");
   start.hidden = s.state !== "engine_stopped";
   $<HTMLButtonElement>("add").disabled = s.state === "host_missing" || s.state === "incompatible";
   switch (s.state) {
     case "ready":
-      text.textContent = `Mohona ${s.version} is running.`;
+      text.textContent = `Mohona ${s.version} is running`;
       break;
     case "engine_stopped":
-      text.textContent = "Mohona is not running.";
+      text.textContent = "Mohona is not running";
       break;
     case "host_missing":
       text.textContent = `Mohona is not connected: ${s.message}. Run "mohona-host install".`;
@@ -91,17 +96,7 @@ $<HTMLInputElement>("intercept").addEventListener("change", async (event) => {
   await ask({ kind: "setSettings", settings: { intercept: (event.target as HTMLInputElement).checked } });
 });
 
-function size(bytes: number | undefined): string {
-  if (!bytes) return "";
-  const units = ["B", "KB", "MB", "GB"];
-  let n = bytes;
-  let i = 0;
-  while (n >= 1024 && i < units.length - 1) {
-    n /= 1024;
-    i++;
-  }
-  return `${n.toFixed(i === 0 ? 0 : 1)} ${units[i]}`;
-}
+const size = (n: number | undefined): string => (n ? bytes(n) : "");
 
 async function showExpired(): Promise<void> {
   const reply = await ask({ kind: "expired" });
@@ -111,7 +106,9 @@ async function showExpired(): Promise<void> {
   list.replaceChildren();
   for (const download of reply.downloads) {
     const row = document.createElement("li");
+    row.className = "item";
     const label = document.createElement("span");
+    label.className = "name";
     label.textContent = download.filename ?? download.url;
     label.title = download.url;
     const button = document.createElement("button");
@@ -137,12 +134,15 @@ async function showMedia(): Promise<void> {
   if (reply.kind !== "media") return;
   if (reply.media.length === 0) {
     const none = document.createElement("li");
+    none.className = "empty";
     none.textContent = "Nothing found yet. Play the video, then open this again.";
     list.append(none);
   }
   for (const media of reply.media) {
     const row = document.createElement("li");
+    row.className = "item";
     const label = document.createElement("span");
+    label.className = "name";
     label.textContent = media.name;
     label.title = media.url;
     const info = document.createElement("small");
@@ -163,6 +163,132 @@ async function showMedia(): Promise<void> {
   }
 }
 
+function bar(percent: number | null, kind: string): HTMLElement {
+  const outer = document.createElement("div");
+  outer.className = `bar ${kind}`;
+  outer.setAttribute("role", "progressbar");
+  outer.setAttribute("aria-valuemin", "0");
+  outer.setAttribute("aria-valuemax", "100");
+  outer.setAttribute("aria-valuenow", String(Math.round(percent ?? 0)));
+  const inner = document.createElement("span");
+  inner.style.width = `${percent ?? 0}%`;
+  outer.append(inner);
+  return outer;
+}
+
+const LABEL: Record<string, string> = {
+  queued: "Waiting",
+  probing: "Connecting",
+  downloading: "Downloading",
+  paused: "Paused",
+  retrying: "Retrying",
+};
+
+let seen = new Map<number, number>();
+let seenAt = 0;
+
+function showDownloads(rows: DownloadRow[]): void {
+  const now = Date.now();
+  const rate = speeds(seen, rows, (now - seenAt) / 1000);
+  seen = new Map(rows.map((r) => [r.id, r.downloaded]));
+  seenAt = now;
+
+  const total = summarize(rows);
+  $("nActive").textContent = String(total.running);
+  $("nWaiting").textContent = String(total.waiting);
+  $("nDone").textContent = String(total.finished);
+  $("nFailed").textContent = String(total.failed);
+  const sum = [...rate.values()].reduce((a, b) => a + b, 0);
+  $("speed").hidden = !(total.running > 0 && sum > 0);
+  $("speedNow").textContent = speed(sum);
+
+  const open = rows.filter((r) => ["downloading", "probing", "retrying", "queued", "paused"].includes(r.status));
+  open.sort((a, b) => Number(isRunning(b)) - Number(isRunning(a)) || b.id - a.id);
+  $("activeBox").hidden = open.length === 0;
+  const active = $("active");
+  active.replaceChildren();
+  for (const row of open.slice(0, 6)) {
+    const percent = row.size ? Math.min(100, (row.downloaded / row.size) * 100) : null;
+    const li = document.createElement("li");
+    li.className = "download";
+    const top = document.createElement("div");
+    top.className = "row";
+    const name = document.createElement("span");
+    name.className = "name";
+    name.textContent = nameOf(row);
+    name.title = row.url;
+    const state = document.createElement("small");
+    state.textContent = percent === null ? (LABEL[row.status] ?? row.status) : `${Math.floor(percent)}%`;
+    top.append(name, state);
+    const perSecond = rate.get(row.id) ?? 0;
+    const left = row.size && perSecond > 0 ? eta((row.size - row.downloaded) / perSecond) : "";
+    const info = document.createElement("small");
+    info.textContent = [
+      LABEL[row.status] ?? row.status,
+      row.size ? `${bytes(row.downloaded)} of ${bytes(row.size)}` : bytes(row.downloaded),
+      perSecond > 0 ? speed(perSecond) : "",
+      left ? `${left} left` : "",
+    ]
+      .filter(Boolean)
+      .join(" · ");
+    li.append(top, bar(percent, isRunning(row) ? "" : "idle"), info);
+    active.append(li);
+  }
+  if (open.length > 6) {
+    const more = document.createElement("li");
+    more.className = "empty";
+    more.textContent = `and ${open.length - 6} more in the Mohona app`;
+    active.append(more);
+  }
+
+  const done = rows.filter((r) => r.status === "completed").sort((a, b) => b.id - a.id).slice(0, 3);
+  $("recentBox").hidden = done.length === 0;
+  const recent = $("recent");
+  recent.replaceChildren();
+  for (const row of done) {
+    const li = document.createElement("li");
+    li.className = "item";
+    const name = document.createElement("span");
+    name.className = "name";
+    name.textContent = nameOf(row);
+    name.title = row.path ?? row.url;
+    const info = document.createElement("small");
+    info.textContent = bytes(row.size ?? row.downloaded);
+    li.append(name, info);
+    recent.append(li);
+  }
+}
+
+async function pollDownloads(): Promise<void> {
+  const reply = await ask({ kind: "downloads" });
+  if (reply.kind === "downloads") showDownloads(reply.downloads);
+}
+
+function setUpTheme(): void {
+  const select = $<HTMLSelectElement>("theme");
+  for (const theme of ALL_THEMES) {
+    const option = document.createElement("option");
+    option.value = theme.id;
+    option.textContent = theme.label;
+    select.append(option);
+  }
+  let storage: Storage | null = null;
+  try {
+    storage = localStorage;
+  } catch {
+    storage = null;
+  }
+  const current = loadTheme(storage);
+  select.value = current;
+  applyTheme(document.documentElement, current);
+  select.addEventListener("change", () => {
+    applyTheme(document.documentElement, select.value);
+    saveTheme(storage, select.value);
+  });
+}
+
+setUpTheme();
+
 void (async () => {
   const reply = await ask({ kind: "getSettings" });
   if (reply.kind === "settings") {
@@ -174,4 +300,6 @@ void (async () => {
   await refresh();
   await showExpired();
   await showMedia();
+  await pollDownloads();
+  setInterval(() => void pollDownloads().then(refresh), 1500);
 })();

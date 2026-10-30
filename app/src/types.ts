@@ -89,6 +89,29 @@ export interface QueueChange {
   windows?: PlanWindow[];
 }
 
+/** One connection of a running download. */
+export interface Connection {
+  number: number;
+  start: number;
+  end: number;
+  received: number;
+  /** Bytes per second. */
+  speed: number;
+  state: "active" | "waiting" | "done" | string;
+}
+
+/** What a download is doing now. */
+export interface Details {
+  id: number;
+  status: string;
+  downloaded: number;
+  size: number | null;
+  /** Bytes per second, all connections together. */
+  speed: number;
+  /** Empty for a download on a single connection. */
+  connections: Connection[];
+}
+
 /** What the browser extension keeps (shared with the browsers through the engine). */
 export interface ExtensionSettings {
   intercept: boolean;
@@ -105,6 +128,7 @@ export interface Api {
   start(): Promise<EngineStatus>;
   list(): Promise<Row[]>;
   add(url: string, folder: string | null, queue?: number): Promise<number>;
+  details(id: number): Promise<Details>;
   queues(): Promise<Queue[]>;
   addQueue(name: string): Promise<Queue[]>;
   renameQueue(id: number, name: string): Promise<Queue[]>;

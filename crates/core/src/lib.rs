@@ -23,7 +23,7 @@ mod verify;
 pub use cancel::CancelToken;
 pub use download::{
     discard_partial, download, partial_progress, previewable_part, DownloadRequest, Event, Outcome,
-    DEFAULT_CONNECTIONS, MAX_CONNECTIONS,
+    Part, DEFAULT_CONNECTIONS, MAX_CONNECTIONS,
 };
 pub use error::Error;
 pub use filename::{sanitize_filename, unique_path};

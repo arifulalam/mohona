@@ -1,4 +1,4 @@
-import type { Api, Category, Config, ConfigChange, EngineStatus, ExtensionSettings, Plan, PlanWindow, Queue, Row } from "./types";
+import type { Api, Category, Config, ConfigChange, EngineStatus, ExtensionSettings, Details, Plan, PlanWindow, Queue, Row } from "./types";
 
 /** True inside the Tauri window; false in a plain browser (development, tests). */
 export function insideTauri(): boolean {
@@ -19,6 +19,7 @@ function tauriApi(): Api {
     start: () => call<EngineStatus>("start_engine"),
     list: () => call<Row[]>("list_downloads"),
     add: (url, folder, queue) => call<number>("add_download", { url, folder, queue }),
+    details: (id) => call<Details>("get_details", { id }),
     queues: () => call<Queue[]>("get_queues"),
     addQueue: (name) => call<Queue[]>("add_queue", { name }),
     renameQueue: (id, name) => call<Queue[]>("rename_queue", { id, name }),
@@ -107,6 +108,29 @@ export function demoApi(tick = 1000): Api {
       if (/\.(exe|msi|bat|cmd|ps1|lnk)$/i.test(rows.find((r) => r.id === id)?.name ?? "")) throw new Error("for safety, programs and scripts are not opened from here; use \"Show in folder\"");
     },
     show: async () => need(),
+    details: async (id) => {
+      need();
+      const row = rows.find((r) => r.id === id);
+      if (!row) throw new Error("there is no such download");
+      const size = row.size ?? 0;
+      const live = row.status === "downloading" && size > 0;
+      const part = Math.ceil(size / 4);
+      return {
+        id,
+        status: row.status,
+        downloaded: row.downloaded,
+        size: row.size,
+        speed: row.speed,
+        connections: live
+          ? [0, 1, 2, 3].map((i) => {
+              const start = i * part;
+              const end = Math.min(size, start + part);
+              const received = Math.min(end - start, Math.max(0, row.downloaded - start));
+              return { number: i + 1, start, end, received, speed: received >= end - start ? 0 : Math.round(row.speed / 3), state: received >= end - start ? "done" : "active" };
+            })
+          : [],
+      };
+    },
     queues: async () => (need(), queueList),
     addQueue: async (name) => (need(), (queueList = [...queueList, { id: nextQueue++, name: checkName(name), maxActive: 3, speedLimit: null, windows: [], openNow: true }])),
     renameQueue: async (id, name) => (need(), (queueList = queueList.map((q) => (q.id === id ? { ...q, name: checkName(name) } : q)))),

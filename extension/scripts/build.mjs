@@ -28,6 +28,7 @@ for (const target of ["chromium", "firefox"]) {
   }
   cpSync(`${root}static/icons`, `${out}/icons`, { recursive: true });
   copyFileSync(`${root}static/popup.html`, `${out}/popup.html`);
+  copyFileSync(`${root}static/themes.css`, `${out}/themes.css`);
   writeFileSync(`${out}/manifest.json`, JSON.stringify(manifestFor(target), null, 2) + "\n");
   console.log(`built ${target}`);
 }

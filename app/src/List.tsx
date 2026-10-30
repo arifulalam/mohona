@@ -43,9 +43,12 @@ interface Props {
   onResume(id: number): void;
   onOpen(id: number): void;
   onShow(id: number): void;
+  onDetails(id: number): void;
+  /** The category of a row, shown as a small label. */
+  category(row: Row): string;
 }
 
-export function List({ rows, selected, onSelect, onPause, onResume, onOpen, onShow }: Props) {
+export function List({ rows, selected, onSelect, onPause, onResume, onOpen, onShow, onDetails, category }: Props) {
   return (
     <ul role="listbox" aria-multiselectable="true" aria-label="Downloads" className="m-0 list-none p-0">
       {rows.map((row) => {
@@ -60,6 +63,7 @@ export function List({ rows, selected, onSelect, onPause, onResume, onOpen, onSh
             tabIndex={0}
             data-status={row.status}
             onClick={(e) => onSelect(row.id, e.ctrlKey || e.metaKey)}
+            onDoubleClick={() => (running ? onDetails(row.id) : row.status === "completed" ? onOpen(row.id) : undefined)}
             onKeyDown={(e) => {
               if (e.key === " " || e.key === "Enter") {
                 e.preventDefault();
@@ -69,8 +73,13 @@ export function List({ rows, selected, onSelect, onPause, onResume, onOpen, onSh
             className="grid cursor-default grid-cols-[1fr_auto] items-center gap-x-4 gap-y-1 border-b border-[var(--line)] px-4 py-3 hover:bg-[var(--hover)] aria-selected:bg-[var(--selected)]"
           >
             <div className="min-w-0">
-              <div className="truncate font-medium" title={row.url}>
-                {row.name}
+              <div className="flex items-center gap-2">
+                <span className="truncate font-medium" title={row.url}>
+                  {row.name}
+                </span>
+                <span className="chip shrink-0" title="Category">
+                  {category(row)}
+                </span>
               </div>
               <div className="truncate text-[12px] muted">{detail(row)}</div>
             </div>
@@ -82,6 +91,11 @@ export function List({ rows, selected, onSelect, onPause, onResume, onOpen, onSh
               <span className="w-24 text-right text-[12px]" style={{ color: row.status === "failed" ? "var(--bad)" : row.status === "completed" ? "var(--ok)" : undefined }}>
                 {LABEL[row.status] ?? row.status}
               </span>
+              {running && (
+                <button className="btn !px-2 !py-0.5 text-[12px]" aria-label={`Details of ${row.name}`} title="Connections, speed and parts" onClick={(e) => (e.stopPropagation(), onDetails(row.id))}>
+                  Details
+                </button>
+              )}
               {row.status === "completed" && (
                 <span className="flex gap-1">
                   <button className="btn !px-2 !py-0.5 text-[12px]" aria-label={`Open ${row.name}`} onClick={(e) => (e.stopPropagation(), onOpen(row.id))}>

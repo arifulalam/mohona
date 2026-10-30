@@ -341,6 +341,8 @@ async function handle(request: Request, sender: chrome.runtime.MessageSender): P
       const rows = await downloadsList().catch(() => [] as DownloadRow[]);
       return { kind: "expired", downloads: rows.filter((r) => r.expired && r.status === "failed") };
     }
+    case "downloads":
+      return { kind: "downloads", downloads: await downloadsList().catch(() => [] as DownloadRow[]) };
     case "refreshDownload": {
       const row = (await downloadsList()).find((r) => r.id === request.id);
       if (!row) return { kind: "refreshed", result: { kind: "failed", message: "that download is gone" } };

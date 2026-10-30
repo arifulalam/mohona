@@ -1,4 +1,5 @@
 @import "tailwindcss";
+@import "./themes.css";
 
 /* Colours are tokens; dark follows the system unless the person chose. */
 :root {
@@ -14,10 +15,11 @@
   --ok: #1b7f3b;
   --bad: #b3261e;
   --warn: #8a5a00;
+  --hero: linear-gradient(135deg, #2b78d4, #1259b0);
   color-scheme: light;
 }
 @media (prefers-color-scheme: dark) {
-  :root:not([data-theme="light"]) {
+  :root:not([data-theme]) {
     --bg: #14171c;
     --panel: #1c2027;
     --line: #2d333d;
@@ -30,6 +32,7 @@
     --ok: #5cc27a;
     --bad: #ff8a80;
     --warn: #e6b450;
+    --hero: linear-gradient(135deg, #2a5fa8, #14325c);
     color-scheme: dark;
   }
 }
@@ -46,6 +49,7 @@
   --ok: #5cc27a;
   --bad: #ff8a80;
   --warn: #e6b450;
+  --hero: linear-gradient(135deg, #2a5fa8, #14325c);
   color-scheme: dark;
 }
 
@@ -76,3 +80,9 @@ button { font: inherit; color: inherit; }
 .bar.done > span { background: var(--ok); }
 .bar.bad > span { background: var(--bad); }
 .bar.idle > span { background: var(--muted); }
+
+.app-header { background: var(--hero); color: var(--hero-text, #fff); }
+.app-header h1, .app-header .status { text-shadow: 0 1px 2px rgba(0,0,0,.4); }
+.app-header .status { opacity: .92; }
+.chip { display: inline-block; padding: 0 .45rem; border-radius: 999px; background: var(--selected); color: var(--text); font-size: 11px; }
+.app-header .btn { color: var(--text); }

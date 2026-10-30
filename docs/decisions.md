@@ -544,3 +544,17 @@ A `401` now becomes its own error (`NetError::Unauthorized`) that names the kind
 **Choosing a queue.** The Add dialog shows a "Queue" choice only when there is more than one queue; without a choice the download goes to Main, as the browser extension's downloads do. `add` in the daemon takes an optional `queue`.
 
 **Not included.** Moving an existing download to another queue, and reordering downloads inside a queue (the command line can).
+
+## ADR-0055: Live progress and connection details, categories in the list, colour themes, a new extension popup
+
+**Progress.** The daemon's list used only the byte count the manager saved to the database once a second, and a segmented download could show a number lower than the one before. The daemon now follows the manager's progress events and answers the list with the newest count (never lower than the saved one). The engine also reports, twice a second, where every part of a segmented download is (`Event::Parts`: start, next byte, end). The daemon turns that into per-connection received bytes, speed (smoothed over a few samples) and a state (`active`, `waiting` after 3 s without bytes, `done`). A new call `get_details` returns it; a download on one connection, or one that is not running, has an empty list.
+
+**Details window.** A "Details" button (and a double click) on running downloads opens a window that refreshes every second: totals, speed, time left, a bar of the whole file that shows which parts are received, and a table of the connections.
+
+**Categories and sorting.** The list shows each file's category (by its extension, from the engine's categories; "Other" when none matches), the sidebar lists the categories with counts and filters by them (together with the status filter), and "Sort by" offers newest, name, size, category and type, and status. The sort is remembered.
+
+**Themes.** Nine named themes (Desert, Forest, Sunny, Orange, Leaf, Earth, Sky and cloud, River, Water) beside System, Light and Dark. They are defined once in `design/themes.json`; `node design/themes.mjs` writes the style sheets and lists for the app and the extension and refuses a palette whose text, buttons or header text fall below WCAG contrast (4.5:1 for text, 3:1 for bars). The app and the extension each remember their own choice.
+
+**Extension popup.** Redesigned: a header with the connection state, four counters (running, waiting, finished, failed), total speed, running downloads with progress, speed and time left, recently finished files, expired links, media on the page, and settings. The popup reads the list through a new `downloads` message and measures speed between two lists.
+
+**Not included.** Clipboard watching and language switching (the remaining Phase 6 items) and moving a download to another queue.

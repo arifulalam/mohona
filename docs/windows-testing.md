@@ -108,6 +108,10 @@ Tick each line when it passes. "Section N.M" means `docs/manual-tests.md`, secti
 - [ ] B12 Repeat B1 to B3 in Edge, and in Firefox (Browser extension 6 and 7)
 - [ ] B13 Real site with a login (Basic, Digest, cookies) from "Logins and cookies against a real site"
 
+### B2. Extension popup (about 10 minutes)
+
+- [ ] B2 Section "Extension popup" of `docs/manual-tests.md`, steps 1 to 4
+
 ### C. Desktop app (about 60 minutes)
 
 Numbers are the steps of the "Desktop app" section.
@@ -127,9 +131,13 @@ Numbers are the steps of the "Desktop app" section.
 - [ ] C13 Browse buttons (folder dialog) in Add and Settings (16)
 - [ ] C14 Categories add, refused cases, remove (17)
 - [ ] C15 Sort by type on and off, also for a browser download (18)
-- [ ] C16 `npm run tauri build` makes an installer; install it on a second user account or PC; the installed app starts, and finds the engine when `MOHONA_PROGRAM` is set (19)
-- [ ] C17 Looks: window at 760 px wide, Windows scaling 125% and 150%, light and dark; text readable, nothing cut off, the Save buttons of Settings and Schedule always visible
-- [ ] C18 Quiet when idle: with the window hidden for 10 minutes, Task Manager shows the app near 0% CPU
+- [ ] C16 Queues: add "Night", duplicate name refused, own downloads-at-once and speed limit, closed window makes its downloads wait while Main runs, queue choice in Add, remove moves downloads to Main (19)
+- [ ] C17 Details window: connections, per-connection speed, parts bar, progress never goes backwards (20)
+- [ ] C18 Categories in the sidebar and list, Sort by (21)
+- [ ] C19 Themes in the app (22)
+- [ ] C20 `npm run tauri build` makes an installer; install it on a second user account or PC; the installed app starts, and finds the engine when `MOHONA_PROGRAM` is set (23)
+- [ ] C21 Looks: window at 760 px wide, Windows scaling 125% and 150%, light and dark; text readable, nothing cut off, the Save buttons of Settings and Schedule always visible
+- [ ] C22 Quiet when idle: with the window hidden for 10 minutes, Task Manager shows the app near 0% CPU
 
 ## What to send back
 

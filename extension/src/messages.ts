@@ -15,6 +15,7 @@ export type Request =
   | { kind: "saveLocal"; url: string; tabId: number }
   | { kind: "pageMedia"; direct?: string; page?: string }
   | { kind: "expired" }
+  | { kind: "downloads" }
   | { kind: "refreshDownload"; id: number }
   | { kind: "getSettings" }
   | { kind: "setSettings"; settings: Partial<Settings> };
@@ -24,6 +25,7 @@ export type Reply =
   | { kind: "media"; media: Media[] }
   | { kind: "saved"; result: SaveResult }
   | { kind: "expired"; downloads: DownloadRow[] }
+  | { kind: "downloads"; downloads: DownloadRow[] }
   | { kind: "refreshed"; result: RefreshResult }
   | { kind: "settings"; settings: Settings }
   | { kind: "outcome"; outcome: Outcome | null };
