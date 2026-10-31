@@ -11,6 +11,7 @@ const row = (id: number, name: string, status: string, extra: Partial<Row> = {})
 
 function fake(initial: Row[], running = true) {
   let rows = initial;
+  let clip: string | null = null;
   let engine = running;
   let cats: Category[] = [{ id: 1, name: "Compressed", extensions: ["zip"], folder: null }];
   let plan: Plan = { windows: [], openNow: true, action: null, countdown: null, message: null };
@@ -59,6 +60,7 @@ function fake(initial: Row[], running = true) {
     setPlan: vi.fn(async (windows: PlanWindow[]) => (plan = { ...plan, windows })),
     setAfterAction: vi.fn(async (action: string | null) => (plan = { ...plan, action, countdown: null })),
     cancelAction: vi.fn(async () => (plan = { ...plan, action: null, countdown: null })),
+    clipboard: vi.fn(async (): Promise<string | null> => clip),
     pickFolder: vi.fn(async () => "D:\\Picked"),
     categories: vi.fn(async () => cats),
     addCategory: vi.fn(async (name: string, extensions: string[], folder: string | null) => {
@@ -75,7 +77,7 @@ function fake(initial: Row[], running = true) {
     extensionSettings: vi.fn(async () => ext),
     setExtensionSettings: vi.fn(async (s: ExtensionSettings) => (ext = s)),
   } satisfies Api;
-  return api;
+  return Object.assign(api, { copy: (text: string | null) => void (clip = text) });
 }
 
 afterEach(cleanup);
@@ -345,5 +347,38 @@ describe("App", () => {
     expect(localStorage.getItem("mohona.theme")).toBe("forest");
     await userEvent.selectOptions(screen.getByLabelText("Colour theme"), "System");
     expect(document.documentElement.hasAttribute("data-theme")).toBe(false);
+  });
+
+  it("offers a copied link once, only when asked to, and adds it on request", async () => {
+    localStorage.setItem("mohona.clipboard", "on");
+    const api = fake([row(1, "a.zip", "completed", { url: "https://x.test/seen.zip" })]);
+    api.copy("https://x.test/new.zip");
+    render(<App api={api} every={50} />);
+    expect(await screen.findByText(/You copied a link: https:\/\/x\.test\/new\.zip/)).toBeTruthy();
+    await userEvent.click(screen.getByRole("button", { name: "Ignore" }));
+    expect(screen.queryByText(/You copied a link/)).toBeNull();
+    window.dispatchEvent(new Event("focus"));
+    await new Promise((r) => setTimeout(r, 150));
+    expect(screen.queryByText(/You copied a link/)).toBeNull();
+    api.copy("https://x.test/second.zip");
+    window.dispatchEvent(new Event("focus"));
+    await userEvent.click(await screen.findByRole("button", { name: "Download it" }));
+    await waitFor(() => expect(api.add).toHaveBeenCalledWith("https://x.test/second.zip", null));
+    api.copy("https://x.test/seen.zip");
+    window.dispatchEvent(new Event("focus"));
+    await new Promise((r) => setTimeout(r, 150));
+    expect(screen.queryByText(/You copied a link/)).toBeNull();
+    localStorage.removeItem("mohona.clipboard");
+  });
+
+  it("does not look at the clipboard unless the switch is on", async () => {
+    localStorage.removeItem("mohona.clipboard");
+    const api = fake([]);
+    api.copy("https://x.test/new.zip");
+    render(<App api={api} every={50} />);
+    await screen.findByRole("button", { name: "+ Add" });
+    window.dispatchEvent(new Event("focus"));
+    await new Promise((r) => setTimeout(r, 150));
+    expect(api.clipboard).not.toHaveBeenCalled();
   });
 });

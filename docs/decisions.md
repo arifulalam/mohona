@@ -558,3 +558,13 @@ A `401` now becomes its own error (`NetError::Unauthorized`) that names the kind
 **Extension popup.** Redesigned: a header with the connection state, four counters (running, waiting, finished, failed), total speed, running downloads with progress, speed and time left, recently finished files, expired links, media on the page, and settings. The popup reads the list through a new `downloads` message and measures speed between two lists.
 
 **Not included.** Clipboard watching and language switching (the remaining Phase 6 items) and moving a download to another queue.
+
+## ADR-0056: Offer to download a link that was copied
+
+**What.** A switch in Settings, "Offer to download a link when I copy one" (off by default), makes the app look at the clipboard when its window comes to the front and once at the start. If the whole text is one http, https or ftp link (no spaces, a host with a dot, at most 2048 characters) a bar offers "Download it" or "Ignore". A link is offered once: not again after Ignore or Download, and never when it is already in the list. Nothing is added without the click.
+
+**Privacy.** The clipboard is read only while the switch is on, only by the app's own window, and only to test for a link; its content is never stored or sent anywhere except to the engine when the person presses "Download it". The switch is kept in the window's own storage, not in the engine.
+
+**How.** Rust reads the text with `tauri-plugin-clipboard-manager` through one command, `read_clipboard`; the page does everything else. This part of the Rust shell was written without being compiled (see the manual tests).
+
+**Not included.** Watching in the background while the window is hidden, and links inside longer text.

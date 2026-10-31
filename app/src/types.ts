@@ -145,6 +145,8 @@ export interface Api {
   setAfterAction(action: string | null, countdownSeconds?: number): Promise<Plan>;
   cancelAction(): Promise<Plan>;
   pickFolder(): Promise<string | null>;
+  /** The text on the clipboard, or null. */
+  clipboard(): Promise<string | null>;
   categories(): Promise<Category[]>;
   addCategory(name: string, extensions: string[], folder: string | null): Promise<Category[]>;
   removeCategory(id: number): Promise<Category[]>;

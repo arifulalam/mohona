@@ -3,7 +3,7 @@ import { Modal } from "./AddDialog";
 import { parseHosts, parseLimit, parseMegabytes, splitLimit, type Unit } from "./limits";
 import type { Api, Config, ExtensionSettings } from "./types";
 
-export function SettingsDialog({ api, onClose }: { api: Api; onClose(): void }) {
+export function SettingsDialog({ api, onClose, clipboard, onClipboard }: { api: Api; onClose(): void; clipboard: boolean; onClipboard(on: boolean): void }) {
   const [config, setConfig] = useState<Config | null>(null);
   const [ext, setExt] = useState<ExtensionSettings | null>(null);
   const [folder, setFolder] = useState("");
@@ -111,6 +111,7 @@ export function SettingsDialog({ api, onClose }: { api: Api; onClose(): void }) 
             <Check label="Sort finished downloads into folders by file type (see Categories)" value={sort} onChange={setSort} />
             <Check label="Show a message when a download finishes or fails" value={notify} onChange={setNotify} />
             <Check label="Keep Mohona in the tray when the window is closed" value={tray} onChange={setTray} />
+            <Check label="Offer to download a link when I copy one" value={clipboard} onChange={onClipboard} />
           </fieldset>
 
           <fieldset className="m-0 flex flex-col gap-3 border-0 p-0">

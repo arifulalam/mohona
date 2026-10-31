@@ -135,9 +135,10 @@ Numbers are the steps of the "Desktop app" section.
 - [ ] C17 Details window: connections, per-connection speed, parts bar, progress never goes backwards (20)
 - [ ] C18 Categories in the sidebar and list, Sort by (21)
 - [ ] C19 Themes in the app (22)
-- [ ] C20 `npm run tauri build` makes an installer; install it on a second user account or PC; the installed app starts, and finds the engine when `MOHONA_PROGRAM` is set (23)
-- [ ] C21 Looks: window at 760 px wide, Windows scaling 125% and 150%, light and dark; text readable, nothing cut off, the Save buttons of Settings and Schedule always visible
-- [ ] C22 Quiet when idle: with the window hidden for 10 minutes, Task Manager shows the app near 0% CPU
+- [ ] C20 Copied link offer: bar, Download it, Ignore, not offered twice, off by default (23)
+- [ ] C21 `npm run tauri build` makes an installer; install it on a second user account or PC; the installed app starts, and finds the engine when `MOHONA_PROGRAM` is set (24)
+- [ ] C22 Looks: window at 760 px wide, Windows scaling 125% and 150%, light and dark; text readable, nothing cut off, the Save buttons of Settings and Schedule always visible
+- [ ] C23 Quiet when idle: with the window hidden for 10 minutes, Task Manager shows the app near 0% CPU
 
 ## What to send back
 

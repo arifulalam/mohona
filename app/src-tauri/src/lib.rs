@@ -142,6 +142,14 @@ async fn cancel_action(app: State<'_, App>) -> Result<Plan> {
     app.engine.cancel_action().await
 }
 
+/// The text on the clipboard, if any (for "offer to download links I copy").
+#[tauri::command]
+async fn read_clipboard(handle: AppHandle) -> Result<Option<String>> {
+    use tauri_plugin_clipboard_manager::ClipboardExt;
+    // An empty clipboard, or one holding an image, is simply "nothing".
+    Ok(handle.clipboard().read_text().ok().filter(|t| !t.is_empty()))
+}
+
 /// Asks the person for a folder (the system's own dialog); `None` when cancelled.
 #[tauri::command]
 async fn pick_folder(handle: AppHandle) -> Result<Option<String>> {
@@ -295,6 +303,7 @@ fn watch_downloads(handle: AppHandle) {
 
 pub fn run() {
     tauri::Builder::default()
+        .plugin(tauri_plugin_clipboard_manager::init())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_notification::init())
         .plugin(tauri_plugin_opener::init())
@@ -341,6 +350,7 @@ pub fn run() {
             get_extension_settings,
             set_extension_settings,
             get_details,
+            read_clipboard,
             get_queues,
             add_queue,
             rename_queue,

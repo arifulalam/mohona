@@ -7,6 +7,7 @@ import { describeWindow, normalTime, windowFrom } from "../src/schedule";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { applyTheme, THEMES } from "../src/theme";
+import { linkIn } from "../src/clipboard";
 import { categoryCounts, categoryOf, extensionOf, sortRows } from "../src/organize";
 import type { Row } from "../src/types";
 
@@ -130,5 +131,15 @@ describe("categories", () => {
   it("reads file types as typed", () => {
     expect(parseTypes("zip, .7z  RAR;tar")).toEqual(["zip", "7z", "rar", "tar"]);
     expect(parseTypes("  ")).toEqual([]);
+  });
+});
+
+describe("copied links", () => {
+  it("accepts one whole link and nothing else", () => {
+    expect(linkIn(" https://example.com/a.zip \n")).toBe("https://example.com/a.zip");
+    expect(linkIn("ftp://files.example.com/x.iso")).toBe("ftp://files.example.com/x.iso");
+    for (const bad of [null, "", "hello", "see https://example.com/a.zip", "javascript:alert(1)", "file:///etc/passwd", "http://localhost/a", "https://example.com/" + "a".repeat(3000)]) {
+      expect(linkIn(bad)).toBeNull();
+    }
   });
 });

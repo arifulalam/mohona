@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { AddDialog, Modal } from "./AddDialog";
 import { CategoriesDialog } from "./CategoriesDialog";
+import { loadClipboardWatch, saveClipboardWatch, useClipboardOffer } from "./clipboard";
 import { DetailsDialog } from "./DetailsDialog";
 import { categoryCounts, categoryOf, SORTS, sortRows, type SortKey } from "./organize";
 import { allowed, counts, FILTERS, matches, type Filter } from "./filters";
@@ -38,6 +39,7 @@ export function App({ api, every }: { api: Api; every?: number }) {
   const [category, setCategory] = useState<string | null>(null);
   const [sort, setSort] = useState<SortKey>(loadSort());
   const [detailsId, setDetailsId] = useState<number | null>(null);
+  const [watchClipboard, setWatchClipboard] = useState(loadClipboardWatch());
   const [defaultFolder, setDefaultFolder] = useState("");
   const [deleteFiles, setDeleteFiles] = useState(false);
   const [theme, setTheme] = useState<Theme>(loadTheme());
@@ -58,6 +60,9 @@ export function App({ api, every }: { api: Api; every?: number }) {
       /* ignore */
     }
   }, [sort]);
+
+  const clip = useClipboardOffer(api, watchClipboard, d.rows, running);
+  useEffect(() => saveClipboardWatch(watchClipboard), [watchClipboard]);
 
   const shown = useMemo(
     () =>
@@ -160,6 +165,26 @@ export function App({ api, every }: { api: Api; every?: number }) {
           </span>
           <button className="btn" onClick={() => void d.act(() => api.cancelAction())}>
             Cancel
+          </button>
+        </div>
+      )}
+      {clip.offer && (
+        <div role="status" className="flex items-center gap-3 border-b border-[var(--line)] bg-[var(--selected)] px-4 py-2">
+          <span className="min-w-0 flex-1 truncate" title={clip.offer}>
+            You copied a link: {clip.offer}
+          </span>
+          <button
+            className="btn btn-primary"
+            onClick={() => {
+              const link = clip.offer;
+              clip.dismiss();
+              if (link) void d.act(() => api.add(link, null));
+            }}
+          >
+            Download it
+          </button>
+          <button className="btn" onClick={clip.dismiss}>
+            Ignore
           </button>
         </div>
       )}
@@ -266,7 +291,7 @@ export function App({ api, every }: { api: Api; every?: number }) {
       {categories && <CategoriesDialog api={api} onClose={() => setCategories(false)} />}
       {queuesOpen && <QueuesDialog api={api} onClose={() => setQueuesOpen(false)} />}
       {schedule && <ScheduleDialog api={api} onClose={() => setSchedule(false)} />}
-      {settings && <SettingsDialog api={api} onClose={() => setSettings(false)} />}
+      {settings && <SettingsDialog api={api} clipboard={watchClipboard} onClipboard={setWatchClipboard} onClose={() => setSettings(false)} />}
       {adding && <AddDialog onAdd={addAll} queues={queueList} onBrowse={() => api.pickFolder()} defaultFolder={defaultFolder} onClose={() => setAdding(false)} />}
       {removing && (
         <Modal title="Remove from the list" onClose={() => setRemoving(false)}>

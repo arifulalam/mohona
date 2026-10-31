@@ -36,6 +36,7 @@ function tauriApi(): Api {
     setAfterAction: (action, countdownSeconds) => call<Plan>("set_after_action", { action, countdownSeconds }),
     cancelAction: () => call<Plan>("cancel_action"),
     pickFolder: () => call<string | null>("pick_folder"),
+    clipboard: () => call<string | null>("read_clipboard"),
     categories: () => call<Category[]>("get_categories"),
     addCategory: (name, extensions, folder) => call<Category[]>("add_category", { name, extensions, folder }),
     removeCategory: (id) => call<Category[]>("remove_category", { id }),
@@ -152,6 +153,7 @@ export function demoApi(tick = 1000): Api {
     },
     setAfterAction: async (action) => (need(), (plan = { ...plan, action, countdown: null, message: null })),
     cancelAction: async () => (need(), (plan = { ...plan, action: null, countdown: null })),
+    clipboard: async () => navigator.clipboard?.readText().then((t) => t || null, () => null) ?? null,
     pickFolder: async () => window.prompt("Folder (the real app opens a folder dialog here):", "C:\\Users\\you\\Downloads\\Videos"),
     categories: async () => (need(), cats),
     addCategory: async (name, extensions, folder) => {
