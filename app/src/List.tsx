@@ -1,15 +1,16 @@
 import * as fmt from "./format";
+import { tr, useT, type Translate } from "./i18n";
 import type { Row } from "./types";
 
 const LABEL: Record<string, string> = {
-  queued: "Waiting",
-  probing: "Connecting",
-  downloading: "Downloading",
-  paused: "Paused",
-  retrying: "Retrying",
-  completed: "Finished",
-  failed: "Failed",
-  canceled: "Cancelled",
+  queued: tr("Waiting"),
+  probing: tr("Connecting"),
+  downloading: tr("Downloading"),
+  paused: tr("Paused"),
+  retrying: tr("Retrying"),
+  completed: tr("Finished"),
+  failed: tr("Failed"),
+  canceled: tr("Cancelled"),
 };
 
 function barClass(row: Row): string {
@@ -19,12 +20,12 @@ function barClass(row: Row): string {
   return "";
 }
 
-function detail(row: Row): string {
+function detail(row: Row, t: Translate): string {
   if (row.status === "failed") {
-    return row.expired ? "The link has expired. Add the file again from its page." : (row.error ?? "Failed");
+    return row.expired ? t("The link has expired. Add the file again from its page.") : (row.error ?? t("Failed"));
   }
   const done = fmt.bytes(row.downloaded);
-  return row.size ? `${done} of ${fmt.bytes(row.size)}` : done;
+  return row.size ? t("{done} of {total}", { done, total: fmt.bytes(row.size) }) : done;
 }
 
 function Icon({ d }: { d: string }) {
@@ -49,8 +50,9 @@ interface Props {
 }
 
 export function List({ rows, selected, onSelect, onPause, onResume, onOpen, onShow, onDetails, category }: Props) {
+  const t = useT();
   return (
-    <ul role="listbox" aria-multiselectable="true" aria-label="Downloads" className="m-0 list-none p-0">
+    <ul role="listbox" aria-multiselectable="true" aria-label={t("Downloads")} className="m-0 list-none p-0">
       {rows.map((row) => {
         const isSelected = selected.has(row.id);
         const running = ["queued", "probing", "downloading", "retrying"].includes(row.status);
@@ -77,49 +79,49 @@ export function List({ rows, selected, onSelect, onPause, onResume, onOpen, onSh
                 <span className="truncate font-medium" title={row.url}>
                   {row.name}
                 </span>
-                <span className="chip shrink-0" title="Category">
-                  {category(row)}
+                <span className="chip shrink-0" title={t("Category")}>
+                  {t(category(row))}
                 </span>
               </div>
-              <div className="truncate text-[12px] muted">{detail(row)}</div>
+              <div className="truncate text-[12px] muted">{detail(row, t)}</div>
             </div>
             <div className="flex items-center gap-3">
               <div className="w-28 text-right text-[12px] muted">
                 <div>{fmt.speed(row.speed)}</div>
-                <div>{row.eta !== null ? `${fmt.eta(row.eta)} left` : ""}</div>
+                <div>{row.eta !== null ? t("{time} left", { time: fmt.eta(row.eta) }) : ""}</div>
               </div>
               <span className="w-24 text-right text-[12px]" style={{ color: row.status === "failed" ? "var(--bad)" : row.status === "completed" ? "var(--ok)" : undefined }}>
-                {LABEL[row.status] ?? row.status}
+                {LABEL[row.status] ? t(LABEL[row.status]!) : row.status}
               </span>
               {running && (
-                <button className="btn !px-2 !py-0.5 text-[12px]" aria-label={`Details of ${row.name}`} title="Connections, speed and parts" onClick={(e) => (e.stopPropagation(), onDetails(row.id))}>
-                  Details
+                <button className="btn !px-2 !py-0.5 text-[12px]" aria-label={t("Details of {name}", { name: row.name })} title={t("Connections, speed and parts")} onClick={(e) => (e.stopPropagation(), onDetails(row.id))}>
+                  {t("Details")}
                 </button>
               )}
               {row.status === "completed" && (
                 <span className="flex gap-1">
-                  <button className="btn !px-2 !py-0.5 text-[12px]" aria-label={`Open ${row.name}`} onClick={(e) => (e.stopPropagation(), onOpen(row.id))}>
-                    Open
+                  <button className="btn !px-2 !py-0.5 text-[12px]" aria-label={t("Open {name}", { name: row.name })} onClick={(e) => (e.stopPropagation(), onOpen(row.id))}>
+                    {t("Open")}
                   </button>
-                  <button className="btn !px-2 !py-0.5 text-[12px]" aria-label={`Show ${row.name} in its folder`} onClick={(e) => (e.stopPropagation(), onShow(row.id))}>
-                    Show in folder
+                  <button className="btn !px-2 !py-0.5 text-[12px]" aria-label={t("Show {name} in its folder", { name: row.name })} onClick={(e) => (e.stopPropagation(), onShow(row.id))}>
+                    {t("Show in folder")}
                   </button>
                 </span>
               )}
               <span className="w-8">
                 {running && (
-                  <button className="btn !p-1" aria-label={`Pause ${row.name}`} title="Pause" onClick={(e) => (e.stopPropagation(), onPause(row.id))}>
+                  <button className="btn !p-1" aria-label={t("Pause {name}", { name: row.name })} title={t("Pause")} onClick={(e) => (e.stopPropagation(), onPause(row.id))}>
                     <Icon d="M6 5h4v14H6zM14 5h4v14h-4z" />
                   </button>
                 )}
                 {stopped && (
-                  <button className="btn !p-1" aria-label={`Resume ${row.name}`} title="Resume" onClick={(e) => (e.stopPropagation(), onResume(row.id))}>
+                  <button className="btn !p-1" aria-label={t("Resume {name}", { name: row.name })} title={t("Resume")} onClick={(e) => (e.stopPropagation(), onResume(row.id))}>
                     <Icon d="M8 5v14l11-7z" />
                   </button>
                 )}
               </span>
             </div>
-            <div className={`bar col-span-2 ${barClass(row)}`} role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(row.percent ?? 0)} aria-label={`${row.name} progress`}>
+            <div className={`bar col-span-2 ${barClass(row)}`} role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(row.percent ?? 0)} aria-label={t("{name} progress", { name: row.name })}>
               <span style={{ width: `${row.percent ?? (row.status === "completed" ? 100 : 0)}%` }} />
             </div>
           </li>

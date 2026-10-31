@@ -1,16 +1,20 @@
+import { tr } from "./i18n";
 import type { Category, Row } from "./types";
 
 export type SortKey = "added" | "name" | "size" | "type" | "status";
 
 export const SORTS: { id: SortKey; label: string }[] = [
-  { id: "added", label: "Newest first" },
-  { id: "name", label: "Name" },
-  { id: "size", label: "Size" },
-  { id: "type", label: "Category and type" },
-  { id: "status", label: "Status" },
+  { id: "added", label: tr("Newest first") },
+  { id: "name", label: tr("Name") },
+  { id: "size", label: tr("Size") },
+  { id: "type", label: tr("Category and type") },
+  { id: "status", label: tr("Status") },
 ];
 
-export const OTHER = "Other";
+export const OTHER = tr("Other");
+
+/** The engine's standard categories, listed so their names can be translated. */
+export const STANDARD_CATEGORIES = [tr("Compressed"), tr("Documents"), tr("Music"), tr("Programs"), tr("Video")];
 
 /** A file's extension in lower case, without the dot ("" when it has none). */
 export function extensionOf(name: string): string {

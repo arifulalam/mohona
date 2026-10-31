@@ -1,10 +1,12 @@
 import { useEffect, useState } from "react";
+import { useT } from "./i18n";
 import { Modal } from "./AddDialog";
 import { ACTIONS } from "./schedule";
 import { WindowsEditor } from "./WindowsEditor";
 import type { Api, Plan, PlanWindow } from "./types";
 
 export function ScheduleDialog({ api, onClose }: { api: Api; onClose(): void }) {
+  const t = useT();
   const [plan, setPlan] = useState<Plan | null>(null);
   const [windows, setWindows] = useState<PlanWindow[]>([]);
   const [action, setAction] = useState("");
@@ -32,7 +34,7 @@ export function ScheduleDialog({ api, onClose }: { api: Api; onClose(): void }) 
     event.preventDefault();
     const countdown = Number(seconds);
     if (action && (!Number.isInteger(countdown) || countdown < 5 || countdown > 3600)) {
-      return setError("The countdown must be a whole number of seconds from 5 to 3600.");
+      return setError(t("The countdown must be a whole number of seconds from 5 to 3600."));
     }
     setBusy(true);
     try {
@@ -48,10 +50,10 @@ export function ScheduleDialog({ api, onClose }: { api: Api; onClose(): void }) 
 
   const field = "rounded-md border border-[var(--line)] bg-[var(--bg)] px-2 py-1";
   return (
-    <Modal title="Schedule" onClose={onClose}>
+    <Modal title={t("Schedule")} onClose={onClose}>
       {!plan ? (
         <p className={error ? "text-[var(--bad)]" : "muted"} role={error ? "alert" : "status"}>
-          {error ?? "Loading…"}
+          {error ?? t("Loading…")}
         </p>
       ) : (
         <form onSubmit={save} className="flex flex-col gap-4">
@@ -59,22 +61,22 @@ export function ScheduleDialog({ api, onClose }: { api: Api; onClose(): void }) 
             <WindowsEditor windows={windows} onChange={setWindows} onError={setError} />
 
             <fieldset className="m-0 flex flex-col gap-2 border-0 p-0">
-              <legend className="mb-1 font-semibold">When all downloads are done</legend>
-              <select className={field} value={action} onChange={(e) => setAction(e.target.value)} aria-label="When everything is done">
+              <legend className="mb-1 font-semibold">{t("When all downloads are done")}</legend>
+              <select className={field} value={action} onChange={(e) => setAction(e.target.value)} aria-label={t("When everything is done")}>
                 {ACTIONS.map((a) => (
                   <option key={a.id} value={a.id}>
-                    {a.label}
+                    {t(a.label)}
                   </option>
                 ))}
               </select>
               {action && (
                 <label className="flex items-center gap-2">
-                  Wait
-                  <input className={`${field} w-20`} value={seconds} onChange={(e) => setSeconds(e.target.value)} aria-label="Countdown seconds" />
-                  seconds first (you can cancel)
+                  {t("Wait")}
+                  <input className={`${field} w-20`} value={seconds} onChange={(e) => setSeconds(e.target.value)} aria-label={t("Countdown seconds")} />
+                  {t("seconds first (you can cancel)")}
                 </label>
               )}
-              <small className="muted">It happens once, only for downloads that finish after you save this.</small>
+              <small className="muted">{t("It happens once, only for downloads that finish after you save this.")}</small>
             </fieldset>
           </div>
           {error && (
@@ -84,10 +86,10 @@ export function ScheduleDialog({ api, onClose }: { api: Api; onClose(): void }) 
           )}
           <div className="flex justify-end gap-2">
             <button type="button" className="btn" onClick={onClose}>
-              Cancel
+              {t("Cancel")}
             </button>
             <button type="submit" className="btn btn-primary" disabled={busy}>
-              {busy ? "Saving…" : "Save"}
+              {busy ? t("Saving…") : t("Save")}
             </button>
           </div>
         </form>

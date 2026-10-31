@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { useT } from "./i18n";
 
 interface Props {
   onAdd(urls: string[], folder: string | null, queue: number | null): Promise<string | null>;
@@ -13,6 +14,7 @@ interface Props {
 
 /** One address per line. */
 export function AddDialog({ onAdd, onBrowse, queues, defaultFolder, onClose }: Props) {
+  const t = useT();
   const [queue, setQueue] = useState<number | null>(null);
   const [folder, setFolder] = useState("");
   const [text, setText] = useState("");
@@ -34,7 +36,7 @@ export function AddDialog({ onAdd, onBrowse, queues, defaultFolder, onClose }: P
   async function submit(event: React.FormEvent) {
     event.preventDefault();
     const urls = text.split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
-    if (urls.length === 0) return setError("Type or paste an address.");
+    if (urls.length === 0) return setError(t("Type or paste an address."));
     setBusy(true);
     const problem = await onAdd(urls, folder.trim() || null, queue);
     setBusy(false);
@@ -43,10 +45,10 @@ export function AddDialog({ onAdd, onBrowse, queues, defaultFolder, onClose }: P
   }
 
   return (
-    <Modal title="Add downloads" onClose={onClose}>
+    <Modal title={t("Add downloads")} onClose={onClose}>
       <form onSubmit={submit} className="flex flex-col gap-3">
         <label className="flex flex-col gap-1">
-          <span>Addresses (one per line)</span>
+          <span>{t("Addresses (one per line)")}</span>
           <textarea
             ref={field}
             value={text}
@@ -58,29 +60,29 @@ export function AddDialog({ onAdd, onBrowse, queues, defaultFolder, onClose }: P
           />
         </label>
         <div className="flex flex-col gap-1">
-          <span>Save in</span>
+          <span>{t("Save in")}</span>
           <span className="flex gap-2">
             <input
               className="min-w-0 flex-1 rounded-md border border-[var(--line)] bg-[var(--bg)] px-2 py-1 font-mono text-[13px]"
               value={folder}
               onChange={(e) => setFolder(e.target.value)}
               placeholder={defaultFolder}
-              aria-label="Save in folder"
+              aria-label={t("Save in folder")}
               spellCheck={false}
             />
             <button type="button" className="btn" onClick={() => void onBrowse().then((f) => f && setFolder(f)).catch((e: Error) => setError(e.message))}>
-              Browse…
+              {t("Browse…")}
             </button>
           </span>
         </div>
         {queues.length > 1 && (
           <label className="flex items-center gap-2">
-            <span>Queue</span>
+            <span>{t("Queue")}</span>
             <select
               className="rounded-md border border-[var(--line)] bg-[var(--bg)] px-2 py-1"
               value={queue ?? queues[0]?.id}
               onChange={(e) => setQueue(Number(e.target.value))}
-              aria-label="Queue"
+              aria-label={t("Queue")}
             >
               {queues.map((q) => (
                 <option key={q.id} value={q.id}>
@@ -97,10 +99,10 @@ export function AddDialog({ onAdd, onBrowse, queues, defaultFolder, onClose }: P
         )}
         <div className="flex justify-end gap-2">
           <button type="button" className="btn" onClick={onClose}>
-            Cancel
+            {t("Cancel")}
           </button>
           <button type="submit" className="btn btn-primary" disabled={busy}>
-            {busy ? "Adding…" : "Download"}
+            {busy ? t("Adding…") : t("Download")}
           </button>
         </div>
       </form>

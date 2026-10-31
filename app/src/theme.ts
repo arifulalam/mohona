@@ -1,11 +1,12 @@
+import { tr } from "./i18n";
 import { NAMED_THEMES } from "./themes.generated";
 
 export type Theme = string;
 
 export const THEMES: { id: Theme; label: string }[] = [
-  { id: "system", label: "System" },
-  { id: "light", label: "Light" },
-  { id: "dark", label: "Dark" },
+  { id: "system", label: tr("System") },
+  { id: "light", label: tr("Light") },
+  { id: "dark", label: tr("Dark") },
   ...NAMED_THEMES.map((t) => ({ id: t.id, label: t.label })),
 ];
 

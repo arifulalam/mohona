@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { I18n, LANGUAGES, loadLanguage, saveLanguage, translator, useT } from "./i18n";
 import { AddDialog, Modal } from "./AddDialog";
 import { CategoriesDialog } from "./CategoriesDialog";
 import { loadClipboardWatch, saveClipboardWatch, useClipboardOffer } from "./clipboard";
@@ -24,7 +25,25 @@ function loadSort(): SortKey {
   return "added";
 }
 
-export function App({ api, every }: { api: Api; every?: number }) {
+/** The window, with the language the person chose. */
+export function App(props: { api: Api; every?: number }) {
+  const [code, setCode] = useState(() => loadLanguage().code);
+  const lang = LANGUAGES.find((l) => l.code === code) ?? LANGUAGES[0]!;
+  const t = useMemo(() => translator(lang.dict), [lang]);
+  useEffect(() => {
+    document.documentElement.lang = lang.code;
+    document.documentElement.dir = lang.dir;
+    saveLanguage(lang.code);
+  }, [lang]);
+  return (
+    <I18n.Provider value={t}>
+      <Main {...props} language={lang.code} onLanguage={setCode} />
+    </I18n.Provider>
+  );
+}
+
+function Main({ api, every, language, onLanguage }: { api: Api; every?: number; language: string; onLanguage(code: string): void }) {
+  const t = useT();
   const d = useDownloads(api, every);
   const [filter, setFilter] = useState<Filter>("all");
   const [selected, setSelected] = useState<Set<number>>(new Set());
@@ -114,27 +133,34 @@ export function App({ api, every }: { api: Api; every?: number }) {
   return (
     <div className="flex h-full flex-col">
       <header className="app-header flex items-center gap-3 border-b border-[var(--line)] px-4 py-2">
-        <h1 className="m-0 text-base font-semibold">Mohona</h1>
+        <h1 className="m-0 text-base font-semibold">{t("Mohona")}</h1>
         <span className="status text-[12px]" aria-live="polite">
-          {d.engine === null ? "Connecting…" : running ? `Engine running${d.engine.version ? ` (${d.engine.version})` : ""}` : "Engine stopped"}
+          {d.engine === null ? t("Connecting…") : running ? `${t("Engine running")}${d.engine.version ? ` (${d.engine.version})` : ""}` : t("Engine stopped")}
         </span>
         <div className="flex-1" />
         <button className="btn" onClick={() => setCategories(true)} disabled={!running}>
-          Categories
+          {t("Categories")}
         </button>
         <button className="btn" onClick={() => setQueuesOpen(true)} disabled={!running}>
-          Queues
+          {t("Queues")}
         </button>
         <button className="btn" onClick={() => setSchedule(true)} disabled={!running}>
-          Schedule
+          {t("Schedule")}
         </button>
         <button className="btn" onClick={() => setSettings(true)} disabled={!running}>
-          Settings
+          {t("Settings")}
         </button>
-        <select className="btn" value={theme} onChange={(e) => setTheme(e.target.value as Theme)} aria-label="Colour theme" title="Colour theme">
-          {THEMES.map((t) => (
-            <option key={t.id} value={t.id}>
-              {t.label}
+        <select className="btn" value={language} onChange={(e) => onLanguage(e.target.value)} aria-label={t("Language")} title={t("Language")}>
+          {LANGUAGES.map((l) => (
+            <option key={l.code} value={l.code} lang={l.code}>
+              {l.name}
+            </option>
+          ))}
+        </select>
+        <select className="btn" value={theme} onChange={(e) => setTheme(e.target.value as Theme)} aria-label={t("Colour theme")} title={t("Colour theme")}>
+          {THEMES.map((th) => (
+            <option key={th.id} value={th.id}>
+              {t(th.label)}
             </option>
           ))}
         </select>
@@ -142,17 +168,17 @@ export function App({ api, every }: { api: Api; every?: number }) {
 
       {!running && d.engine !== null && (
         <div role="status" className="flex items-center gap-3 border-b border-[var(--line)] bg-[var(--selected)] px-4 py-2">
-          <span>Mohona is not running, so downloads cannot start.</span>
+          <span>{t("Mohona is not running, so downloads cannot start.")}</span>
           {d.engine.message && <span className="muted">{d.engine.message}</span>}
           <button className="btn btn-primary" onClick={() => void d.startEngine()}>
-            Start Mohona
+            {t("Start Mohona")}
           </button>
         </div>
       )}
       {d.plan?.windows.length ? (
         !d.plan.openNow && (
           <div role="status" className="border-b border-[var(--line)] px-4 py-1 text-[12px] muted">
-            Outside the scheduled hours: downloads wait for the next window.
+            {t("Outside the scheduled hours: downloads wait for the next window.")}
           </div>
         )
       ) : null}
@@ -160,18 +186,18 @@ export function App({ api, every }: { api: Api; every?: number }) {
         <div role="status" className="flex items-center gap-3 border-b border-[var(--line)] bg-[var(--selected)] px-4 py-2">
           <span>
             {d.plan.countdown !== null
-              ? `${actionName(d.plan.action)} in ${d.plan.countdown} s.`
-              : `When all downloads are done: ${actionName(d.plan.action).toLowerCase()}.`}
+              ? t("{action} in {seconds} s.", { action: t(actionName(d.plan.action)), seconds: d.plan.countdown })
+              : t("When all downloads are done: {action}.", { action: t(actionName(d.plan.action)).toLowerCase() })}
           </span>
           <button className="btn" onClick={() => void d.act(() => api.cancelAction())}>
-            Cancel
+            {t("Cancel")}
           </button>
         </div>
       )}
       {clip.offer && (
         <div role="status" className="flex items-center gap-3 border-b border-[var(--line)] bg-[var(--selected)] px-4 py-2">
           <span className="min-w-0 flex-1 truncate" title={clip.offer}>
-            You copied a link: {clip.offer}
+            {t("You copied a link: {link}", { link: clip.offer })}
           </span>
           <button
             className="btn btn-primary"
@@ -181,10 +207,10 @@ export function App({ api, every }: { api: Api; every?: number }) {
               if (link) void d.act(() => api.add(link, null));
             }}
           >
-            Download it
+            {t("Download it")}
           </button>
           <button className="btn" onClick={clip.dismiss}>
-            Ignore
+            {t("Ignore")}
           </button>
         </div>
       )}
@@ -197,12 +223,12 @@ export function App({ api, every }: { api: Api; every?: number }) {
         <div role="alert" className="flex items-center gap-3 border-b border-[var(--line)] px-4 py-2 text-[var(--bad)]">
           <span className="flex-1 whitespace-pre-wrap">{d.error}</span>
           <button className="btn" onClick={d.dismissError}>
-            Dismiss
+            {t("Dismiss")}
           </button>
         </div>
       )}
 
-      <div className="flex items-center gap-2 border-b border-[var(--line)] bg-[var(--panel)] px-4 py-2" role="toolbar" aria-label="Actions">
+      <div className="flex items-center gap-2 border-b border-[var(--line)] bg-[var(--panel)] px-4 py-2" role="toolbar" aria-label={t("Actions")}>
         <button
           className="btn btn-primary"
           onClick={() => {
@@ -212,27 +238,27 @@ export function App({ api, every }: { api: Api; every?: number }) {
           }}
           disabled={!running}
         >
-          + Add
+          {t("+ Add")}
         </button>
         <button className="btn" disabled={!can.pause} onClick={() => void each(chosen, api.pause)}>
-          Pause
+          {t("Pause")}
         </button>
         <button className="btn" disabled={!can.resume} onClick={() => void each(chosen, api.resume)}>
-          Resume
+          {t("Resume")}
         </button>
         <button className="btn" disabled={!can.cancel} onClick={() => void each(chosen, api.cancel)}>
-          Cancel
+          {t("Cancel")}
         </button>
         <button className="btn btn-danger" disabled={!can.remove} onClick={() => (setDeleteFiles(false), setRemoving(true))}>
-          Remove
+          {t("Remove")}
         </button>
         <div className="flex-1" />
         <label className="flex items-center gap-2 text-[12px] muted">
-          Sort by
-          <select className="btn !py-0.5" value={sort} onChange={(e) => setSort(e.target.value as SortKey)} aria-label="Sort by">
+          {t("Sort by")}
+          <select className="btn !py-0.5" value={sort} onChange={(e) => setSort(e.target.value as SortKey)} aria-label={t("Sort by")}>
             {SORTS.map((o) => (
               <option key={o.id} value={o.id}>
-                {o.label}
+                {t(o.label)}
               </option>
             ))}
           </select>
@@ -240,7 +266,7 @@ export function App({ api, every }: { api: Api; every?: number }) {
       </div>
 
       <div className="flex min-h-0 flex-1">
-        <nav aria-label="Filters" className="w-48 shrink-0 border-r border-[var(--line)] bg-[var(--panel)] p-2">
+        <nav aria-label={t("Filters")} className="w-48 shrink-0 border-r border-[var(--line)] bg-[var(--panel)] p-2">
           {FILTERS.map((f) => (
             <button
               key={f.id}
@@ -248,17 +274,17 @@ export function App({ api, every }: { api: Api; every?: number }) {
               aria-current={filter === f.id ? "page" : undefined}
               className="flex w-full items-center justify-between rounded-md border-0 bg-transparent px-3 py-2 text-left hover:bg-[var(--hover)] aria-[current=page]:bg-[var(--selected)] aria-[current=page]:font-semibold"
             >
-              <span>{f.label}</span>
+              <span>{t(f.label)}</span>
               <span className="muted">{number[f.id]}</span>
             </button>
           ))}
-          <h2 className="mb-1 mt-4 px-3 text-[11px] font-semibold uppercase tracking-wide muted">Categories</h2>
+          <h2 className="mb-1 mt-4 px-3 text-[11px] font-semibold uppercase tracking-wide muted">{t("Categories")}</h2>
           <button
             onClick={() => setCategory(null)}
             aria-current={category === null ? "true" : undefined}
             className="flex w-full items-center justify-between rounded-md border-0 bg-transparent px-3 py-1.5 text-left hover:bg-[var(--hover)] aria-[current=true]:bg-[var(--selected)] aria-[current=true]:font-semibold"
           >
-            <span>All types</span>
+            <span>{t("All types")}</span>
             <span className="muted">{inFilter.length}</span>
           </button>
           {byCategory.map((c) => (
@@ -266,10 +292,10 @@ export function App({ api, every }: { api: Api; every?: number }) {
               key={c.name}
               onClick={() => setCategory(category === c.name ? null : c.name)}
               aria-current={category === c.name ? "true" : undefined}
-              aria-label={`Category ${c.name}, ${c.count}`}
+              aria-label={t("Category {name}, {count}", { name: t(c.name), count: c.count })}
               className="flex w-full items-center justify-between rounded-md border-0 bg-transparent px-3 py-1.5 text-left hover:bg-[var(--hover)] aria-[current=true]:bg-[var(--selected)] aria-[current=true]:font-semibold"
             >
-              <span className="truncate">{c.name}</span>
+              <span className="truncate">{t(c.name)}</span>
               <span className="muted">{c.count}</span>
             </button>
           ))}
@@ -277,7 +303,7 @@ export function App({ api, every }: { api: Api; every?: number }) {
         <main className="min-w-0 flex-1 overflow-auto bg-[var(--panel)]">
           {shown.length === 0 ? (
             <div className="p-10 text-center muted">
-              {d.rows.length === 0 ? (running ? "No downloads yet. Press “+ Add” and paste an address." : "Start Mohona to see your downloads.") : "Nothing here."}
+              {d.rows.length === 0 ? (running ? t("No downloads yet. Press “+ Add” and paste an address.") : t("Start Mohona to see your downloads.")) : t("Nothing here.")}
             </div>
           ) : (
             <List rows={shown} selected={selected} onSelect={select} onPause={(id) => void d.act(() => api.pause(id))} onResume={(id) => void d.act(() => api.resume(id))} onOpen={(id) => void d.act(() => api.open(id))} onShow={(id) => void d.act(() => api.show(id))} onDetails={setDetailsId} category={(r) => categoryOf(r.name, cats)} />
@@ -294,17 +320,17 @@ export function App({ api, every }: { api: Api; every?: number }) {
       {settings && <SettingsDialog api={api} clipboard={watchClipboard} onClipboard={setWatchClipboard} onClose={() => setSettings(false)} />}
       {adding && <AddDialog onAdd={addAll} queues={queueList} onBrowse={() => api.pickFolder()} defaultFolder={defaultFolder} onClose={() => setAdding(false)} />}
       {removing && (
-        <Modal title="Remove from the list" onClose={() => setRemoving(false)}>
+        <Modal title={t("Remove from the list")} onClose={() => setRemoving(false)}>
           <p className="mt-0">
-            Remove {chosen.length === 1 ? `“${chosen[0]!.name}”` : `${chosen.length} downloads`} from the list?
+            {chosen.length === 1 ? t("Remove “{name}” from the list?", { name: chosen[0]!.name }) : t("Remove {count} downloads from the list?", { count: chosen.length })}
           </p>
           <label className="mb-4 flex items-center gap-2">
             <input type="checkbox" checked={deleteFiles} onChange={(e) => setDeleteFiles(e.target.checked)} />
-            Also delete the downloaded file{chosen.length === 1 ? "" : "s"} from the disk
+            {chosen.length === 1 ? t("Also delete the downloaded file from the disk") : t("Also delete the downloaded files from the disk")}
           </label>
           <div className="flex justify-end gap-2">
             <button className="btn" onClick={() => setRemoving(false)}>
-              Keep
+              {t("Keep")}
             </button>
             <button
               className="btn btn-primary"
@@ -314,7 +340,7 @@ export function App({ api, every }: { api: Api; every?: number }) {
                 setRemoving(false);
               }}
             >
-              Remove
+              {t("Remove")}
             </button>
           </div>
         </Modal>

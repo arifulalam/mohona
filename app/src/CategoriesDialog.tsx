@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useT } from "./i18n";
 import { Modal } from "./AddDialog";
 import type { Api, Category } from "./types";
 
@@ -11,6 +12,7 @@ export function parseTypes(text: string): string[] {
 }
 
 export function CategoriesDialog({ api, onClose }: { api: Api; onClose(): void }) {
+  const t = useT();
   const [list, setList] = useState<Category[] | null>(null);
   const [name, setName] = useState("");
   const [types, setTypes] = useState("");
@@ -47,13 +49,13 @@ export function CategoriesDialog({ api, onClose }: { api: Api; onClose(): void }
 
   const field = "rounded-md border border-[var(--line)] bg-[var(--bg)] px-2 py-1";
   return (
-    <Modal title="Categories" onClose={onClose}>
+    <Modal title={t("Categories")} onClose={onClose}>
       <p className="mt-0 muted">
-        With “Sort finished downloads into folders by file type” on in Settings, a finished file moves into the folder of its category (inside the download folder unless you give a full path).
+        {t("With “Sort finished downloads into folders by file type” on in Settings, a finished file moves into the folder of its category (inside the download folder unless you give a full path).")}
       </p>
       {!list ? (
         <p className={error ? "text-[var(--bad)]" : "muted"} role={error ? "alert" : "status"}>
-          {error ?? "Loading…"}
+          {error ?? t("Loading…")}
         </p>
       ) : (
         <>
@@ -61,24 +63,24 @@ export function CategoriesDialog({ api, onClose }: { api: Api; onClose(): void }
             {list.map((c) => (
               <li key={c.id} className="flex items-center justify-between gap-2 border-b border-[var(--line)] py-1">
                 <span className="min-w-0">
-                  <strong>{c.name}</strong> <span className="muted">→ {c.folder ?? c.name}</span>
+                  <strong>{t(c.name)}</strong> <span className="muted">→ {c.folder ?? c.name}</span>
                   <div className="truncate text-[12px] muted">{c.extensions.join(", ")}</div>
                 </span>
                 <button className="btn !px-2 !py-0.5" aria-label={`Remove category ${c.name}`} onClick={() => void change(() => api.removeCategory(c.id))}>
-                  Remove
+                  {t("Remove")}
                 </button>
               </li>
             ))}
           </ul>
           <form onSubmit={add} className="mt-3 flex flex-col gap-2">
             <div className="flex gap-2">
-              <input className={`${field} w-40`} value={name} onChange={(e) => setName(e.target.value)} placeholder="Name" aria-label="Category name" />
-              <input className={`${field} min-w-0 flex-1`} value={types} onChange={(e) => setTypes(e.target.value)} placeholder="File types: jpg, png, gif" aria-label="File types" />
+              <input className={`${field} w-40`} value={name} onChange={(e) => setName(e.target.value)} placeholder={t("Name")} aria-label={t("Category name")} />
+              <input className={`${field} min-w-0 flex-1`} value={types} onChange={(e) => setTypes(e.target.value)} placeholder={t("File types: jpg, png, gif")} aria-label={t("File types")} />
             </div>
             <span className="flex gap-2">
-              <input className={`${field} min-w-0 flex-1 font-mono text-[13px]`} value={folder} onChange={(e) => setFolder(e.target.value)} placeholder="Folder (optional): a name, or a full path" aria-label="Category folder" spellCheck={false} />
+              <input className={`${field} min-w-0 flex-1 font-mono text-[13px]`} value={folder} onChange={(e) => setFolder(e.target.value)} placeholder={t("Folder (optional): a name, or a full path")} aria-label={t("Category folder")} spellCheck={false} />
               <button type="button" className="btn" onClick={() => void api.pickFolder().then((f) => f && setFolder(f)).catch((e: Error) => setError(e.message))}>
-                Browse…
+                {t("Browse…")}
               </button>
             </span>
             {error && (
@@ -88,10 +90,10 @@ export function CategoriesDialog({ api, onClose }: { api: Api; onClose(): void }
             )}
             <div className="flex justify-end gap-2">
               <button type="button" className="btn" onClick={onClose}>
-                Close
+                {t("Close")}
               </button>
               <button type="submit" className="btn btn-primary">
-                Add category
+                {t("Add category")}
               </button>
             </div>
           </form>

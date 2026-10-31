@@ -1,12 +1,13 @@
+import { tr } from "./i18n";
 import type { Row } from "./types";
 
 export type Filter = "all" | "active" | "finished" | "problems";
 
 export const FILTERS: { id: Filter; label: string }[] = [
-  { id: "all", label: "All downloads" },
-  { id: "active", label: "In progress" },
-  { id: "finished", label: "Finished" },
-  { id: "problems", label: "Failed" },
+  { id: "all", label: tr("All downloads") },
+  { id: "active", label: tr("In progress") },
+  { id: "finished", label: tr("Finished") },
+  { id: "problems", label: tr("Failed") },
 ];
 
 const ACTIVE = new Set(["queued", "probing", "downloading", "paused", "retrying"]);

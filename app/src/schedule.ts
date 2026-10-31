@@ -1,13 +1,14 @@
+import { tr, translator, type Translate } from "./i18n";
 import type { PlanWindow } from "./types";
 
 export const DAYS = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"] as const;
-export const DAY_LABEL: Record<string, string> = { mon: "Mon", tue: "Tue", wed: "Wed", thu: "Thu", fri: "Fri", sat: "Sat", sun: "Sun" };
+export const DAY_LABEL: Record<string, string> = { mon: tr("Mon"), tue: tr("Tue"), wed: tr("Wed"), thu: tr("Thu"), fri: tr("Fri"), sat: tr("Sat"), sun: tr("Sun") };
 
 export const ACTIONS = [
-  { id: "", label: "Do nothing" },
-  { id: "sleep", label: "Put the computer to sleep" },
-  { id: "hibernate", label: "Hibernate the computer" },
-  { id: "shutdown", label: "Shut the computer down" },
+  { id: "", label: tr("Do nothing") },
+  { id: "sleep", label: tr("Put the computer to sleep") },
+  { id: "hibernate", label: tr("Hibernate the computer") },
+  { id: "shutdown", label: tr("Shut the computer down") },
 ] as const;
 
 export function actionName(action: string | null): string {
@@ -27,18 +28,18 @@ export function normalTime(text: string): string | null {
 export function windowFrom(days: string[], start: string, end: string, limitKb: string): PlanWindow | string {
   const s = normalTime(start);
   const e = normalTime(end);
-  if (!s || !e) return "Times must look like 23:00.";
-  if (s === e) return "A window cannot start and end at the same time.";
+  if (!s || !e) return tr("Times must look like 23:00.");
+  if (s === e) return tr("A window cannot start and end at the same time.");
   const t = limitKb.trim().replace(",", ".");
-  if (t !== "" && !/^\d+(\.\d+)?$/.test(t)) return "The speed limit must be a number.";
+  if (t !== "" && !/^\d+(\.\d+)?$/.test(t)) return tr("The speed limit must be a number.");
   // Seven days is the same as every day.
   const chosen = days.length === 7 ? [] : DAYS.filter((d) => days.includes(d));
   return { days: [...chosen], start: s, end: e, speedLimit: t === "" ? null : Math.round(Number(t) * 1024) };
 }
 
 /** "Mon, Tue 23:00–06:00" for a list. */
-export function describeWindow(w: PlanWindow): string {
-  const days = w.days.length === 0 ? "Every day" : w.days.map((d) => DAY_LABEL[d] ?? d).join(", ");
-  const limit = w.speedLimit ? `, up to ${Math.round(w.speedLimit / 1024)} KB/s` : "";
+export function describeWindow(w: PlanWindow, t: Translate = translator({})): string {
+  const days = w.days.length === 0 ? t("Every day") : w.days.map((d) => (DAY_LABEL[d] ? t(DAY_LABEL[d]) : d)).join(", ");
+  const limit = w.speedLimit ? `, ${t("up to {speed} KB/s", { speed: Math.round(w.speedLimit / 1024) })}` : "";
   return `${days} ${w.start}–${w.end}${limit}`;
 }

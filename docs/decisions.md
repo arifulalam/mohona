@@ -568,3 +568,15 @@ A `401` now becomes its own error (`NetError::Unauthorized`) that names the kind
 **How.** Rust reads the text with `tauri-plugin-clipboard-manager` through one command, `read_clipboard`; the page does everything else. This part of the Rust shell was written without being compiled (see the manual tests).
 
 **Not included.** Watching in the background while the window is hidden, and links inside longer text.
+
+## ADR-0057: Languages are plain files, English is the key
+
+**What.** The app window can be shown in 14 languages (English, Bengali, Hindi, Urdu, Arabic, Spanish, French, German, Portuguese, Russian, Chinese, Japanese, Indonesian, Turkish). A language is one JSON file in `app/src/locales`: the English text on the left, the translation on the right. The program lists every file in that folder, so adding a language means adding a file (see `docs/translating.md`); no code changes.
+
+**Why English as the key.** A person who adds a language sees the real sentence, not a code such as `settings.title`, and a missing translation shows the English text instead of a blank or a code. `{name}` placeholders carry the variable parts, so the order of words can change in any language.
+
+**First start.** The window uses the saved choice, else the browser's or system's language (a region such as `pt-BR` falls back to `pt`), else English. Arabic and Urdu set the page direction to right to left.
+
+**Checks.** `npm run i18n:check` and the tests find every text in the code (including those in tables), and fail when a language lacks a text, keeps one that is gone, or changes a `{name}`. The translations that ship were written without a native speaker's review; the guide asks speakers to correct them.
+
+**Not translated.** Messages written by the engine, names of the person's own categories and queues, the browser extension popup (English for now), and numbers' digits (Western digits everywhere).
