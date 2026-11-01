@@ -59,5 +59,14 @@
   "Looking…": "Buscando…",
   "Nothing found yet. Play the video, then open this again.": "Aún no se ha encontrado nada. Reproduce el vídeo y vuelve a abrir esto.",
   "file": "archivo",
-  "and {n} more in the Mohona app": "y {n} más en la aplicación Mohona"
+  "and {n} more in the Mohona app": "y {n} más en la aplicación Mohona",
+  "Close": "Cerrar",
+  "Download with Mohona": "Descargar con Mohona",
+  "Looking for downloads…": "Buscando descargas…",
+  "Mohona is not available. Is it installed and running?": "Mohona no está disponible. ¿Está instalado y en marcha?",
+  "YouTube sends video and sound in many small signed pieces, so there is no single file to take yet. Support for it is planned.": "YouTube envía el vídeo y el sonido en muchas piezas pequeñas firmadas, así que aún no hay un único archivo que tomar. Su compatibilidad está prevista.",
+  "Nothing to download was found yet. Press play, wait a moment, and try again.": "Todavía no se ha encontrado nada que descargar. Pulsa reproducir, espera un momento e inténtalo de nuevo.",
+  "Sending…": "Enviando…",
+  "Sent": "Enviado",
+  "Hide on {site}": "Ocultar en {site}"
 }

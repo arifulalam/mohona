@@ -18,6 +18,8 @@ function texts(): string[] {
   for (const m of label.matchAll(/:\s*"([^"]+)"/g)) found.add(m[1]!);
   for (const m of readFileSync(join(root, "src", "themes.generated.ts"), "utf8").matchAll(/"label": "([^"]+)"/g)) found.add(m[1]!);
   for (const name of ["System", "Light", "Dark"]) found.add(name);
+  const look = readFileSync(join(root, "src", "look.ts"), "utf8");
+  for (const m of (look.match(/BUTTON_TEXTS = \[([\s\S]*?)\];/)?.[1] ?? "").matchAll(/"((?:[^"\\]|\\.)*)"/g)) found.add(JSON.parse(`"${m[1]}"`));
   return [...found];
 }
 
@@ -44,7 +46,7 @@ describe("popup languages", () => {
 
   const all = texts();
   it("finds the popup's texts", () => {
-    for (const text of ["Start Mohona", "Total speed", "Mohona {version} is running", "Waiting", "Desert"]) expect(all).toContain(text);
+    for (const text of ["Download with Mohona", "Hide on {site}", "Start Mohona", "Total speed", "Mohona {version} is running", "Waiting", "Desert"]) expect(all).toContain(text);
   });
 
   it.each(files)("%s has every popup text and the same {names} as English", (file) => {

@@ -59,5 +59,14 @@
   "Looking…": "جارٍ البحث…",
   "Nothing found yet. Play the video, then open this again.": "لم يُعثر على شيء بعد. شغّل الفيديو ثم افتح هذه النافذة مجددًا.",
   "file": "ملف",
-  "and {n} more in the Mohona app": "و{n} أخرى في تطبيق موهنا"
+  "and {n} more in the Mohona app": "و{n} أخرى في تطبيق موهنا",
+  "Close": "إغلاق",
+  "Download with Mohona": "التنزيل باستخدام موهنا",
+  "Looking for downloads…": "جارٍ البحث عن تنزيلات…",
+  "Mohona is not available. Is it installed and running?": "موهنا غير متاح. هل هو مثبّت ويعمل؟",
+  "YouTube sends video and sound in many small signed pieces, so there is no single file to take yet. Support for it is planned.": "يرسل يوتيوب الفيديو والصوت في قطع صغيرة كثيرة موقّعة، لذا لا يوجد ملف واحد يمكن أخذه بعد. الدعم مخطط له.",
+  "Nothing to download was found yet. Press play, wait a moment, and try again.": "لم يُعثر على ما يمكن تنزيله بعد. اضغط تشغيل وانتظر قليلًا ثم حاول مرة أخرى.",
+  "Sending…": "جارٍ الإرسال…",
+  "Sent": "تم الإرسال",
+  "Hide on {site}": "إخفاء في {site}"
 }

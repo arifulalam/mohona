@@ -582,3 +582,13 @@ A `401` now becomes its own error (`NetError::Unauthorized`) that names the kind
 **Not translated.** Messages written by the engine, names of the person's own categories and queues, the extension's background messages, and numbers' digits (Western digits everywhere).
 
 **Extension popup (added later).** The popup uses the same scheme with its own files in `extension/src/locales` (the same 13 languages; texts it shares with the app are copied from the app's files so the wording is the same). Static page text carries `data-t` attributes and is translated when the page opens and when the language is changed; the popup keeps its own language choice and, the first time, follows the browser's language. A test fails when a language lacks a popup text or changes a `{name}`.
+
+## ADR-0058: A modern button on videos and sounds
+
+**Look.** The button on players is a round glass-like button with a download arrow that opens out to "Mohona" when the mouse is over it (it anchors by its right edge, so it grows to the left and stays on the player). Its card has a coloured header (the theme's gradient) with a close button, one row per found item (name, a FILE, HLS or DASH label, size) and an accent "Download" button that shows "Sending…", then a green "Sent ✓" or a red "Failed". It follows the theme and the language chosen in the popup; "System" follows the browser's light or dark mode.
+
+**Sounds.** Sound players that show their own controls (`<audio controls>`, at least 160 by 28 pixels) get the button too, beside the bar rather than on its corner, where the player's own controls are. Hidden `<audio>` elements are page machinery and get none.
+
+**How the choice reaches the page.** The popup saves its theme and language in the extension's local storage. When a page has a player, its script asks the background script once for a "look": the language, direction, the few translated words the button needs and the colours of the theme. The page script therefore does not carry the language files (they would be added to every page). A change in the popup reaches open pages at once.
+
+**Still as before.** The page is only measured; nothing is read from it or sent anywhere until the person presses a button; clicks on the button never reach the page.

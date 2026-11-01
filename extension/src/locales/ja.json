@@ -59,5 +59,14 @@
   "Looking…": "検索中…",
   "Nothing found yet. Play the video, then open this again.": "まだ何も見つかりません。動画を再生してから、もう一度開いてください。",
   "file": "ファイル",
-  "and {n} more in the Mohona app": "ほか {n} 件は Mohona アプリで"
+  "and {n} more in the Mohona app": "ほか {n} 件は Mohona アプリで",
+  "Close": "閉じる",
+  "Download with Mohona": "Mohona でダウンロード",
+  "Looking for downloads…": "ダウンロードを検索中…",
+  "Mohona is not available. Is it installed and running?": "Mohona を利用できません。インストールされ、実行中ですか？",
+  "YouTube sends video and sound in many small signed pieces, so there is no single file to take yet. Support for it is planned.": "YouTube は動画と音声を署名付きの小さな断片で送るため、まだ取得できる単一のファイルがありません。対応は予定されています。",
+  "Nothing to download was found yet. Press play, wait a moment, and try again.": "ダウンロードできるものはまだ見つかりません。再生して少し待ってから、もう一度お試しください。",
+  "Sending…": "送信中…",
+  "Sent": "送信しました",
+  "Hide on {site}": "{site} で非表示"
 }

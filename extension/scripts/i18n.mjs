@@ -18,6 +18,8 @@ export function popupTexts() {
   for (const m of table.matchAll(/:\s*"([^"]+)"/g)) found.add(m[1]);
   for (const m of readFileSync(join(root, "src", "themes.generated.ts"), "utf8").matchAll(/"label": "([^"]+)"/g)) found.add(m[1]);
   for (const name of ["System", "Light", "Dark"]) found.add(name);
+  const look = readFileSync(join(root, "src", "look.ts"), "utf8");
+  for (const m of (look.match(/BUTTON_TEXTS = \[([\s\S]*?)\];/)?.[1] ?? "").matchAll(/"((?:[^"\\]|\\.)*)"/g)) found.add(JSON.parse(`"${m[1]}"`));
   return [...found].sort((a, b) => a.localeCompare(b));
 }
 

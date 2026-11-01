@@ -4,6 +4,7 @@ import type { Status } from "./native";
 import type { Media } from "./sniffer";
 import type { Settings } from "./settings";
 import type { SaveResult } from "./local";
+import type { Look } from "./look";
 
 /** Popup (and later pages) to the background script. */
 export type Request =
@@ -17,6 +18,7 @@ export type Request =
   | { kind: "expired" }
   | { kind: "downloads" }
   | { kind: "refreshDownload"; id: number }
+  | { kind: "look" }
   | { kind: "getSettings" }
   | { kind: "setSettings"; settings: Partial<Settings> };
 
@@ -27,5 +29,6 @@ export type Reply =
   | { kind: "expired"; downloads: DownloadRow[] }
   | { kind: "downloads"; downloads: DownloadRow[] }
   | { kind: "refreshed"; result: RefreshResult }
+  | { kind: "look"; look: Look }
   | { kind: "settings"; settings: Settings }
   | { kind: "outcome"; outcome: Outcome | null };

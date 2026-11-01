@@ -313,9 +313,11 @@ function setUpTheme(): void {
   const current = loadTheme(storage);
   select.value = current;
   applyTheme(document.documentElement, current);
+  void chrome.storage.local.set({ "mohona.theme": current }).catch(() => undefined);
   select.addEventListener("change", () => {
     applyTheme(document.documentElement, select.value);
     saveTheme(storage, select.value);
+    void chrome.storage.local.set({ "mohona.theme": select.value }).catch(() => undefined);
   });
 }
 
@@ -331,10 +333,12 @@ function setUpLanguage(): void {
   const storage = storageOrNull();
   const current = loadLanguage(storage, navigator.languages ?? [navigator.language]);
   select.value = current.code;
+  void chrome.storage.local.set({ "mohona.language": current.code }).catch(() => undefined);
   translatePage(current);
   select.addEventListener("change", () => {
     const next = LANGUAGES.find((l) => l.code === select.value) ?? LANGUAGES[0]!;
     saveLanguage(storage, next.code);
+    void chrome.storage.local.set({ "mohona.language": next.code }).catch(() => undefined);
     translatePage(next);
     void redraw();
   });

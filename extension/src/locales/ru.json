@@ -59,5 +59,14 @@
   "Looking…": "Поиск…",
   "Nothing found yet. Play the video, then open this again.": "Пока ничего не найдено. Запустите видео и откройте это снова.",
   "file": "файл",
-  "and {n} more in the Mohona app": "и ещё {n} в приложении Mohona"
+  "and {n} more in the Mohona app": "и ещё {n} в приложении Mohona",
+  "Close": "Закрыть",
+  "Download with Mohona": "Скачать с помощью Mohona",
+  "Looking for downloads…": "Поиск загрузок…",
+  "Mohona is not available. Is it installed and running?": "Mohona недоступен. Он установлен и запущен?",
+  "YouTube sends video and sound in many small signed pieces, so there is no single file to take yet. Support for it is planned.": "YouTube передаёт видео и звук множеством мелких подписанных фрагментов, поэтому единого файла пока нет. Поддержка запланирована.",
+  "Nothing to download was found yet. Press play, wait a moment, and try again.": "Ничего для загрузки пока не найдено. Нажмите воспроизведение, подождите немного и повторите.",
+  "Sending…": "Отправка…",
+  "Sent": "Отправлено",
+  "Hide on {site}": "Скрыть на {site}"
 }

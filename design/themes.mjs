@@ -55,7 +55,10 @@ const css = themes
   })
   .join("\n");
 const header = "/* Made by design/themes.mjs from design/themes.json. Do not edit by hand. */\n";
-const list = themes.map((t) => ({ id: t.id, label: t.label, dark: t.dark, bg: t.bg, accent: t.accent, hero: t.hero }));
+const list = themes.map((t) => ({
+  id: t.id, label: t.label, dark: t.dark, bg: t.bg, panel: t.panel, line: t.line, text: t.text, muted: t.muted,
+  accent: t.accent, accentText: t["accent-text"], ok: t.ok, bad: t.bad, hero: t.hero, heroText: t.heroText,
+}));
 const ts = `// Made by design/themes.mjs from design/themes.json. Do not edit by hand.\nexport const NAMED_THEMES = ${JSON.stringify(list, null, 2)} as const;\n`;
 for (const [folder, cssName] of [["../app/src", "themes.css"], ["../extension/static", "themes.css"]]) {
   writeFileSync(join(here, folder, cssName), header + css);

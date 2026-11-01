@@ -9,6 +9,7 @@ import { adoptSettings, loadSettings, saveSettings } from "./settings";
 import { reconcile } from "./settingsync";
 import { linksInPage, nextToRefresh, refreshExpired, type RefreshResult } from "./refresh";
 import type { DownloadRow } from "./protocol";
+import { lookFor } from "./look";
 
 const client = new NativeClient(() => chrome.runtime.connectNative(HOST_NAME));
 
@@ -348,6 +349,11 @@ async function handle(request: Request, sender: chrome.runtime.MessageSender): P
       if (!row) return { kind: "refreshed", result: { kind: "failed", message: "that download is gone" } };
       tries.delete(row.id);
       return { kind: "refreshed", result: await refreshOne(row) };
+    }
+    case "look": {
+      const stored = (await chrome.storage.local.get(["mohona.theme", "mohona.language"]).catch(() => ({}))) as Record<string, unknown>;
+      const text = (v: unknown) => (typeof v === "string" ? v : null);
+      return { kind: "look", look: lookFor(text(stored["mohona.theme"]), text(stored["mohona.language"]), navigator.languages ?? []) };
     }
     case "getSettings":
       return { kind: "settings", settings: await loadSettings() };

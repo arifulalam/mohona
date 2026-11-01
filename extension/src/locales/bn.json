@@ -59,5 +59,14 @@
   "Looking…": "খোঁজা হচ্ছে…",
   "Nothing found yet. Play the video, then open this again.": "এখনও কিছু পাওয়া যায়নি। ভিডিও চালান, তারপর এটি আবার খুলুন।",
   "file": "ফাইল",
-  "and {n} more in the Mohona app": "এবং মোহনা অ্যাপে আরও {n}টি"
+  "and {n} more in the Mohona app": "এবং মোহনা অ্যাপে আরও {n}টি",
+  "Close": "বন্ধ করুন",
+  "Download with Mohona": "মোহনা দিয়ে ডাউনলোড করুন",
+  "Looking for downloads…": "ডাউনলোড খোঁজা হচ্ছে…",
+  "Mohona is not available. Is it installed and running?": "মোহনা পাওয়া যাচ্ছে না। এটি কি ইনস্টল করা ও চালু আছে?",
+  "YouTube sends video and sound in many small signed pieces, so there is no single file to take yet. Support for it is planned.": "ইউটিউব ভিডিও ও শব্দ অনেক ছোট সইকৃত টুকরোয় পাঠায়, তাই এখনও নেওয়ার মতো একক ফাইল নেই। এর সমর্থন পরিকল্পনায় আছে।",
+  "Nothing to download was found yet. Press play, wait a moment, and try again.": "এখনও ডাউনলোডের মতো কিছু পাওয়া যায়নি। প্লে চাপুন, একটু অপেক্ষা করুন, তারপর আবার চেষ্টা করুন।",
+  "Sending…": "পাঠানো হচ্ছে…",
+  "Sent": "পাঠানো হয়েছে",
+  "Hide on {site}": "{site}-এ লুকান"
 }
