@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { ALL_THEMES, applyTheme, loadTheme, saveTheme } from "../src/popuptheme";
 import type { DownloadRow } from "../src/protocol";
-import { brief, bytes, eta, nameOf, speed, speeds, summarize } from "../src/summary";
+import { bytes, eta, nameOf, speed, speeds, summarize } from "../src/summary";
 
 const row = (id: number, status: string, downloaded = 0, extra: Partial<DownloadRow> = {}): DownloadRow => ({
   id, url: `https://x.test/f${id}.zip`, filename: null, status, downloaded, size: 1000, error: null, path: null, page: null, expired: false, ...extra,
@@ -64,17 +64,5 @@ describe("popup theme", () => {
     expect(attributes.get("data-theme")).toBe("river");
     applyTheme(el, "system");
     expect(attributes.has("data-theme")).toBe(false);
-  });
-});
-
-describe("brief", () => {
-  it("shortens long addresses and leaves short text alone", async () => {
-    
-    const long = "https://javacodegeeks.tradepub.com/?p=w_wile925&w=d&email=f9677dca1d4a296be107129d82eaaa20&key=vvhhOX6xX2zMxcHscp5Z&ts=82103";
-    const out = brief(`Could not refresh the link of ${long}: 403`);
-    expect(out).toContain("…");
-    expect(out.length).toBeLessThan(100);
-    expect(brief("Added to Mohona.")).toBe("Added to Mohona.");
-    expect(brief("https://a.example/x")).toBe("https://a.example/x");
   });
 });

@@ -4,7 +4,7 @@ import type { Settings } from "./settings";
 import { label as languageLabel, LANGUAGES, loadLanguage, saveLanguage, translator, type Language, type Translate } from "./i18n";
 import { ALL_THEMES, applyTheme, loadTheme, saveTheme } from "./popuptheme";
 import type { DownloadRow } from "./protocol";
-import { brief, bytes, eta, isRunning, nameOf, speed, speeds, summarize } from "./summary";
+import { bytes, eta, isRunning, nameOf, speed, speeds, summarize } from "./summary";
 
 let t: Translate = translator({});
 
@@ -16,8 +16,8 @@ function ask(request: Request): Promise<Reply> {
 
 function setResult(text: string): void {
   const el = $("result");
-  el.textContent = brief(text);
-  el.title = text;
+  el.textContent = text;
+  el.scrollTop = 0;
 }
 
 function describe(outcome: Outcome | null): string {
@@ -39,8 +39,7 @@ async function refresh(): Promise<void> {
   if (reply.kind !== "status") return;
   {
     const last = reply.last ?? "";
-    $("last").textContent = brief(last);
-    $("last").title = last;
+    $("last").textContent = last;
   }
   const s = reply.status;
   const text = $("status");

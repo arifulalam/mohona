@@ -234,7 +234,7 @@ The window cannot be built where the tests run (it needs the system web view), s
 
 ## Extension popup, long links
 
-1. Let a download from a link that expires fail, press "Refresh link" in the popup so that it fails too. The message shows the address shortened with "…" in the middle; hovering shows the whole address. The popup has no side scrollbar.
+1. Let a download from a link that expires fail, press "Refresh link" in the popup so that it fails too. The whole address is shown, wrapped, in a small box under the Download button; if it is long, the box has its own scrollbar. The popup page itself has no side scrollbar and does not get wider.
 
 ## Local API
 

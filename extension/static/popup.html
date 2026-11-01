@@ -32,10 +32,11 @@
       }
 
       * { box-sizing: border-box; }
-      html { overflow-x: hidden; }
-      /* Long addresses never widen the popup: they wrap anywhere. */
-      p, small, li, .empty, .muted, #result, #last, label { overflow-wrap: anywhere; word-break: break-word; min-width: 0; }
-      #result, #last { max-height: 6.5em; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 4; -webkit-box-orient: vertical; }
+      html, body { overflow-x: hidden; }
+      /* Long text never widens the page: it wraps, and a long message scrolls inside its own box. */
+      p, small, li, .empty, .muted, label { overflow-wrap: anywhere; min-width: 0; }
+      .scrollbox { max-height: 6.5em; overflow: auto; overflow-wrap: anywhere; word-break: break-all; min-width: 0; padding-right: 2px; scrollbar-width: thin; scrollbar-color: var(--line) transparent; }
+      .scrollbox:empty { display: none; }
       body { margin: 0; width: 380px; max-width: 100%; overflow-x: hidden; background: var(--bg); color: var(--text); font: 13px/1.4 system-ui, "Segoe UI", sans-serif; }
       button, input, select, textarea { font: inherit; color: inherit; }
       :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
@@ -127,8 +128,8 @@
           <input id="url" type="url" data-t-placeholder="Paste a download address" placeholder="Paste a download address" required />
           <button id="add" type="submit" class="primary" data-t="Download">Download</button>
         </form>
-        <p id="result" role="status"></p>
-        <p id="last" class="muted"></p>
+        <p id="result" class="scrollbox" role="status"></p>
+        <p id="last" class="muted scrollbox"></p>
       </section>
 
       <section id="activeBox" hidden>
