@@ -592,3 +592,22 @@ A `401` now becomes its own error (`NetError::Unauthorized`) that names the kind
 **How the choice reaches the page.** The popup saves its theme and language in the extension's local storage. When a page has a player, its script asks the background script once for a "look": the language, direction, the few translated words the button needs and the colours of the theme. The page script therefore does not carry the language files (they would be added to every page). A change in the popup reaches open pages at once.
 
 **Still as before.** The page is only measured; nothing is read from it or sent anywhere until the person presses a button; clicks on the button never reach the page.
+
+## ADR-0059: A public local API (HTTP and WebSocket)
+
+**What.** The daemon also listens on `127.0.0.1:6791` (any free port when that is taken; `MOHONA_API_PORT=off` turns it off, a number picks another port). It speaks version 1 of a small REST API (`/v1/downloads`, `/v1/queues`, `/v1/categories`, `/v1/config`, `/v1/plan`, `/v1/tokens`) and a WebSocket (`/v1/events`) that sends `added`, `state`, `progress`, `error` and `removed` events. `docs/commands.md` lists every address; the machine-readable description is `crates/daemon/openapi.json`, served at `/v1/openapi.json`. `mohona api` prints the address and the master token.
+
+**One engine, one set of rules.** Each REST call becomes the same `Call` the app and the command line send over the daemon's own JSON-lines connection, so the API can do nothing they cannot and the checks (limits, duplicates, folders) are not written twice. The port is written to `daemon.json` (`api_port`).
+
+**Why hand-written HTTP.** The API needs about fifteen request shapes and one upgrade. A small reader that refuses anything unusual (repeated headers, chunked bodies, bodies over 1 MiB, other methods) is easier to check than a web framework with its defaults, and adds two small crates (`sha1`, `sha2`) instead of a stack.
+
+**Safety rules (checked before a body is read).**
+- Loopback only, and only loopback peers are served.
+- `Host` must be `127.0.0.1`, `localhost` or `[::1]` with the API's port. A page reached through DNS rebinding sends its own name there and gets 421.
+- A request that carries `Origin`, or `Sec-Fetch-Site` other than `none`, is a web page's request and gets 403, even with a valid token. No CORS header is ever sent, so a page cannot read answers or be pre-approved; preflights fail the same way. Command-line tools and scripts do not send these headers.
+- Everything but `/v1/ping` and `/v1/openapi.json` needs `Authorization: Bearer <token>`. The master token is the daemon's own (in `daemon.json`, readable by the person only). Smaller tokens are made with `POST /v1/tokens` with a scope: `read` (look), `write` (also add, pause, resume, cancel, remove) or `admin` (also settings, queues, categories, schedule, tokens). Only the SHA-256 of a token is stored; the secret is shown once. Wrong tokens wait a quarter of a second before the 401, and comparisons take the same time whether or not they match.
+- Bodies must be `application/json` objects. The extension's `SettingGet/Set` calls cannot reach the `api.tokens` setting (they are limited to `extension.*`).
+
+**Tests.** The OpenAPI file and the server's route table are compared (paths, methods, names, scopes), every operation is called, and requests with a page's `Origin`, a foreign `Host`, a wrong or revoked token, a too-small scope, a wrong content type, chunked or oversized bodies and non-HTTP bytes are refused. The WebSocket is tested for the token, for refusing page origins, for the handshake and for events of a real download.
+
+**Not included.** HTTPS (it is loopback only), a remote or LAN mode (planned later as the web companion, which needs its own sign-in), per-token limits on rate, and request bodies over 1 MiB.

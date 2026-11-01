@@ -4,7 +4,7 @@ import type { Settings } from "./settings";
 import { label as languageLabel, LANGUAGES, loadLanguage, saveLanguage, translator, type Language, type Translate } from "./i18n";
 import { ALL_THEMES, applyTheme, loadTheme, saveTheme } from "./popuptheme";
 import type { DownloadRow } from "./protocol";
-import { bytes, eta, isRunning, nameOf, speed, speeds, summarize } from "./summary";
+import { brief, bytes, eta, isRunning, nameOf, speed, speeds, summarize } from "./summary";
 
 let t: Translate = translator({});
 
@@ -12,6 +12,12 @@ const $ = <T extends HTMLElement>(id: string): T => document.getElementById(id) 
 
 function ask(request: Request): Promise<Reply> {
   return chrome.runtime.sendMessage(request) as Promise<Reply>;
+}
+
+function setResult(text: string): void {
+  const el = $("result");
+  el.textContent = brief(text);
+  el.title = text;
 }
 
 function describe(outcome: Outcome | null): string {
@@ -31,7 +37,11 @@ function describe(outcome: Outcome | null): string {
 async function refresh(): Promise<void> {
   const reply = await ask({ kind: "status" });
   if (reply.kind !== "status") return;
-  $("last").textContent = reply.last ?? "";
+  {
+    const last = reply.last ?? "";
+    $("last").textContent = brief(last);
+    $("last").title = last;
+  }
   const s = reply.status;
   const text = $("status");
   const dot = $("dot");
@@ -57,7 +67,7 @@ async function refresh(): Promise<void> {
 
 $("start").addEventListener("click", async () => {
   const reply = await ask({ kind: "startEngine" });
-  if (reply.kind === "outcome") $("result").textContent = describe(reply.outcome);
+  if (reply.kind === "outcome") setResult(describe(reply.outcome));
   await refresh();
 });
 
@@ -66,7 +76,7 @@ $<HTMLFormElement>("form").addEventListener("submit", async (event) => {
   const url = $<HTMLInputElement>("url").value.trim();
   if (!url) return;
   const reply = await ask({ kind: "add", url });
-  if (reply.kind === "outcome") $("result").textContent = describe(reply.outcome);
+  if (reply.kind === "outcome") setResult(describe(reply.outcome));
   await refresh();
 });
 
@@ -157,7 +167,7 @@ async function showMedia(): Promise<void> {
     button.addEventListener("click", async () => {
       button.disabled = true;
       const answer = await ask({ kind: "downloadMedia", media });
-      if (answer.kind === "outcome") $("result").textContent = describe(answer.outcome);
+      if (answer.kind === "outcome") setResult(describe(answer.outcome));
       button.disabled = false;
       await refresh();
     });

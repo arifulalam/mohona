@@ -232,6 +232,20 @@ The window cannot be built where the tests run (it needs the system web view), s
 4. Languages: the popup's first box lists the same languages as the app, each as its own name followed by the English name. Pick বাংলা · Bengali: every word of the popup (counters, headings, buttons, settings) changes and the choice is still there when you open the popup again. Pick العربية · Arabic: the popup turns right to left. A fresh browser profile starts in the browser's own language when it is one of the list.
 5. Finished files appear under "Recently finished"; media found on a page under "Media on this page"; "Settings" opens the same options as before.
 
+## Extension popup, long links
+
+1. Let a download from a link that expires fail, press "Refresh link" in the popup so that it fails too. The message shows the address shortened with "…" in the middle; hovering shows the whole address. The popup has no side scrollbar.
+
+## Local API
+
+1. Start the daemon (or the app), then run `mohona api`. Note the address and token.
+2. In PowerShell: `curl.exe http://127.0.0.1:6791/v1/ping` shows the version without a token. `curl.exe http://127.0.0.1:6791/v1/downloads` answers 401.
+3. `curl.exe -H "Authorization: Bearer TOKEN" http://127.0.0.1:6791/v1/downloads` lists the downloads you see in the app.
+4. Add a download with `curl.exe -H "Authorization: Bearer TOKEN" -H "Content-Type: application/json" -d "{\"url\":\"https://...\"}" http://127.0.0.1:6791/v1/downloads`. It appears in the app within a second.
+5. Make a read-only token (`POST /v1/tokens` with `{"name":"test","scope":"read"}`); with it, listing works and adding answers 403. Delete the token; it stops working at once.
+6. Open any website, press F12, Console, and run `fetch("http://127.0.0.1:6791/v1/ping")`. The page must not be able to read the answer (a CORS error), and `fetch("http://127.0.0.1:6791/v1/downloads", {headers:{Authorization:"Bearer x"}})` must fail too.
+7. Windows Firewall must not ask anything when the daemon starts (it listens on 127.0.0.1 only). If port 6791 is in use by another program, the daemon still starts on another port (`mohona api` shows it).
+
 ## Store packaging
 
 1. `cd extension && npm run package`, unzip `dist/store/mohona-chromium-0.0.1.zip` into an empty folder and load it unpacked in Chrome: it loads without errors, shows the Mohona icon, and its id is different from the development id (it has no `key`), so the popup says not connected until the host is registered for that id.

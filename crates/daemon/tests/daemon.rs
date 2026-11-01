@@ -314,6 +314,7 @@ async fn a_second_daemon_is_refused_but_a_stale_info_file_is_replaced() {
         token: "old".into(),
         pid: 1,
         version: "0".into(),
+        api_port: 0,
     }
     .write(&d.info_path)
     .unwrap();

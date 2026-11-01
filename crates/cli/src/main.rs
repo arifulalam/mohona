@@ -44,6 +44,12 @@ enum Command {
         #[arg(long)]
         folder: Option<PathBuf>,
     },
+    /// Show where the local API is and the master token (the daemon must be running)
+    Api {
+        /// The daemon's connection file (default: your application-data folder)
+        #[arg(long)]
+        info: Option<PathBuf>,
+    },
     /// Keep a list of downloads and run it with limits on how many go at once
     Queue {
         #[command(subcommand)]
@@ -487,6 +493,25 @@ async fn main() -> ExitCode {
                 },
             )
         })),
+        Some(Command::Api { info }) => {
+            let path = info.unwrap_or_else(mohona_daemon::default_info_path);
+            match mohona_daemon::DaemonInfo::read(&path) {
+                Ok(i) if i.api_port != 0 => {
+                    println!("Address: http://127.0.0.1:{}/v1/", i.api_port);
+                    println!("Token:   {}", i.token);
+                    println!("Keep the token secret. Make smaller tokens with POST /v1/tokens.");
+                    ExitCode::SUCCESS
+                }
+                Ok(_) => {
+                    eprintln!("The local API is off (MOHONA_API_PORT=off).");
+                    ExitCode::FAILURE
+                }
+                Err(_) => {
+                    eprintln!("The daemon is not running. Start it with: mohona daemon");
+                    ExitCode::FAILURE
+                }
+            }
+        }
         Some(Command::Network) => {
             use mohona_manager::NetworkProbe;
             let state = mohona_manager::SystemNetwork.state();

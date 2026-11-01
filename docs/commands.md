@@ -575,3 +575,45 @@ Online.
 ```
 
 When the address changes while `queue run` is going, downloads pause and continue when the network is back.
+
+## `api` — where the local API is
+
+```
+mohona api
+```
+
+Prints the address (`http://127.0.0.1:6791/v1/`) and the master token. The daemon must be running. Keep the token secret.
+
+# The local HTTP API
+
+The daemon (`mohona daemon`, or the desktop app) serves it on `127.0.0.1:6791`. Set `MOHONA_API_PORT` to use another port or `off` to turn it off. Requests need `Authorization: Bearer <token>`; the full description is `crates/daemon/openapi.json` (also at `/v1/openapi.json`).
+
+```
+mohona api                                   # address and master token
+TOKEN=...                                    # the master token
+curl http://127.0.0.1:6791/v1/ping           # no token needed
+curl -H "Authorization: Bearer $TOKEN" http://127.0.0.1:6791/v1/downloads
+curl -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
+     -d '{"url":"https://example.com/a.zip"}' http://127.0.0.1:6791/v1/downloads
+```
+
+| Address | Scope | What |
+|---|---|---|
+| `GET /v1/ping` | none | version and API number |
+| `GET /v1/openapi.json` | none | the description |
+| `GET /v1/events` | read | WebSocket: `hello`, then `added`, `state`, `progress` (at most 4 a second per download), `error`, `removed` |
+| `GET /v1/downloads` | read | every download |
+| `POST /v1/downloads` | write | add: `url`, optional `folder`, `cookies`, `referrer`, `user_agent`, `sort`, `duplicates` (`ask`/`skip`/`rename`), `queue` |
+| `GET /v1/downloads/{id}` | read | one download |
+| `GET /v1/downloads/{id}/details` | read | its connections and speed |
+| `POST /v1/downloads/{id}/pause` `/resume` `/cancel` | write | |
+| `DELETE /v1/downloads/{id}?delete_file=true` | write | remove (and delete the file) |
+| `GET`/`PUT /v1/config` | read / admin | engine settings |
+| `GET`/`POST /v1/queues`, `PUT`/`DELETE /v1/queues/{id}` | read / admin | queues |
+| `GET`/`POST /v1/categories`, `DELETE /v1/categories/{id}` | read / admin | categories |
+| `GET`/`PUT /v1/plan`, `PUT`/`DELETE /v1/plan/after-action` | read / admin | schedule and the "when finished" action |
+| `GET`/`POST /v1/tokens`, `DELETE /v1/tokens/{id}` | admin | tokens: `{"name":"phone","scope":"read"}`; the secret is in the answer once |
+
+Errors always look like `{"error":{"code":"...","message":"..."}}`: 400 bad request, 401 no or wrong token, 403 too small a scope or a web page's request, 404 not found, 409 duplicate, 421 wrong `Host`.
+
+Web pages cannot use the API: requests with an `Origin` header are refused and no CORS permission is given. Scripts, `curl` and other programs on your computer can.

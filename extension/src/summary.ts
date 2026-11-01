@@ -65,3 +65,10 @@ export function nameOf(row: DownloadRow): string {
     return row.url;
   }
 }
+
+/** Shortens every long web address in a message to its start and end, so it fits. */
+export function brief(text: string, max = 56): string {
+  return text.replace(/https?:\/\/\S+/g, (url) =>
+    url.length <= max ? url : `${url.slice(0, Math.ceil(max * 0.6))}…${url.slice(-Math.floor(max * 0.3))}`,
+  );
+}

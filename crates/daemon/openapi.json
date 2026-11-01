@@ -1,0 +1,1053 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "Mohona local API",
+    "version": "1.0.0",
+    "description": "Runs on 127.0.0.1 only. Send 'Authorization: Bearer <token>'. Requests from web pages (Origin header) and with a foreign Host header are refused."
+  },
+  "servers": [
+    {
+      "url": "http://127.0.0.1:6791"
+    }
+  ],
+  "security": [
+    {
+      "bearer": []
+    }
+  ],
+  "paths": {
+    "/v1/ping": {
+      "get": {
+        "operationId": "ping",
+        "summary": "Is the API there? Needs no token.",
+        "x-scope": "none",
+        "responses": {
+          "200": {
+            "description": "Done."
+          },
+          "400": {
+            "$ref": "#/components/responses/Error"
+          },
+          "401": {
+            "$ref": "#/components/responses/Error"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          },
+          "404": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "security": []
+      }
+    },
+    "/v1/openapi.json": {
+      "get": {
+        "operationId": "openapi",
+        "summary": "This description.",
+        "x-scope": "none",
+        "responses": {
+          "200": {
+            "description": "Done."
+          },
+          "400": {
+            "$ref": "#/components/responses/Error"
+          },
+          "401": {
+            "$ref": "#/components/responses/Error"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          },
+          "404": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "security": []
+      }
+    },
+    "/v1/events": {
+      "get": {
+        "operationId": "events",
+        "summary": "WebSocket with live events (added, state, progress, error, removed).",
+        "x-scope": "read",
+        "responses": {
+          "200": {
+            "description": "Done."
+          },
+          "400": {
+            "$ref": "#/components/responses/Error"
+          },
+          "401": {
+            "$ref": "#/components/responses/Error"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          },
+          "404": {
+            "$ref": "#/components/responses/Error"
+          },
+          "101": {
+            "description": "Switching to WebSocket."
+          }
+        }
+      }
+    },
+    "/v1/downloads": {
+      "get": {
+        "operationId": "listDownloads",
+        "summary": "Every download, oldest first.",
+        "x-scope": "read",
+        "responses": {
+          "200": {
+            "description": "Done."
+          },
+          "400": {
+            "$ref": "#/components/responses/Error"
+          },
+          "401": {
+            "$ref": "#/components/responses/Error"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          },
+          "404": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      },
+      "post": {
+        "operationId": "addDownload",
+        "summary": "Add a download.",
+        "x-scope": "write",
+        "responses": {
+          "200": {
+            "description": "Done."
+          },
+          "400": {
+            "$ref": "#/components/responses/Error"
+          },
+          "401": {
+            "$ref": "#/components/responses/Error"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          },
+          "404": {
+            "$ref": "#/components/responses/Error"
+          },
+          "201": {
+            "description": "Added; the body has its id."
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "url": {
+                    "type": "string"
+                  },
+                  "folder": {
+                    "type": "string"
+                  },
+                  "cookies": {
+                    "type": "string"
+                  },
+                  "referrer": {
+                    "type": "string"
+                  },
+                  "user_agent": {
+                    "type": "string"
+                  },
+                  "sort": {
+                    "type": "boolean"
+                  },
+                  "duplicates": {
+                    "type": "string",
+                    "enum": [
+                      "ask",
+                      "skip",
+                      "rename"
+                    ]
+                  },
+                  "queue": {
+                    "type": "integer"
+                  }
+                },
+                "required": [
+                  "url"
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/downloads/{id}": {
+      "get": {
+        "operationId": "getDownload",
+        "summary": "One download.",
+        "x-scope": "read",
+        "responses": {
+          "200": {
+            "description": "Done."
+          },
+          "400": {
+            "$ref": "#/components/responses/Error"
+          },
+          "401": {
+            "$ref": "#/components/responses/Error"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          },
+          "404": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "minimum": 1
+            }
+          }
+        ]
+      },
+      "delete": {
+        "operationId": "removeDownload",
+        "summary": "Remove a download (query delete_file=true also deletes the file).",
+        "x-scope": "write",
+        "responses": {
+          "200": {
+            "description": "Done."
+          },
+          "400": {
+            "$ref": "#/components/responses/Error"
+          },
+          "401": {
+            "$ref": "#/components/responses/Error"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          },
+          "404": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "minimum": 1
+            }
+          }
+        ]
+      }
+    },
+    "/v1/downloads/{id}/details": {
+      "get": {
+        "operationId": "downloadDetails",
+        "summary": "The connections of a running download.",
+        "x-scope": "read",
+        "responses": {
+          "200": {
+            "description": "Done."
+          },
+          "400": {
+            "$ref": "#/components/responses/Error"
+          },
+          "401": {
+            "$ref": "#/components/responses/Error"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          },
+          "404": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "minimum": 1
+            }
+          }
+        ]
+      }
+    },
+    "/v1/downloads/{id}/pause": {
+      "post": {
+        "operationId": "pauseDownload",
+        "summary": "Pause.",
+        "x-scope": "write",
+        "responses": {
+          "200": {
+            "description": "Done."
+          },
+          "400": {
+            "$ref": "#/components/responses/Error"
+          },
+          "401": {
+            "$ref": "#/components/responses/Error"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          },
+          "404": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "minimum": 1
+            }
+          }
+        ]
+      }
+    },
+    "/v1/downloads/{id}/resume": {
+      "post": {
+        "operationId": "resumeDownload",
+        "summary": "Resume.",
+        "x-scope": "write",
+        "responses": {
+          "200": {
+            "description": "Done."
+          },
+          "400": {
+            "$ref": "#/components/responses/Error"
+          },
+          "401": {
+            "$ref": "#/components/responses/Error"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          },
+          "404": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "minimum": 1
+            }
+          }
+        ]
+      }
+    },
+    "/v1/downloads/{id}/cancel": {
+      "post": {
+        "operationId": "cancelDownload",
+        "summary": "Cancel.",
+        "x-scope": "write",
+        "responses": {
+          "200": {
+            "description": "Done."
+          },
+          "400": {
+            "$ref": "#/components/responses/Error"
+          },
+          "401": {
+            "$ref": "#/components/responses/Error"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          },
+          "404": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "minimum": 1
+            }
+          }
+        ]
+      }
+    },
+    "/v1/config": {
+      "get": {
+        "operationId": "getConfig",
+        "summary": "The engine's settings.",
+        "x-scope": "read",
+        "responses": {
+          "200": {
+            "description": "Done."
+          },
+          "400": {
+            "$ref": "#/components/responses/Error"
+          },
+          "401": {
+            "$ref": "#/components/responses/Error"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          },
+          "404": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      },
+      "put": {
+        "operationId": "setConfig",
+        "summary": "Change settings; fields left out stay.",
+        "x-scope": "admin",
+        "responses": {
+          "200": {
+            "description": "Done."
+          },
+          "400": {
+            "$ref": "#/components/responses/Error"
+          },
+          "401": {
+            "$ref": "#/components/responses/Error"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          },
+          "404": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "download_folder": {
+                    "type": "string"
+                  },
+                  "speed_limit": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "max_active": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 32
+                  },
+                  "notifications": {
+                    "type": "boolean"
+                  },
+                  "keep_in_tray": {
+                    "type": "boolean"
+                  },
+                  "sort_by_type": {
+                    "type": "boolean"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/queues": {
+      "get": {
+        "operationId": "listQueues",
+        "summary": "Every queue.",
+        "x-scope": "read",
+        "responses": {
+          "200": {
+            "description": "Done."
+          },
+          "400": {
+            "$ref": "#/components/responses/Error"
+          },
+          "401": {
+            "$ref": "#/components/responses/Error"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          },
+          "404": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      },
+      "post": {
+        "operationId": "addQueue",
+        "summary": "A new queue.",
+        "x-scope": "admin",
+        "responses": {
+          "200": {
+            "description": "Done."
+          },
+          "400": {
+            "$ref": "#/components/responses/Error"
+          },
+          "401": {
+            "$ref": "#/components/responses/Error"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          },
+          "404": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "name": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "name"
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/queues/{id}": {
+      "put": {
+        "operationId": "setQueue",
+        "summary": "Rename a queue or change its limits and schedule.",
+        "x-scope": "admin",
+        "responses": {
+          "200": {
+            "description": "Done."
+          },
+          "400": {
+            "$ref": "#/components/responses/Error"
+          },
+          "401": {
+            "$ref": "#/components/responses/Error"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          },
+          "404": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "minimum": 1
+            }
+          }
+        ],
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "name": {
+                    "type": "string"
+                  },
+                  "max_active": {
+                    "type": "integer"
+                  },
+                  "speed_limit": {
+                    "type": "integer"
+                  },
+                  "windows": {
+                    "type": "array",
+                    "items": {
+                      "$ref": "#/components/schemas/Window"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "operationId": "removeQueue",
+        "summary": "Remove a queue; its downloads move to the main queue.",
+        "x-scope": "admin",
+        "responses": {
+          "200": {
+            "description": "Done."
+          },
+          "400": {
+            "$ref": "#/components/responses/Error"
+          },
+          "401": {
+            "$ref": "#/components/responses/Error"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          },
+          "404": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "minimum": 1
+            }
+          }
+        ]
+      }
+    },
+    "/v1/categories": {
+      "get": {
+        "operationId": "listCategories",
+        "summary": "The categories.",
+        "x-scope": "read",
+        "responses": {
+          "200": {
+            "description": "Done."
+          },
+          "400": {
+            "$ref": "#/components/responses/Error"
+          },
+          "401": {
+            "$ref": "#/components/responses/Error"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          },
+          "404": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      },
+      "post": {
+        "operationId": "addCategory",
+        "summary": "A new category.",
+        "x-scope": "admin",
+        "responses": {
+          "200": {
+            "description": "Done."
+          },
+          "400": {
+            "$ref": "#/components/responses/Error"
+          },
+          "401": {
+            "$ref": "#/components/responses/Error"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          },
+          "404": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "name": {
+                    "type": "string"
+                  },
+                  "extensions": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "folder": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "name",
+                  "extensions"
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/categories/{id}": {
+      "delete": {
+        "operationId": "removeCategory",
+        "summary": "Remove a category.",
+        "x-scope": "admin",
+        "responses": {
+          "200": {
+            "description": "Done."
+          },
+          "400": {
+            "$ref": "#/components/responses/Error"
+          },
+          "401": {
+            "$ref": "#/components/responses/Error"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          },
+          "404": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "minimum": 1
+            }
+          }
+        ]
+      }
+    },
+    "/v1/plan": {
+      "get": {
+        "operationId": "getPlan",
+        "summary": "The schedule and the armed action.",
+        "x-scope": "read",
+        "responses": {
+          "200": {
+            "description": "Done."
+          },
+          "400": {
+            "$ref": "#/components/responses/Error"
+          },
+          "401": {
+            "$ref": "#/components/responses/Error"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          },
+          "404": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      },
+      "put": {
+        "operationId": "setPlan",
+        "summary": "Set the schedule.",
+        "x-scope": "admin",
+        "responses": {
+          "200": {
+            "description": "Done."
+          },
+          "400": {
+            "$ref": "#/components/responses/Error"
+          },
+          "401": {
+            "$ref": "#/components/responses/Error"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          },
+          "404": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "windows": {
+                    "type": "array",
+                    "items": {
+                      "$ref": "#/components/schemas/Window"
+                    }
+                  }
+                },
+                "required": [
+                  "windows"
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/plan/after-action": {
+      "put": {
+        "operationId": "setAfterAction",
+        "summary": "Arm an action for when downloads finish.",
+        "x-scope": "admin",
+        "responses": {
+          "200": {
+            "description": "Done."
+          },
+          "400": {
+            "$ref": "#/components/responses/Error"
+          },
+          "401": {
+            "$ref": "#/components/responses/Error"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          },
+          "404": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "action": {
+                    "type": "string",
+                    "enum": [
+                      "sleep",
+                      "hibernate",
+                      "shutdown"
+                    ]
+                  },
+                  "countdown_seconds": {
+                    "type": "integer"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "operationId": "cancelAfterAction",
+        "summary": "Disarm the action.",
+        "x-scope": "admin",
+        "responses": {
+          "200": {
+            "description": "Done."
+          },
+          "400": {
+            "$ref": "#/components/responses/Error"
+          },
+          "401": {
+            "$ref": "#/components/responses/Error"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          },
+          "404": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/v1/tokens": {
+      "get": {
+        "operationId": "listTokens",
+        "summary": "The tokens (never their secrets).",
+        "x-scope": "admin",
+        "responses": {
+          "200": {
+            "description": "Done."
+          },
+          "400": {
+            "$ref": "#/components/responses/Error"
+          },
+          "401": {
+            "$ref": "#/components/responses/Error"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          },
+          "404": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      },
+      "post": {
+        "operationId": "createToken",
+        "summary": "Make a token; the secret is shown once.",
+        "x-scope": "admin",
+        "responses": {
+          "200": {
+            "description": "Done."
+          },
+          "400": {
+            "$ref": "#/components/responses/Error"
+          },
+          "401": {
+            "$ref": "#/components/responses/Error"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          },
+          "404": {
+            "$ref": "#/components/responses/Error"
+          },
+          "201": {
+            "description": "Made; the body has the secret token."
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "name": {
+                    "type": "string"
+                  },
+                  "scope": {
+                    "type": "string",
+                    "enum": [
+                      "read",
+                      "write",
+                      "admin"
+                    ]
+                  }
+                },
+                "required": [
+                  "name"
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/tokens/{id}": {
+      "delete": {
+        "operationId": "deleteToken",
+        "summary": "Revoke a token.",
+        "x-scope": "admin",
+        "responses": {
+          "200": {
+            "description": "Done."
+          },
+          "400": {
+            "$ref": "#/components/responses/Error"
+          },
+          "401": {
+            "$ref": "#/components/responses/Error"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          },
+          "404": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "minimum": 1
+            }
+          }
+        ]
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "bearer": {
+        "type": "http",
+        "scheme": "bearer"
+      }
+    },
+    "responses": {
+      "Error": {
+        "description": "An error.",
+        "content": {
+          "application/json": {
+            "schema": {
+              "type": "object",
+              "properties": {
+                "error": {
+                  "type": "object",
+                  "properties": {
+                    "code": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "code",
+                    "message"
+                  ]
+                }
+              },
+              "required": [
+                "error"
+              ]
+            }
+          }
+        }
+      }
+    },
+    "schemas": {
+      "Window": {
+        "type": "object",
+        "properties": {
+          "days": {
+            "type": "array",
+            "items": {
+              "type": "integer"
+            }
+          },
+          "start": {
+            "type": "string"
+          },
+          "end": {
+            "type": "string"
+          },
+          "speed_limit": {
+            "type": "integer"
+          }
+        }
+      }
+    }
+  }
+}

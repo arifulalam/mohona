@@ -6,6 +6,7 @@
 //! and every message carries a secret token that only the person's own
 //! account can read (see [`DaemonInfo`]).
 
+pub mod api;
 mod client;
 mod info;
 mod protocol;

@@ -32,9 +32,9 @@ pub struct ServerConfig {
     pub shutdown: Arc<Notify>,
 }
 
-struct State {
-    manager: Manager,
-    token: String,
+pub(crate) struct State {
+    pub(crate) manager: Manager,
+    pub(crate) token: String,
     default_dir: PathBuf,
     shutdown: Arc<Notify>,
     streams: crate::streams::Streams,
@@ -84,7 +84,22 @@ pub async fn serve(manager: Manager, config: ServerConfig) -> std::io::Result<()
         }
     }
     let listener = TcpListener::bind(("127.0.0.1", 0)).await?;
+    // The public API: MOHONA_API_PORT picks its port ("off" turns it off).
+    let api_listener = match std::env::var("MOHONA_API_PORT").ok().as_deref() {
+        Some("off") => None,
+        other => crate::api::bind(
+            other
+                .and_then(|p| p.parse().ok())
+                .unwrap_or(crate::api::DEFAULT_PORT),
+        )
+        .await
+        .ok(),
+    };
     let info = DaemonInfo {
+        api_port: api_listener
+            .as_ref()
+            .and_then(|l| l.local_addr().ok())
+            .map_or(0, |a| a.port()),
         port: listener.local_addr()?.port(),
         token: DaemonInfo::new_token(),
         pid: std::process::id(),
@@ -102,6 +117,9 @@ pub async fn serve(manager: Manager, config: ServerConfig) -> std::io::Result<()
         live: std::sync::Mutex::new(std::collections::HashMap::new()),
     });
     watch_action(&state);
+    if let Some(api_listener) = api_listener {
+        tokio::spawn(crate::api::serve(api_listener, Arc::clone(&state)));
+    }
     loop {
         tokio::select! {
             accepted = listener.accept() => {
@@ -449,7 +467,7 @@ async fn set_after_action(state: &State, action: Option<String>, seconds: Option
 }
 
 /// Same answer in the same time whether the token is nearly right or not.
-fn same_token(a: &str, b: &str) -> bool {
+pub(crate) fn same_token(a: &str, b: &str) -> bool {
     a.len() == b.len() && a.bytes().zip(b.bytes()).fold(0u8, |d, (x, y)| d | (x ^ y)) == 0
 }
 
@@ -495,7 +513,7 @@ fn done(result: Result<(), ManagerError>) -> Response {
     }
 }
 
-async fn handle(state: &State, call: Call) -> Response {
+pub(crate) async fn handle(state: &State, call: Call) -> Response {
     let manager = &state.manager;
     match call {
         Call::Ping => Response::Pong {

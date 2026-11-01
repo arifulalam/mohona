@@ -12,6 +12,9 @@ pub struct DaemonInfo {
     pub token: String,
     pub pid: u32,
     pub version: String,
+    /// The port of the public HTTP API (0: it is off).
+    #[serde(default)]
+    pub api_port: u16,
 }
 
 /// Where the daemon writes its info file unless told otherwise: in the
