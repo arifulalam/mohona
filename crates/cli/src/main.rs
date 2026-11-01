@@ -15,6 +15,7 @@ use tokio::sync::mpsc;
 mod daemon;
 mod history;
 mod queue;
+mod rules;
 mod stream;
 mod tools;
 
@@ -46,6 +47,14 @@ enum Command {
     },
     /// Show where the local API is and the master token (the daemon must be running)
     Api {
+        /// The daemon's connection file (default: your application-data folder)
+        #[arg(long)]
+        info: Option<PathBuf>,
+    },
+    /// Rules: when a download matches this, do that (the daemon must be running)
+    Rules {
+        #[command(subcommand)]
+        command: rules::RulesCommand,
         /// The daemon's connection file (default: your application-data folder)
         #[arg(long)]
         info: Option<PathBuf>,
@@ -550,6 +559,7 @@ async fn main() -> ExitCode {
                 ExitCode::FAILURE
             }
         },
+        Some(Command::Rules { command, info }) => rules::run(command, info).await,
         Some(Command::Queue { command }) => match queue::run(command, cli.db).await {
             Ok(()) => ExitCode::SUCCESS,
             Err(message) => {

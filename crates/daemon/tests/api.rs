@@ -751,3 +751,177 @@ async fn the_extensions_settings_calls_cannot_reach_the_token_store() {
     }
     api.shutdown.notify_one();
 }
+
+#[tokio::test]
+async fn rules_sort_route_and_block_downloads_from_every_door() {
+    use mohona_daemon::{Call, Client, Response};
+    let dir = tempfile::tempdir().unwrap();
+    let api = start(dir.path()).await;
+    let server = files().await;
+    let host = server.ip().to_string();
+
+    // Nothing is set at first.
+    let (s, b) = admin(&api, "GET", "/v1/rules", None).await;
+    assert_eq!((s, b["rules"].clone()), (200, json!([])));
+
+    let (s, b) = admin(
+        &api,
+        "PUT",
+        "/v1/rules",
+        Some(json!({ "rules": [
+            { "name": "Block bad", "when": { "url_contains": "evil=1" }, "then": { "block": true } },
+            { "name": "Bin files to Zips", "when": { "host": host, "url_contains": "kind=zip" }, "then": { "folder": "Zips" } },
+        ]})),
+    )
+    .await;
+    assert_eq!(s, 200, "{b}");
+    assert_eq!(b["rules"][1]["id"], 2);
+
+    // Test endpoint: nothing is added.
+    let (s, b) = admin(
+        &api,
+        "POST",
+        "/v1/rules/test",
+        Some(json!({ "url": "http://x.test/a.zip?evil=1" })),
+    )
+    .await;
+    assert_eq!((s, b["rule"]["name"].clone()), (200, json!("Block bad")));
+    let (_, b) = admin(
+        &api,
+        "POST",
+        "/v1/rules/test",
+        Some(json!({ "url": "http://x.test/fine.zip" })),
+    )
+    .await;
+    assert_eq!(b["rule"], Value::Null);
+    assert_eq!(
+        admin(&api, "GET", "/v1/downloads", None).await.1["downloads"],
+        json!([])
+    );
+
+    // Blocked, from the API and from the daemon's own connection (what the app and extension use).
+    let (s, b) = admin(
+        &api,
+        "POST",
+        "/v1/downloads",
+        Some(json!({ "url": format!("http://{server}/file?size=1000&evil=1") })),
+    )
+    .await;
+    assert_eq!(s, 400, "{b}");
+    assert!(b["error"]["message"]
+        .as_str()
+        .unwrap()
+        .contains("Block bad"));
+    let client = Client::from_info_file(&dir.path().join("daemon.json")).unwrap();
+    let add = |url: String, dest: Option<String>| Call::Add {
+        url,
+        dest_dir: dest,
+        cookies: None,
+        referrer: None,
+        user_agent: None,
+        headers: vec![],
+        sort: false,
+        duplicates: None,
+        queue: None,
+    };
+    assert!(matches!(
+        client
+            .call(add(format!("http://{server}/file?size=10&evil=1"), None))
+            .await
+            .unwrap(),
+        Response::Error { .. }
+    ));
+
+    // Routed to the folder.
+    let (s, b) = admin(
+        &api,
+        "POST",
+        "/v1/downloads",
+        Some(json!({ "url": format!("http://{server}/file?size=50000&kind=zip") })),
+    )
+    .await;
+    assert_eq!(s, 201, "{b}");
+    let id = b["id"].as_i64().unwrap();
+    until_done(&api, id).await;
+    let (_, d) = admin(&api, "GET", &format!("/v1/downloads/{id}"), None).await;
+    let path = d["path"].as_str().unwrap().replace('\\', "/");
+    assert!(path.contains("/dl/Zips/"), "{path}");
+
+    // The caller's own folder wins.
+    let other = dir.path().join("mine");
+    let (s, b) = admin(
+        &api,
+        "POST",
+        "/v1/downloads",
+        Some(json!({ "url": format!("http://{server}/file?size=50000&kind=zip&n=2"), "folder": other.to_str().unwrap() })),
+    )
+    .await;
+    assert_eq!(s, 201, "{b}");
+    let id = b["id"].as_i64().unwrap();
+    until_done(&api, id).await;
+    let (_, d) = admin(&api, "GET", &format!("/v1/downloads/{id}"), None).await;
+    assert!(d["path"].as_str().unwrap().contains("mine"), "{d}");
+
+    // Bad lists are refused and change nothing; a read token can test but not change.
+    for bad in [
+        json!({ "rules": [{ "name": "x", "when": {}, "then": { "block": true } }] }),
+        json!({ "rules": [{ "name": "x", "when": { "host": "a.test" }, "then": { "folder": "../up" } }] }),
+        json!({ "rules": [{ "name": "x", "when": { "host": "a.test" }, "then": {} }] }),
+    ] {
+        assert_eq!(admin(&api, "PUT", "/v1/rules", Some(bad)).await.0, 400);
+    }
+    assert_eq!(
+        admin(&api, "GET", "/v1/rules", None).await.1["rules"]
+            .as_array()
+            .unwrap()
+            .len(),
+        2
+    );
+    let (_, t) = admin(
+        &api,
+        "POST",
+        "/v1/tokens",
+        Some(json!({ "name": "r", "scope": "read" })),
+    )
+    .await;
+    let read = t["token"].as_str().unwrap().to_string();
+    assert_eq!(
+        call(
+            &api,
+            &read,
+            "POST",
+            "/v1/rules/test",
+            Some(json!({ "url": "http://x.test/a" }))
+        )
+        .await
+        .0,
+        200
+    );
+    assert_eq!(
+        call(
+            &api,
+            &read,
+            "PUT",
+            "/v1/rules",
+            Some(json!({ "rules": [] }))
+        )
+        .await
+        .0,
+        403
+    );
+    // Disabling a rule works and the number stays.
+    let (_, b) = admin(&api, "GET", "/v1/rules", None).await;
+    let mut rules = b["rules"].clone();
+    rules[0]["enabled"] = json!(false);
+    let (s, b) = admin(&api, "PUT", "/v1/rules", Some(json!({ "rules": rules }))).await;
+    assert_eq!((s, b["rules"][0]["id"].clone()), (200, json!(1)));
+    let (s, _) = admin(
+        &api,
+        "POST",
+        "/v1/downloads",
+        Some(json!({ "url": format!("http://{server}/file?size=1000&evil=1") })),
+    )
+    .await;
+    assert_eq!(s, 201);
+    api.shutdown.notify_one();
+}

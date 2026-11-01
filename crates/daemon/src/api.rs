@@ -120,6 +120,9 @@ pub const ROUTES: &[Route] = routes![
         "removeCategory",
         Scope::Admin
     ),
+    ("GET", "/v1/rules", "getRules", Scope::Read),
+    ("PUT", "/v1/rules", "setRules", Scope::Admin),
+    ("POST", "/v1/rules/test", "testRules", Scope::Read),
     ("GET", "/v1/plan", "getPlan", Scope::Read),
     ("PUT", "/v1/plan", "setPlan", Scope::Admin),
     (
@@ -692,6 +695,16 @@ async fn dispatch(
             fields.insert("id".into(), id_of(&params)?.into());
             ask(state, call("remove_category", fields)?).await
         }
+        "getRules" => ask(state, Call::GetRules).await,
+        "setRules" => {
+            let saved = ask(state, call("set_rules", object(&req)?)?).await;
+            if saved.status >= 400 {
+                saved
+            } else {
+                ask(state, Call::GetRules).await
+            }
+        }
+        "testRules" => ask(state, call("test_rules", object(&req)?)?).await,
         "getPlan" => ask(state, Call::GetPlan).await,
         "setPlan" => ask(state, call("set_plan", object(&req)?)?).await,
         "setAfterAction" => ask(state, call("set_after_action", object(&req)?)?).await,

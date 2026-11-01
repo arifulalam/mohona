@@ -11,6 +11,7 @@ mod client;
 mod info;
 mod protocol;
 pub mod receive;
+pub mod rules;
 mod server;
 mod streams;
 

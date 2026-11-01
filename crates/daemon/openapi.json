@@ -986,6 +986,109 @@
           }
         ]
       }
+    },
+    "/v1/rules": {
+      "get": {
+        "operationId": "getRules",
+        "summary": "The rules in the order they are tried; the first enabled match wins.",
+        "x-scope": "read",
+        "responses": {
+          "200": {
+            "description": "Done."
+          },
+          "400": {
+            "$ref": "#/components/responses/Error"
+          },
+          "401": {
+            "$ref": "#/components/responses/Error"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      },
+      "put": {
+        "operationId": "setRules",
+        "summary": "Replace the whole list; the answer is the saved list.",
+        "x-scope": "admin",
+        "responses": {
+          "200": {
+            "description": "Done."
+          },
+          "400": {
+            "$ref": "#/components/responses/Error"
+          },
+          "401": {
+            "$ref": "#/components/responses/Error"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "rules"
+                ],
+                "properties": {
+                  "rules": {
+                    "type": "array",
+                    "items": {
+                      "$ref": "#/components/schemas/Rule"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/rules/test": {
+      "post": {
+        "operationId": "testRules",
+        "summary": "Which rule would apply to an address (nothing is added).",
+        "x-scope": "read",
+        "responses": {
+          "200": {
+            "description": "Done."
+          },
+          "400": {
+            "$ref": "#/components/responses/Error"
+          },
+          "401": {
+            "$ref": "#/components/responses/Error"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "url"
+                ],
+                "properties": {
+                  "url": {
+                    "type": "string"
+                  },
+                  "referrer": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
@@ -1045,6 +1148,66 @@
           },
           "speed_limit": {
             "type": "integer"
+          }
+        }
+      },
+      "Rule": {
+        "type": "object",
+        "required": [
+          "name",
+          "when",
+          "then"
+        ],
+        "properties": {
+          "id": {
+            "type": "integer",
+            "description": "Given by the daemon."
+          },
+          "name": {
+            "type": "string"
+          },
+          "enabled": {
+            "type": "boolean",
+            "default": true
+          },
+          "when": {
+            "type": "object",
+            "description": "All given conditions must match; at least one is required.",
+            "properties": {
+              "host": {
+                "type": "string"
+              },
+              "extensions": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "url_contains": {
+                "type": "string"
+              },
+              "referrer_host": {
+                "type": "string"
+              }
+            }
+          },
+          "then": {
+            "type": "object",
+            "description": "What to do; a blocking rule does nothing else.",
+            "properties": {
+              "folder": {
+                "type": "string"
+              },
+              "queue": {
+                "type": "integer"
+              },
+              "sort": {
+                "type": "boolean"
+              },
+              "block": {
+                "type": "boolean"
+              }
+            }
           }
         }
       }

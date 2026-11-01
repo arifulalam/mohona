@@ -187,6 +187,10 @@ mohona get webdavs://cloud.example.com/remote.php/dav/files/alice/report.pdf -u 
 
 The running daemon serves a small REST + WebSocket API on `127.0.0.1:6791` for scripts and other programs: `mohona api` shows the address and token; the endpoints are in [docs/commands.md](docs/commands.md) and `crates/daemon/openapi.json`. Web pages cannot use it (see ADR-0059).
 
+## Rules
+
+`mohona rules add "Archives" --ext zip,7z --folder Archives` sends matching downloads to a folder or queue, or blocks them; it works for the extension, app and API alike (ADR-0060, [docs/commands.md](docs/commands.md)).
+
 ## Browser extension (early)
 
 `extension/` holds the browser extension (TypeScript, Manifest V3, Chrome/Edge/Firefox). Build it with `cd extension && npm install && npm run build`, load `dist/chromium` or `dist/firefox`, and register the host with `mohona-host install`. The extension takes over the browser's downloads (and falls back to the browser whenever Mohona cannot take them) and its popup shows what is downloading (counts, progress, speed) and can send a pasted address, in 14 languages and 12 colour themes; it adds a "Download with Mohona" right-click entry; it lists video and audio found on the page (including HLS and DASH streams, which Mohona downloads with `mohona stream`) in the popup, and puts a small download button on videos and sound players in pages (a round button that opens out on hover, in the chosen theme and language; it can be hidden per site), saves files only the browser holds (`blob:`, `data:`) from the right-click entry, and renews expired download links from the page they came from. See `docs/manual-tests.md`.

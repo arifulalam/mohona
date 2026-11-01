@@ -78,6 +78,18 @@ pub enum Call {
     RemoveCategory {
         id: i64,
     },
+    /// The rules ("when a download matches this, do that"), in the order they are tried.
+    GetRules,
+    /// Replace the whole list of rules (checked first; new rules get ids).
+    SetRules {
+        rules: Vec<crate::rules::Rule>,
+    },
+    /// Which rule would apply to this address (nothing is added).
+    TestRules {
+        url: String,
+        #[serde(default)]
+        referrer: Option<String>,
+    },
     /// Every queue, with its limits and schedule.
     GetQueues,
     /// A new queue (a unique name of 1 to 40 characters).
@@ -332,6 +344,13 @@ pub enum Response {
     },
     Queues {
         queues: Vec<QueueInfo>,
+    },
+    Rules {
+        rules: Vec<crate::rules::Rule>,
+    },
+    /// The rule that applies, if any.
+    RuleMatch {
+        rule: Option<crate::rules::Rule>,
     },
     Plan {
         windows: Vec<Window>,

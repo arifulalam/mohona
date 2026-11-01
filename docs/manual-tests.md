@@ -246,6 +246,14 @@ The window cannot be built where the tests run (it needs the system web view), s
 6. Open any website, press F12, Console, and run `fetch("http://127.0.0.1:6791/v1/ping")`. The page must not be able to read the answer (a CORS error), and `fetch("http://127.0.0.1:6791/v1/downloads", {headers:{Authorization:"Bearer x"}})` must fail too.
 7. Windows Firewall must not ask anything when the daemon starts (it listens on 127.0.0.1 only). If port 6791 is in use by another program, the daemon still starts on another port (`mohona api` shows it).
 
+## Rules
+
+1. With the daemon or app running: `mohona rules add "Zips" --ext zip --folder ZipTest`. `mohona rules list` shows it.
+2. In the extension or the app, add any `.zip` link. The finished file is in `Downloads\ZipTest`, not in `Downloads`.
+3. Add a link of another type: it goes to the normal folder.
+4. `mohona rules add "Block" --contains blockme --block`, then add a link that contains "blockme": it is refused with a message naming the rule. `mohona rules disable 2` lets it through again.
+5. `mohona rules test https://example.com/a.zip` names the rule without adding anything.
+
 ## Store packaging
 
 1. `cd extension && npm run package`, unzip `dist/store/mohona-chromium-0.0.1.zip` into an empty folder and load it unpacked in Chrome: it loads without errors, shows the Mohona icon, and its id is different from the development id (it has no `key`), so the popup says not connected until the host is registered for that id.

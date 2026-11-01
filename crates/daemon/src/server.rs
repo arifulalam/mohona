@@ -513,6 +513,17 @@ fn done(result: Result<(), ManagerError>) -> Response {
     }
 }
 
+async fn load_rules(state: &State) -> Vec<crate::rules::Rule> {
+    let text = state
+        .manager
+        .setting(crate::rules::SETTING)
+        .await
+        .ok()
+        .flatten()
+        .unwrap_or_default();
+    serde_json::from_str(&text).unwrap_or_default()
+}
+
 pub(crate) async fn handle(state: &State, call: Call) -> Response {
     let manager = &state.manager;
     match call {
@@ -541,8 +552,45 @@ pub(crate) async fn handle(state: &State, call: Call) -> Response {
                     ))
                 }
             };
+            // Rules fill in what the caller left open; they never override it.
+            let rules = load_rules(state).await;
+            let found = crate::rules::first_match(
+                &rules,
+                &crate::rules::Subject {
+                    url: &url,
+                    referrer: referrer.as_deref(),
+                },
+            );
+            let (mut dest_dir, mut queue, mut rule_sort) = (dest_dir, queue, None);
+            if let Some(rule) = found {
+                if rule.then.block {
+                    return Response::Error {
+                        message: format!("blocked by the rule \"{}\"", rule.name),
+                    };
+                }
+                if dest_dir.is_none() {
+                    if let Some(folder) = &rule.then.folder {
+                        dest_dir = Some(if crate::rules::is_full_path(folder) {
+                            folder.clone()
+                        } else {
+                            folder_or_default(state, None)
+                                .await
+                                .join(folder.replace('\\', "/"))
+                                .display()
+                                .to_string()
+                        });
+                    }
+                }
+                if queue.is_none() {
+                    queue = rule.then.queue;
+                }
+                rule_sort = rule.then.sort;
+            }
             let mut request = AddRequest::new(url, folder_or_default(state, dest_dir).await);
-            request.sort_into_categories = sort || sorting_is_on(state).await;
+            request.sort_into_categories = match rule_sort {
+                Some(on) if !sort => on,
+                _ => sort || sorting_is_on(state).await,
+            };
             request.duplicates = policy;
             request.queue_id = queue;
             // Only what a browser session legitimately carries: nothing that
@@ -561,6 +609,33 @@ pub(crate) async fn handle(state: &State, call: Call) -> Response {
                 },
                 Err(e) => error(e),
             }
+        }
+        Call::GetRules => Response::Rules {
+            rules: load_rules(state).await,
+        },
+        Call::SetRules { rules } => {
+            let old = load_rules(state).await;
+            match crate::rules::check(rules, &old) {
+                Err(message) => Response::Error { message },
+                Ok(clean) => match serde_json::to_string(&clean) {
+                    Ok(text) => done(manager.set_setting(crate::rules::SETTING, &text).await),
+                    Err(e) => Response::Error {
+                        message: e.to_string(),
+                    },
+                },
+            }
+        }
+        Call::TestRules { url, referrer } => {
+            let rules = load_rules(state).await;
+            let rule = crate::rules::first_match(
+                &rules,
+                &crate::rules::Subject {
+                    url: &url,
+                    referrer: referrer.as_deref(),
+                },
+            )
+            .cloned();
+            Response::RuleMatch { rule }
         }
         Call::Stream {
             url,

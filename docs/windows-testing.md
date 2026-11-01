@@ -141,6 +141,7 @@ Numbers are the steps of the "Desktop app" section.
 - [ ] C23 Looks: window at 760 px wide, Windows scaling 125% and 150%, light and dark; text readable, nothing cut off, the Save buttons of Settings and Schedule always visible
 - [ ] C24 Quiet when idle: with the window hidden for 10 minutes, Task Manager shows the app near 0% CPU
 - [ ] C25 Local API: `mohona api`, then the steps of "Local API" in `docs/manual-tests.md` (token works, web page refused, read-only token cannot add)
+- [ ] C26 Rules: the steps of "Rules" in `docs/manual-tests.md` (folder routing, block, test)
 - [ ] B3 Extension popup: a very long link in an error message wraps or is shortened; no horizontal or vertical scrollbar appears
 
 ## What to send back

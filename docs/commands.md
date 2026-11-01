@@ -584,6 +584,22 @@ mohona api
 
 Prints the address (`http://127.0.0.1:6791/v1/`) and the master token. The daemon must be running. Keep the token secret.
 
+## `rules` — send downloads where they belong
+
+The daemon must be running. Rules apply to every download added by the extension, the app, the API or `mohona get` through the daemon. The first enabled rule that matches wins, and a folder or queue named when adding wins over a rule.
+
+```
+mohona rules add "Archives" --ext zip,7z,rar --folder Archives
+mohona rules add "Work site" --host files.mycompany.com --folder Work --queue 2
+mohona rules add "No ads" --host ads.example.com --block
+mohona rules add "ISOs" --contains /iso/ --sort
+mohona rules list
+mohona rules test https://files.mycompany.com/a.zip     # shows the rule that would apply
+mohona rules disable 3        # also: enable, remove
+```
+
+Conditions: `--host` (example.com includes its subdomains; `*.example.com` only subdomains; `*` patterns), `--ext`, `--contains`, `--referrer-host`; all given ones must match and at least one is needed. Actions: `--folder` (a full path, or a name inside the download folder), `--queue`, `--sort`, `--block` (blocking cannot be combined with the others). API: `GET`/`PUT /v1/rules`, `POST /v1/rules/test`.
+
 # The local HTTP API
 
 The daemon (`mohona daemon`, or the desktop app) serves it on `127.0.0.1:6791`. Set `MOHONA_API_PORT` to use another port or `off` to turn it off. Requests need `Authorization: Bearer <token>`; the full description is `crates/daemon/openapi.json` (also at `/v1/openapi.json`).
@@ -611,6 +627,7 @@ curl -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
 | `GET`/`PUT /v1/config` | read / admin | engine settings |
 | `GET`/`POST /v1/queues`, `PUT`/`DELETE /v1/queues/{id}` | read / admin | queues |
 | `GET`/`POST /v1/categories`, `DELETE /v1/categories/{id}` | read / admin | categories |
+| `GET`/`PUT /v1/rules`, `POST /v1/rules/test` | read / admin (test: read) | rules; `PUT` replaces the whole list |
 | `GET`/`PUT /v1/plan`, `PUT`/`DELETE /v1/plan/after-action` | read / admin | schedule and the "when finished" action |
 | `GET`/`POST /v1/tokens`, `DELETE /v1/tokens/{id}` | admin | tokens: `{"name":"phone","scope":"read"}`; the secret is in the answer once |
 

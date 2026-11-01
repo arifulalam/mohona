@@ -611,3 +611,13 @@ A `401` now becomes its own error (`NetError::Unauthorized`) that names the kind
 **Tests.** The OpenAPI file and the server's route table are compared (paths, methods, names, scopes), every operation is called, and requests with a page's `Origin`, a foreign `Host`, a wrong or revoked token, a too-small scope, a wrong content type, chunked or oversized bodies and non-HTTP bytes are refused. The WebSocket is tested for the token, for refusing page origins, for the handshake and for events of a real download.
 
 **Not included.** HTTPS (it is loopback only), a remote or LAN mode (planned later as the web companion, which needs its own sign-in), per-token limits on rate, and request bodies over 1 MiB.
+
+## ADR-0060: Rules decide where a download goes
+
+**What.** A rule is "when (conditions) then (actions)". Conditions: the site (`example.com` also matches its subdomains, `*.example.com` only subdomains, any pattern with `*`), file types, text in the address, the site of the page the link was on. All given conditions must match, and a rule needs at least one, so no rule can match everything by mistake. Actions: save in a folder, put in a queue, sort into the category's folder (or not), or block. A blocking rule does nothing else. Rules are tried in order and the first enabled match wins.
+
+**Where it runs.** In the daemon's `Add`, so it covers the extension, the app, the API and the command line alike. Rules only fill in what the caller left open: a folder or queue named by the caller wins over the rule. A relative folder is a name inside the download folder (`..` is refused); a full path is used as written. The list is stored as one setting (`rules.list`) and replaced as a whole (`SetRules`), which is checked first (names, patterns, folders, at most 100 rules); new rules get numbers that are never reused by the list's current rules. `TestRules` shows which rule would apply to an address without adding anything.
+
+**Where it is edited.** `mohona rules list|add|remove|enable|disable|test`, and `GET`/`PUT /v1/rules` and `POST /v1/rules/test` of the API (changing needs the admin scope, testing the read scope).
+
+**Not included yet.** Conditions on the file size or type reported by the server (they are known only after the first request), renaming files, a window in the app for editing rules, and rules for streams, blob links and torrents.
