@@ -579,4 +579,6 @@ A `401` now becomes its own error (`NetError::Unauthorized`) that names the kind
 
 **Checks.** `npm run i18n:check` and the tests find every text in the code (including those in tables), and fail when a language lacks a text, keeps one that is gone, or changes a `{name}`. The translations that ship were written without a native speaker's review; the guide asks speakers to correct them.
 
-**Not translated.** Messages written by the engine, names of the person's own categories and queues, the browser extension popup (English for now), and numbers' digits (Western digits everywhere).
+**Not translated.** Messages written by the engine, names of the person's own categories and queues, the extension's background messages, and numbers' digits (Western digits everywhere).
+
+**Extension popup (added later).** The popup uses the same scheme with its own files in `extension/src/locales` (the same 13 languages; texts it shares with the app are copied from the app's files so the wording is the same). Static page text carries `data-t` attributes and is translated when the page opens and when the language is changed; the popup keeps its own language choice and, the first time, follows the browser's language. A test fails when a language lacks a popup text or changes a `{name}`.

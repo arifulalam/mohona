@@ -10,7 +10,8 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "package": "npm run build && node scripts/package.mjs",
-    "check": "npm run typecheck && npm test && npm run build"
+    "check": "npm run typecheck && npm test && npm run build",
+    "i18n": "node scripts/i18n.mjs"
   },
   "devDependencies": {
     "@types/chrome": "^0.0.300",

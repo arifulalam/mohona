@@ -100,69 +100,69 @@
     <header>
       <div class="top">
         <h1>Mohona</h1>
-        <label><span hidden>Theme</span>
-          <select id="theme" aria-label="Colour theme"></select>
+        <label><select id="language" data-t-label="Language"></select>
+          <select id="theme" data-t-label="Colour theme"></select>
         </label>
       </div>
-      <div class="pill"><span id="dot" class="dot"></span><span id="status" role="status">Checking…</span></div>
-      <button id="start" class="primary" hidden style="margin-top:8px">Start Mohona</button>
+      <div class="pill"><span id="dot" class="dot"></span><span id="status" role="status" data-t="Checking…">Checking…</span></div>
+      <button id="start" class="primary" hidden style="margin-top:8px" data-t="Start Mohona">Start Mohona</button>
     </header>
 
     <main>
-      <div class="stats" aria-label="Download counts">
-        <div class="stat"><b id="nActive">0</b><span>Running</span></div>
-        <div class="stat"><b id="nWaiting">0</b><span>Waiting</span></div>
-        <div class="stat ok"><b id="nDone">0</b><span>Finished</span></div>
-        <div class="stat bad"><b id="nFailed">0</b><span>Failed</span></div>
+      <div class="stats" data-t-label="Download counts">
+        <div class="stat"><b id="nActive">0</b><span data-t="Running">Running</span></div>
+        <div class="stat"><b id="nWaiting">0</b><span data-t="Waiting">Waiting</span></div>
+        <div class="stat ok"><b id="nDone">0</b><span data-t="Finished">Finished</span></div>
+        <div class="stat bad"><b id="nFailed">0</b><span data-t="Failed">Failed</span></div>
       </div>
-      <p class="speed" id="speed" hidden>Total speed <b id="speedNow">0 B/s</b></p>
+      <p class="speed" id="speed" hidden><span data-t="Total speed">Total speed</span> <b id="speedNow">0 B/s</b></p>
 
       <section>
-        <h2>Add a download</h2>
+        <h2 data-t="Add a download">Add a download</h2>
         <form id="form">
-          <input id="url" type="url" placeholder="Paste a download address" required />
-          <button id="add" type="submit" class="primary">Download</button>
+          <input id="url" type="url" data-t-placeholder="Paste a download address" placeholder="Paste a download address" required />
+          <button id="add" type="submit" class="primary" data-t="Download">Download</button>
         </form>
         <p id="result" role="status"></p>
         <p id="last" class="muted"></p>
       </section>
 
       <section id="activeBox" hidden>
-        <h2>Downloads</h2>
+        <h2 data-t="Downloads">Downloads</h2>
         <ul id="active"></ul>
       </section>
 
       <section id="recentBox" hidden>
-        <h2>Recently finished</h2>
+        <h2 data-t="Recently finished">Recently finished</h2>
         <ul id="recent"></ul>
       </section>
 
       <section id="expiredBox" hidden>
-        <h2>Expired links</h2>
+        <h2 data-t="Expired links">Expired links</h2>
         <ul id="expired"></ul>
       </section>
 
       <section>
-        <h2>Media on this page</h2>
+        <h2 data-t="Media on this page">Media on this page</h2>
         <ul id="media"></ul>
       </section>
 
       <section>
         <details id="more">
-          <summary>Settings</summary>
-          <label class="switch"><input id="intercept" type="checkbox" /> Take over browser downloads</label>
-          <label class="switch"><input id="videoButton" type="checkbox" /> Show a download button on videos</label>
-          <label class="switch"><input id="autoRefresh" type="checkbox" /> Refresh expired links automatically</label>
-          <label class="field">Leave files smaller than <input id="minMb" type="number" min="0" step="1" style="width:5em;display:inline-block" /> MB to the browser</label>
-          <label class="field">Never take downloads from these sites (one per line)
+          <summary data-t="Settings">Settings</summary>
+          <label class="switch"><input id="intercept" type="checkbox" /> <span data-t="Take over downloads from the browser">Take over downloads from the browser</span></label>
+          <label class="switch"><input id="videoButton" type="checkbox" /> <span data-t="Show a download button on videos">Show a download button on videos</span></label>
+          <label class="switch"><input id="autoRefresh" type="checkbox" /> <span data-t="Renew expired download links by themselves">Renew expired download links by themselves</span></label>
+          <label class="field"><span data-t="Leave files smaller than">Leave files smaller than</span> <input id="minMb" type="number" min="0" step="1" style="width:5em;display:inline-block" /> <span data-t="MB to the browser">MB to the browser</span></label>
+          <label class="field"><span data-t="Never take downloads from these sites (one per line)">Never take downloads from these sites (one per line)</span>
             <textarea id="excluded" rows="3" placeholder="example.com"></textarea>
           </label>
-          <p><button id="saveMore" type="button" class="primary">Save</button> <small id="savedMore" class="muted"></small></p>
-          <p class="muted">These settings are shared with the Mohona app.</p>
+          <p><button id="saveMore" type="button" class="primary" data-t="Save">Save</button> <small id="savedMore" class="muted"></small></p>
+          <p class="muted" data-t="These settings are shared with the Mohona app.">These settings are shared with the Mohona app.</p>
         </details>
       </section>
     </main>
-    <footer>Mohona, the estuary for your downloads</footer>
+    <footer data-t="Mohona, the estuary for your downloads">Mohona, the estuary for your downloads</footer>
     <script src="popup.js"></script>
   </body>
 </html>

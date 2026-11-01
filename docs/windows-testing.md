@@ -110,7 +110,7 @@ Tick each line when it passes. "Section N.M" means `docs/manual-tests.md`, secti
 
 ### B2. Extension popup (about 10 minutes)
 
-- [ ] B2 Section "Extension popup" of `docs/manual-tests.md`, steps 1 to 4
+- [ ] B2 Section "Extension popup" of `docs/manual-tests.md`, steps 1 to 5
 
 ### C. Desktop app (about 60 minutes)
 

@@ -227,7 +227,8 @@ The window cannot be built where the tests run (it needs the system web view), s
 1. Open the popup with Mohona running: the header shows "Mohona x.y.z is running" with a green dot; four counters show running, waiting, finished and failed downloads. Start a big download: it appears under "Downloads" with a progress bar, speed and time left, and "Total speed" shows; they update every second or two.
 2. Stop Mohona (`mohona` daemon quit or the tray's Quit): the dot turns yellow, "Start Mohona" shows and works.
 3. The theme box in the header offers the twelve themes; the popup changes at once and keeps the choice after closing it. Check at least one dark theme (Forest, Earth, River) and one light (Sunny, Water): all text readable.
-4. Finished files appear under "Recently finished"; media found on a page under "Media on this page"; "Settings" opens the same options as before.
+4. Languages: the popup's first box lists the same languages as the app, each as its own name followed by the English name. Pick বাংলা · Bengali: every word of the popup (counters, headings, buttons, settings) changes and the choice is still there when you open the popup again. Pick العربية · Arabic: the popup turns right to left. A fresh browser profile starts in the browser's own language when it is one of the list.
+5. Finished files appear under "Recently finished"; media found on a page under "Media on this page"; "Settings" opens the same options as before.
 
 ## Store packaging
 

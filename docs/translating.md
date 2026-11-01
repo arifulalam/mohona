@@ -6,7 +6,7 @@ Anyone can add another language, or improve one, without writing code. The trans
 
 ## What is translated
 
-The app window: every button, label, message and table. Not translated: messages that the engine itself writes (for example "the address must start with http://") and the names of your own categories and queues. The browser extension's popup is English only for now.
+The app window: every button, label, message and table. Not translated: messages that the engine itself writes (for example "the address must start with http://"), messages written by the extension's background (such as "Sent to Mohona: ...") and the names of your own categories and queues. The browser extension's popup is translated too, with its own, smaller set of files (see below). 
 
 ## Add a new language (about an hour for the whole window)
 
@@ -37,6 +37,10 @@ You need the `app` folder and Node.js (the same as for building the app).
 3. Check your work: `npm run i18n:check` lists every language with how many texts are translated, and says what is missing or wrong (a `{name}` that was changed, a text that no longer exists).
 4. Start the app (`npm run dev`, or `npm run tauri dev`). Your language is in the list already, with both names ("नेपाली · Nepali"). Click through every window (Add, Settings, Queues, Schedule, Categories, Details) and look for texts that are cut off or sound strange.
 5. Send us the file `ne.json` (a pull request, an e-mail, or an issue with the file attached) so everyone gets it. Nothing else has to change: the program finds every file in `src/locales` by itself.
+
+## The browser extension's popup
+
+The popup of the extension has its own language files in `extension/src/locales` (about 55 short texts, most of them the same as in the app) and the same format. In the `extension` folder, `npm run i18n -- --new ne` starts `src/locales/ne.json`; fill it in as above, run `npm run build`, and load the extension again. The popup has its own language box and uses the browser's language the first time.
 
 ## Improve an existing language
 

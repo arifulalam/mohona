@@ -1,9 +1,12 @@
 import type { Reply, Request } from "./messages";
 import type { Outcome } from "./protocol";
 import type { Settings } from "./settings";
+import { label as languageLabel, LANGUAGES, loadLanguage, saveLanguage, translator, type Language, type Translate } from "./i18n";
 import { ALL_THEMES, applyTheme, loadTheme, saveTheme } from "./popuptheme";
 import type { DownloadRow } from "./protocol";
 import { bytes, eta, isRunning, nameOf, speed, speeds, summarize } from "./summary";
+
+let t: Translate = translator({});
 
 const $ = <T extends HTMLElement>(id: string): T => document.getElementById(id) as T;
 
@@ -15,13 +18,13 @@ function describe(outcome: Outcome | null): string {
   if (!outcome) return "";
   switch (outcome.kind) {
     case "added":
-      return "Added to Mohona.";
+      return t("Added to Mohona.");
     case "streaming":
-      return `Stream download started. It will be saved in ${outcome.folder}.`;
+      return t("Stream download started. It will be saved in {folder}.", { folder: outcome.folder });
     case "duplicate":
-      return `Not added: ${outcome.message}`;
+      return t("Not added: {message}", { message: outcome.message });
     case "error":
-      return `Could not add: ${outcome.message}`;
+      return t("Could not add: {message}", { message: outcome.message });
   }
 }
 
@@ -38,13 +41,13 @@ async function refresh(): Promise<void> {
   $<HTMLButtonElement>("add").disabled = s.state === "host_missing" || s.state === "incompatible";
   switch (s.state) {
     case "ready":
-      text.textContent = `Mohona ${s.version} is running`;
+      text.textContent = t("Mohona {version} is running", { version: s.version });
       break;
     case "engine_stopped":
-      text.textContent = "Mohona is not running";
+      text.textContent = t("Mohona is not running");
       break;
     case "host_missing":
-      text.textContent = `Mohona is not connected: ${s.message}. Run "mohona-host install".`;
+      text.textContent = t("Mohona is not connected: {message}. Run \"mohona-host install\".", { message: s.message });
       break;
     case "incompatible":
       text.textContent = s.message;
@@ -82,7 +85,7 @@ $<HTMLButtonElement>("saveMore").addEventListener("click", async () => {
     settings: { minSizeBytes: Number.isFinite(mb) && mb > 0 ? Math.round(mb * 1_048_576) : 0, excludedHosts },
   });
   if (reply.kind === "settings") {
-    $("savedMore").textContent = "Saved.";
+    $("savedMore").textContent = t("Saved.");
     showMore(reply.settings);
   }
 });
@@ -112,10 +115,10 @@ async function showExpired(): Promise<void> {
     label.textContent = download.filename ?? download.url;
     label.title = download.url;
     const button = document.createElement("button");
-    button.textContent = "Refresh link";
+    button.textContent = t("Refresh link");
     button.addEventListener("click", async () => {
       button.disabled = true;
-      button.textContent = "Looking…";
+      button.textContent = t("Looking…");
       await ask({ kind: "refreshDownload", id: download.id });
       await refresh();
       await showExpired();
@@ -135,7 +138,7 @@ async function showMedia(): Promise<void> {
   if (reply.media.length === 0) {
     const none = document.createElement("li");
     none.className = "empty";
-    none.textContent = "Nothing found yet. Play the video, then open this again.";
+    none.textContent = t("Nothing found yet. Play the video, then open this again.");
     list.append(none);
   }
   for (const media of reply.media) {
@@ -146,11 +149,11 @@ async function showMedia(): Promise<void> {
     label.textContent = media.name;
     label.title = media.url;
     const info = document.createElement("small");
-    info.textContent = [media.kind === "file" ? "file" : media.kind.toUpperCase(), size(media.size)]
+    info.textContent = [media.kind === "file" ? t("file") : media.kind.toUpperCase(), size(media.size)]
       .filter(Boolean)
       .join(" ");
     const button = document.createElement("button");
-    button.textContent = "Download";
+    button.textContent = t("Download");
     button.addEventListener("click", async () => {
       button.disabled = true;
       const answer = await ask({ kind: "downloadMedia", media });
@@ -183,6 +186,7 @@ const LABEL: Record<string, string> = {
   paused: "Paused",
   retrying: "Retrying",
 };
+const word = (status: string): string => t(LABEL[status] ?? status);
 
 let seen = new Map<number, number>();
 let seenAt = 0;
@@ -218,16 +222,16 @@ function showDownloads(rows: DownloadRow[]): void {
     name.textContent = nameOf(row);
     name.title = row.url;
     const state = document.createElement("small");
-    state.textContent = percent === null ? (LABEL[row.status] ?? row.status) : `${Math.floor(percent)}%`;
+    state.textContent = percent === null ? word(row.status) : `${Math.floor(percent)}%`;
     top.append(name, state);
     const perSecond = rate.get(row.id) ?? 0;
     const left = row.size && perSecond > 0 ? eta((row.size - row.downloaded) / perSecond) : "";
     const info = document.createElement("small");
     info.textContent = [
-      LABEL[row.status] ?? row.status,
-      row.size ? `${bytes(row.downloaded)} of ${bytes(row.size)}` : bytes(row.downloaded),
+      word(row.status),
+      row.size ? t("{done} of {total}", { done: bytes(row.downloaded), total: bytes(row.size) }) : bytes(row.downloaded),
       perSecond > 0 ? speed(perSecond) : "",
-      left ? `${left} left` : "",
+      left ? t("{time} left", { time: left }) : "",
     ]
       .filter(Boolean)
       .join(" · ");
@@ -237,7 +241,7 @@ function showDownloads(rows: DownloadRow[]): void {
   if (open.length > 6) {
     const more = document.createElement("li");
     more.className = "empty";
-    more.textContent = `and ${open.length - 6} more in the Mohona app`;
+    more.textContent = t("and {n} more in the Mohona app", { n: open.length - 6 });
     active.append(more);
   }
 
@@ -264,20 +268,48 @@ async function pollDownloads(): Promise<void> {
   if (reply.kind === "downloads") showDownloads(reply.downloads);
 }
 
-function setUpTheme(): void {
+function storageOrNull(): Storage | null {
+  try {
+    return localStorage;
+  } catch {
+    return null;
+  }
+}
+
+/** Puts the chosen language's words on everything the page has already drawn. */
+function translatePage(language: Language): void {
+  t = translator(language.dict);
+  document.documentElement.lang = language.code;
+  document.documentElement.dir = language.dir;
+  for (const el of document.querySelectorAll<HTMLElement>("[data-t]")) el.textContent = t(el.dataset.t ?? "");
+  for (const el of document.querySelectorAll<HTMLElement>("[data-t-label]")) {
+    const text = t(el.dataset.tLabel ?? "");
+    el.setAttribute("aria-label", text);
+    el.title = text;
+  }
+  for (const el of document.querySelectorAll<HTMLInputElement>("[data-t-placeholder]")) el.placeholder = t(el.dataset.tPlaceholder ?? "");
   const select = $<HTMLSelectElement>("theme");
+  const current = select.value;
+  select.replaceChildren();
   for (const theme of ALL_THEMES) {
     const option = document.createElement("option");
     option.value = theme.id;
-    option.textContent = theme.label;
+    option.textContent = t(theme.label);
     select.append(option);
   }
-  let storage: Storage | null = null;
-  try {
-    storage = localStorage;
-  } catch {
-    storage = null;
-  }
+  select.value = current || "system";
+}
+
+async function redraw(): Promise<void> {
+  await refresh();
+  await showExpired();
+  await showMedia();
+  await pollDownloads();
+}
+
+function setUpTheme(): void {
+  const select = $<HTMLSelectElement>("theme");
+  const storage = storageOrNull();
   const current = loadTheme(storage);
   select.value = current;
   applyTheme(document.documentElement, current);
@@ -287,7 +319,29 @@ function setUpTheme(): void {
   });
 }
 
+function setUpLanguage(): void {
+  const select = $<HTMLSelectElement>("language");
+  for (const l of LANGUAGES) {
+    const option = document.createElement("option");
+    option.value = l.code;
+    option.textContent = languageLabel(l);
+    option.lang = l.code;
+    select.append(option);
+  }
+  const storage = storageOrNull();
+  const current = loadLanguage(storage, navigator.languages ?? [navigator.language]);
+  select.value = current.code;
+  translatePage(current);
+  select.addEventListener("change", () => {
+    const next = LANGUAGES.find((l) => l.code === select.value) ?? LANGUAGES[0]!;
+    saveLanguage(storage, next.code);
+    translatePage(next);
+    void redraw();
+  });
+}
+
 setUpTheme();
+setUpLanguage();
 
 void (async () => {
   const reply = await ask({ kind: "getSettings" });
