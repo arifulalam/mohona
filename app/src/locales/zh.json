@@ -1,5 +1,6 @@
 {
   "_name": "简体中文",
+  "_english": "Chinese",
   "_dir": "ltr",
   "up to {speed} KB/s": "最高 {speed} KB/s",
   "(waiting)": "（等待中）",

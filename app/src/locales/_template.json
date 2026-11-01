@@ -1,5 +1,6 @@
 {
   "_name": "Your language's name, as its speakers write it",
+  "_english": "The same name in English",
   "_dir": "ltr",
   "(waiting)": "",
   "{action} in {seconds} s.": "",

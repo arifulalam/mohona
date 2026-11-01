@@ -18,6 +18,7 @@ You need the `app` folder and Node.js (the same as for building the app).
    ```json
    {
      "_name": "Your language's name, as its speakers write it",
+     "_english": "The same name in English",
      "_dir": "ltr",
      "Settings": "",
      "Pause {name}": "",
@@ -26,6 +27,7 @@ You need the `app` folder and Node.js (the same as for building the app).
    ```
 
    - `_name`: the language's own name, as it should appear in the list ("नेपाली").
+   - `_english`: the same name in English ("Nepali"). The list shows both, "नेपाली · Nepali", so people who cannot read the script still know which language it is.
    - `_dir`: `"ltr"` for left to right, `"rtl"` for right to left (Arabic, Urdu, Persian, Hebrew).
    - On the left of each line is the English text. **Never change it.** Write the translation between the second pair of quotes.
    - `{name}`, `{count}`, `{done}` and the like are filled in by the program. Keep them exactly as they are, and move them where they belong in your sentence: `"{done} of {total}"` may become `"{total} मध्ये {done}"`.
@@ -33,7 +35,7 @@ You need the `app` folder and Node.js (the same as for building the app).
    - Keep short texts short: they are on buttons.
    - A `"` inside a text is written `\"`.
 3. Check your work: `npm run i18n:check` lists every language with how many texts are translated, and says what is missing or wrong (a `{name}` that was changed, a text that no longer exists).
-4. Start the app (`npm run dev`, or `npm run tauri dev`). Your language is in the list already, with the name you gave it. Click through every window (Add, Settings, Queues, Schedule, Categories, Details) and look for texts that are cut off or sound strange.
+4. Start the app (`npm run dev`, or `npm run tauri dev`). Your language is in the list already, with both names ("नेपाली · Nepali"). Click through every window (Add, Settings, Queues, Schedule, Categories, Details) and look for texts that are cut off or sound strange.
 5. Send us the file `ne.json` (a pull request, an e-mail, or an issue with the file attached) so everyone gets it. Nothing else has to change: the program finds every file in `src/locales` by itself.
 
 ## Improve an existing language

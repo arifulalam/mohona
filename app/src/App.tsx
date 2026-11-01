@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { I18n, LANGUAGES, loadLanguage, saveLanguage, translator, useT } from "./i18n";
+import { I18n, label, LANGUAGES, loadLanguage, saveLanguage, translator, useT } from "./i18n";
 import { AddDialog, Modal } from "./AddDialog";
 import { CategoriesDialog } from "./CategoriesDialog";
 import { loadClipboardWatch, saveClipboardWatch, useClipboardOffer } from "./clipboard";
@@ -153,7 +153,7 @@ function Main({ api, every, language, onLanguage }: { api: Api; every?: number; 
         <select className="btn" value={language} onChange={(e) => onLanguage(e.target.value)} aria-label={t("Language")} title={t("Language")}>
           {LANGUAGES.map((l) => (
             <option key={l.code} value={l.code} lang={l.code}>
-              {l.name}
+              {label(l)}
             </option>
           ))}
         </select>

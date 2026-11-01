@@ -38,7 +38,7 @@ export function review(dict, texts) {
 
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
   const texts = findTexts();
-  const template = { _name: "Your language's name, as its speakers write it", _dir: "ltr", ...Object.fromEntries(texts.map((t) => [t, ""])) };
+  const template = { _name: "Your language's name, as its speakers write it", _english: "The same name in English", _dir: "ltr", ...Object.fromEntries(texts.map((t) => [t, ""])) };
   writeFileSync(join(locales, "_template.json"), JSON.stringify(template, null, 2) + "\n");
   console.log(`${texts.length} texts; template written to src/locales/_template.json`);
 

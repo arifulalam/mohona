@@ -5,7 +5,7 @@ import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { findTexts, review } from "../scripts/i18n.mjs";
 import { App } from "../src/App";
-import { fill, LANGUAGES, languageFrom, pickLanguage, translator } from "../src/i18n";
+import { fill, label, LANGUAGES, languageFrom, pickLanguage, translator } from "../src/i18n";
 import type { Api } from "../src/types";
 
 afterEach(() => {
@@ -42,6 +42,8 @@ describe("translating", () => {
     expect(LANGUAGES[0]?.code).toBe("en");
     expect(LANGUAGES.map((l) => l.code).sort()).toEqual(["en", ...files.map((f) => f.replace(".json", ""))].sort());
     for (const l of LANGUAGES) expect(l.name.length).toBeGreaterThan(0);
+    expect(label(LANGUAGES.find((l) => l.code === "bn")!)).toBe("বাংলা · Bengali");
+    expect(label(LANGUAGES[0]!)).toBe("English");
     for (const code of ["bn", "hi", "ur", "ar", "es", "fr", "de", "pt", "ru", "zh", "ja", "id", "tr"]) expect(LANGUAGES.some((l) => l.code === code)).toBe(true);
     expect(LANGUAGES.find((l) => l.code === "ar")?.dir).toBe("rtl");
     expect(LANGUAGES.find((l) => l.code === "ur")?.dir).toBe("rtl");
@@ -56,6 +58,7 @@ describe("translating", () => {
     const shipped = ["ar", "bn", "de", "es", "fr", "hi", "id", "ja", "pt", "ru", "tr", "ur", "zh"].includes(file.replace(".json", ""));
     expect({ missing: shipped ? missing : [], stale, broken }).toEqual({ missing: [], stale: [], broken: [] });
     expect(dict._name).toBeTruthy();
+    expect(dict._english).toBeTruthy();
     expect(["ltr", "rtl"]).toContain(dict._dir);
   });
 
@@ -77,13 +80,13 @@ describe("the window in another language", () => {
   it("switches the words, remembers the choice and sets the direction", async () => {
     render(<App api={api} every={50} />);
     expect(await screen.findByRole("button", { name: "Settings" })).toBeTruthy();
-    await userEvent.selectOptions(screen.getByLabelText("Language"), "বাংলা");
+    await userEvent.selectOptions(screen.getByLabelText("Language"), "bn");
     expect(await screen.findByRole("button", { name: "সেটিংস" })).toBeTruthy();
     expect(screen.getByRole("button", { name: "সময়সূচি" })).toBeTruthy();
     expect(localStorage.getItem("mohona.language")).toBe("bn");
     expect(document.documentElement.lang).toBe("bn");
     expect(document.documentElement.dir).toBe("ltr");
-    await userEvent.selectOptions(screen.getByLabelText("ভাষা"), "العربية");
+    await userEvent.selectOptions(screen.getByLabelText("ভাষা"), "ar");
     expect(await screen.findByRole("button", { name: "الإعدادات" })).toBeTruthy();
     expect(document.documentElement.dir).toBe("rtl");
     await userEvent.selectOptions(screen.getByLabelText("اللغة"), "English");

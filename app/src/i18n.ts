@@ -7,6 +7,8 @@ export interface Language {
   code: string;
   /** The language's own name, as its speakers write it. */
   name: string;
+  /** The name in English, shown beside it so anyone can tell which language it is. */
+  english: string;
   dir: "ltr" | "rtl";
   dict: Dict;
 }
@@ -20,10 +22,13 @@ export const tr = (text: string): string => text;
 // Every file in locales/ is a language: drop in `xx.json` and it appears in the list.
 const files = import.meta.glob("./locales/*.json", { eager: true, import: "default" }) as Record<string, Dict>;
 
-export const ENGLISH: Language = { code: "en", name: "English", dir: "ltr", dict: {} };
+export const ENGLISH: Language = { code: "en", name: "English", english: "English", dir: "ltr", dict: {} };
+
+/** "বাংলা · Bengali"; just "English" when both are the same. */
+export const label = (l: Language): string => (l.english && l.english !== l.name ? `${l.name} · ${l.english}` : l.name);
 
 export function languageFrom(code: string, dict: Dict): Language {
-  return { code, name: dict._name || code, dir: dict._dir === "rtl" ? "rtl" : "ltr", dict };
+  return { code, name: dict._name || code, english: dict._english || "", dir: dict._dir === "rtl" ? "rtl" : "ltr", dict };
 }
 
 export const LANGUAGES: Language[] = [

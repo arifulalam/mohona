@@ -1,5 +1,6 @@
 {
   "_name": "Deutsch",
+  "_english": "German",
   "_dir": "ltr",
   "up to {speed} KB/s": "bis zu {speed} KB/s",
   "(waiting)": "(wartet)",
