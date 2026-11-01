@@ -1,4 +1,4 @@
-import type { Api, Category, Config, ConfigChange, EngineStatus, ExtensionSettings, Details, Plan, PlanWindow, Queue, Row } from "./types";
+import type { Api, Category, Config, ConfigChange, EngineStatus, ExtensionSettings, Details, Plan, PlanWindow, Queue, Row, Rule } from "./types";
 
 /** True inside the Tauri window; false in a plain browser (development, tests). */
 export function insideTauri(): boolean {
@@ -20,6 +20,8 @@ function tauriApi(): Api {
     list: () => call<Row[]>("list_downloads"),
     add: (url, folder, queue) => call<number>("add_download", { url, folder, queue }),
     details: (id) => call<Details>("get_details", { id }),
+    rules: () => call<Rule[]>("get_rules"),
+    setRules: (rules) => call<Rule[]>("set_rules", { rules }),
     queues: () => call<Queue[]>("get_queues"),
     addQueue: (name) => call<Queue[]>("add_queue", { name }),
     renameQueue: (id, name) => call<Queue[]>("rename_queue", { id, name }),
@@ -75,6 +77,8 @@ export function demoApi(tick = 1000): Api {
   let nextCat = 10;
   let queueList: Queue[] = [{ id: 1, name: "Main", maxActive: 4, speedLimit: null, windows: [], openNow: true }];
   let nextQueue = 2;
+  let ruleList: Rule[] = [];
+  let nextRule = 1;
   const checkName = (name: string) => {
     const n = name.trim();
     if (!n || n.length > 40) throw new Error("a queue's name must be 1 to 40 characters");
@@ -131,6 +135,17 @@ export function demoApi(tick = 1000): Api {
             })
           : [],
       };
+    },
+    rules: async () => (need(), ruleList),
+    setRules: async (rules) => {
+      need();
+      rules.forEach((r, n) => {
+        if (!r.name.trim()) throw new Error(`rule ${n + 1}: the name must be 1 to 60 characters`);
+        if (!r.host && !r.extensions.length && !r.urlContains) throw new Error(`rule ${n + 1}: give at least one condition, or the rule would match everything`);
+        if (!r.block && !r.folder && r.queue === null && r.sort === null) throw new Error(`rule ${n + 1}: give it something to do`);
+        if (r.folder && /(^|[\\/])\.\.([\\/]|$)/.test(r.folder)) throw new Error(`rule ${n + 1}: a folder name inside the download folder cannot use ".."`);
+      });
+      return (ruleList = rules.map((r) => ({ ...r, id: r.id > 0 ? r.id : nextRule++ })));
     },
     queues: async () => (need(), queueList),
     addQueue: async (name) => (need(), (queueList = [...queueList, { id: nextQueue++, name: checkName(name), maxActive: 3, speedLimit: null, windows: [], openNow: true }])),

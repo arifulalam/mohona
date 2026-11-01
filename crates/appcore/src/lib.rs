@@ -123,6 +123,49 @@ pub struct Queue {
     pub open_now: bool,
 }
 
+/// One rule, as the page shows it: what to look for, and what to do.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Rule {
+    /// 0 for a rule that is not saved yet.
+    #[serde(default)]
+    pub id: i64,
+    pub name: String,
+    #[serde(default)]
+    pub enabled: bool,
+    #[serde(default)]
+    pub host: Option<String>,
+    #[serde(default)]
+    pub extensions: Vec<String>,
+    #[serde(default)]
+    pub url_contains: Option<String>,
+    #[serde(default)]
+    pub folder: Option<String>,
+    #[serde(default)]
+    pub queue: Option<i64>,
+    #[serde(default)]
+    pub sort: Option<bool>,
+    #[serde(default)]
+    pub block: bool,
+}
+
+impl From<mohona_daemon::rules::Rule> for Rule {
+    fn from(r: mohona_daemon::rules::Rule) -> Self {
+        Rule {
+            id: r.id,
+            name: r.name,
+            enabled: r.enabled,
+            host: r.when.host,
+            extensions: r.when.extensions,
+            url_contains: r.when.url_contains,
+            folder: r.then.folder,
+            queue: r.then.queue,
+            sort: r.then.sort,
+            block: r.then.block,
+        }
+    }
+}
+
 /// One connection of a running download, as the page shows it.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -529,6 +572,51 @@ impl Engine {
                 .collect()),
             _ => Err(AppError::Engine("unexpected answer from the engine".into())),
         }
+    }
+
+    /// The rules in the order they are tried.
+    pub async fn rules(&self) -> Result<Vec<Rule>, AppError> {
+        match self.call(Call::GetRules).await? {
+            Response::Rules { rules } => Ok(rules.into_iter().map(Into::into).collect()),
+            _ => Err(AppError::Engine("unexpected answer from the engine".into())),
+        }
+    }
+
+    /// Replaces the whole list (checked by the engine) and returns what was saved.
+    /// Conditions the page does not show (the page a link was on) are kept.
+    pub async fn set_rules(&self, rules: Vec<Rule>) -> Result<Vec<Rule>, AppError> {
+        let old = match self.call(Call::GetRules).await? {
+            Response::Rules { rules } => rules,
+            _ => Vec::new(),
+        };
+        let rules = rules
+            .into_iter()
+            .map(|r| {
+                let kept = old
+                    .iter()
+                    .find(|o| o.id == r.id)
+                    .and_then(|o| o.when.referrer_host.clone());
+                mohona_daemon::rules::Rule {
+                    id: r.id,
+                    name: r.name,
+                    enabled: r.enabled,
+                    when: mohona_daemon::rules::When {
+                        host: r.host,
+                        extensions: r.extensions,
+                        url_contains: r.url_contains,
+                        referrer_host: kept,
+                    },
+                    then: mohona_daemon::rules::Then {
+                        folder: r.folder,
+                        queue: r.queue,
+                        sort: r.sort,
+                        block: r.block,
+                    },
+                }
+            })
+            .collect();
+        self.call(Call::SetRules { rules }).await?;
+        self.rules().await
     }
 
     pub async fn plan(&self) -> Result<Plan, AppError> {

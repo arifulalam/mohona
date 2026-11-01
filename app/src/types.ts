@@ -89,6 +89,21 @@ export interface QueueChange {
   windows?: PlanWindow[];
 }
 
+/** One rule: what to look for in a new download, and what to do with it. */
+export interface Rule {
+  /** 0 for a rule that is not saved yet. */
+  id: number;
+  name: string;
+  enabled: boolean;
+  host: string | null;
+  extensions: string[];
+  urlContains: string | null;
+  folder: string | null;
+  queue: number | null;
+  sort: boolean | null;
+  block: boolean;
+}
+
 /** One connection of a running download. */
 export interface Connection {
   number: number;
@@ -129,6 +144,9 @@ export interface Api {
   list(): Promise<Row[]>;
   add(url: string, folder: string | null, queue?: number): Promise<number>;
   details(id: number): Promise<Details>;
+  rules(): Promise<Rule[]>;
+  /** Replaces the whole list; resolves with what was saved. */
+  setRules(rules: Rule[]): Promise<Rule[]>;
   queues(): Promise<Queue[]>;
   addQueue(name: string): Promise<Queue[]>;
   renameQueue(id: number, name: string): Promise<Queue[]>;

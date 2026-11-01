@@ -620,4 +620,6 @@ A `401` now becomes its own error (`NetError::Unauthorized`) that names the kind
 
 **Where it is edited.** `mohona rules list|add|remove|enable|disable|test`, and `GET`/`PUT /v1/rules` and `POST /v1/rules/test` of the API (changing needs the admin scope, testing the read scope).
 
-**Not included yet.** Conditions on the file size or type reported by the server (they are known only after the first request), renaming files, a window in the app for editing rules, and rules for streams, blob links and torrents.
+**In the app (added later).** The "Rules" button opens a window that lists the rules (switch on or off, move up or down, remove) and adds one: name, site, file types, text in the address, and either "block" or a folder and a queue. The same checks as the engine's run first. Conditions the window does not show (the page a link was on, sorting) are kept when the list is saved.
+
+**Not included yet.** Conditions on the file size or type reported by the server (they are known only after the first request), renaming files, rules for streams, blob links and torrents.

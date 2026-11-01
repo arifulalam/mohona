@@ -3,7 +3,7 @@ use std::path::Path;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
-use mohona_appcore::{AppError, Engine, SpeedTracker};
+use mohona_appcore::{AppError, Engine, Rule, SpeedTracker};
 use mohona_daemon::{serve, DaemonInfo, ServerConfig};
 use mohona_manager::{Manager, ManagerConfig};
 use mohona_net::{ClientConfig, HttpClient};
@@ -378,5 +378,39 @@ async fn details_of_a_download_are_readable_and_unknown_ones_are_refused() {
     assert!(seen, "no connections were reported");
     assert!(engine.details(9999).await.is_err());
     engine.cancel(id).await.unwrap();
+    shutdown.notify_one();
+}
+
+#[tokio::test]
+async fn rules_are_saved_numbered_and_checked() {
+    let dir = tempfile::tempdir().unwrap();
+    let (engine, shutdown) = engine(dir.path()).await;
+    assert!(engine.rules().await.unwrap().is_empty());
+    let rule = |name: &str| Rule {
+        id: 0,
+        name: name.into(),
+        enabled: true,
+        host: None,
+        extensions: vec!["zip".into()],
+        url_contains: None,
+        folder: Some("Zips".into()),
+        queue: None,
+        sort: None,
+        block: false,
+    };
+    let saved = engine
+        .set_rules(vec![rule("One"), rule("Two")])
+        .await
+        .unwrap();
+    assert_eq!(saved.iter().map(|r| r.id).collect::<Vec<_>>(), vec![1, 2]);
+    let mut again = saved.clone();
+    again[0].enabled = false;
+    again.remove(1);
+    let saved = engine.set_rules(again).await.unwrap();
+    assert_eq!((saved.len(), saved[0].id, saved[0].enabled), (1, 1, false));
+    let mut bad = rule("Bad");
+    bad.folder = Some("../x".into());
+    assert!(engine.set_rules(vec![bad]).await.is_err());
+    assert_eq!(engine.rules().await.unwrap().len(), 1);
     shutdown.notify_one();
 }

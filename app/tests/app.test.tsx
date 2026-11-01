@@ -2,7 +2,7 @@ import { cleanup, render, screen, waitFor, within } from "@testing-library/react
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { App } from "../src/App";
-import type { Api, Category, Config, ConfigChange, EngineStatus, ExtensionSettings, Details, Plan, PlanWindow, Queue, Row } from "../src/types";
+import type { Api, Category, Config, ConfigChange, EngineStatus, ExtensionSettings, Details, Plan, PlanWindow, Queue, Row, Rule } from "../src/types";
 
 const row = (id: number, name: string, status: string, extra: Partial<Row> = {}): Row => ({
   id, name, url: `https://x.test/${name}`, status, downloaded: 50, size: 100, percent: 50, speed: 0, eta: null,
@@ -18,6 +18,7 @@ function fake(initial: Row[], running = true) {
   let cfg: Config = { downloadFolder: "C:\\Dl", defaultFolder: "C:\\Dl", speedLimit: null, maxActive: 4, notifications: true, keepInTray: true, sortByType: false };
   let ext: ExtensionSettings = { intercept: true, minSizeBytes: 0, excludedHosts: [], videoButton: true, buttonHiddenHosts: [], autoRefresh: true };
   let queues: Queue[] = [{ id: 1, name: "Main", maxActive: 4, speedLimit: null, windows: [], openNow: true }];
+  let rules: Rule[] = [];
   const status = (): EngineStatus => ({ running: engine, version: engine ? "9.9" : null, message: null });
   const api = {
     status: vi.fn(async () => status()),
@@ -46,6 +47,12 @@ function fake(initial: Row[], running = true) {
           { number: 2, start: 50, end: 100, received: 10, speed: 2048, state: "active" },
         ],
       };
+    }),
+    rules: vi.fn(async () => rules),
+    setRules: vi.fn(async (next: Rule[]) => {
+      if (next.some((r) => r.folder?.includes(".."))) throw new Error("rule: a folder name inside the download folder cannot use \"..\"");
+      let id = rules.reduce((m, r) => Math.max(m, r.id), 0);
+      return (rules = next.map((r) => ({ ...r, id: r.id || ++id })));
     }),
     queues: vi.fn(async () => queues),
     addQueue: vi.fn(async (name: string) => {
@@ -276,6 +283,46 @@ describe("App", () => {
     expect(await within(dialog).findByText("Archives")).toBeTruthy();
     await userEvent.click(within(dialog).getByRole("button", { name: "Remove category Archives" }));
     await waitFor(() => expect(within(dialog).queryByText("Archives")).toBeNull());
+  });
+
+  it("lists rules, adds one with checks, switches it off, reorders and removes it", async () => {
+    const api = fake([]);
+    render(<App api={api} every={50} />);
+    await userEvent.click(await screen.findByRole("button", { name: "Rules" }));
+    const dialog = await screen.findByRole("dialog");
+    expect(await within(dialog).findByText("No rules yet.")).toBeTruthy();
+    // Checks come before anything is sent.
+    await userEvent.click(within(dialog).getByRole("button", { name: "Add" }));
+    expect((await within(dialog).findByRole("alert")).textContent).toContain("name");
+    await userEvent.type(within(dialog).getByLabelText("Rule name"), "Zips");
+    await userEvent.click(within(dialog).getByRole("button", { name: "Add" }));
+    expect((await within(dialog).findByRole("alert")).textContent).toContain("at least one condition");
+    await userEvent.type(within(dialog).getByLabelText("File types (such as zip, iso)"), ".ZIP, 7z");
+    await userEvent.click(within(dialog).getByRole("button", { name: "Add" }));
+    expect((await within(dialog).findByRole("alert")).textContent).toContain("Choose what to do");
+    expect(api.setRules).not.toHaveBeenCalled();
+    await userEvent.type(within(dialog).getByLabelText("Save in this folder (optional)"), "Archives");
+    await userEvent.click(within(dialog).getByRole("button", { name: "Add" }));
+    await waitFor(() => expect(api.setRules).toHaveBeenLastCalledWith([expect.objectContaining({ name: "Zips", extensions: ["zip", "7z"], folder: "Archives", block: false })]));
+    expect(await within(dialog).findByText("Types: zip, 7z → Folder: Archives")).toBeTruthy();
+    // A second one that blocks, then move it up.
+    await userEvent.type(within(dialog).getByLabelText("Rule name"), "No ads");
+    await userEvent.type(within(dialog).getByLabelText("Site (such as example.com)"), "ads.example.com");
+    await userEvent.click(within(dialog).getByLabelText("Block this download"));
+    await userEvent.click(within(dialog).getByRole("button", { name: "Add" }));
+    await waitFor(() => expect(within(dialog).getAllByRole("listitem")).toHaveLength(2));
+    await userEvent.click(within(dialog).getAllByRole("button", { name: "Move up" })[1]!);
+    await waitFor(() => expect(api.setRules.mock.lastCall![0].map((r: Rule) => r.name)).toEqual(["No ads", "Zips"]));
+    await userEvent.click(await within(dialog).findByLabelText("Use rule “No ads”"));
+    await waitFor(() => expect(api.setRules.mock.lastCall![0][0]?.enabled).toBe(false));
+    await userEvent.click(within(dialog).getAllByRole("button", { name: "Remove" })[0]!);
+    await waitFor(() => expect(within(dialog).getAllByRole("listitem")).toHaveLength(1));
+    // The engine's own refusal is shown.
+    await userEvent.type(within(dialog).getByLabelText("Rule name"), "Up");
+    await userEvent.type(within(dialog).getByLabelText("Address contains"), "x");
+    await userEvent.type(within(dialog).getByLabelText("Save in this folder (optional)"), "../up");
+    await userEvent.click(within(dialog).getByRole("button", { name: "Add" }));
+    expect((await within(dialog).findByRole("alert")).textContent).toContain("cannot use");
   });
 
   it("adds a queue, changes its limits, and sends new downloads to it", async () => {

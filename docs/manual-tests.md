@@ -253,6 +253,7 @@ The window cannot be built where the tests run (it needs the system web view), s
 3. Add a link of another type: it goes to the normal folder.
 4. `mohona rules add "Block" --contains blockme --block`, then add a link that contains "blockme": it is refused with a message naming the rule. `mohona rules disable 2` lets it through again.
 5. `mohona rules test https://example.com/a.zip` names the rule without adding anything.
+6. In the app press "Rules": the rules above are listed. Add one (name, site `example.com`, a folder), switch it off and on, move it with the arrows, remove it. A folder such as `..\x` is refused with a message.
 
 ## Store packaging
 

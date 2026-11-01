@@ -7,7 +7,7 @@ use std::time::Duration;
 
 use mohona_appcore::{
     AppError, Category, Config, ConfigChange, Engine, EngineStatus, ExtensionSettings, Plan,
-    Details, PlanWindow, Queue, QueueChange, Row, SpeedTracker, Watcher,
+    Details, PlanWindow, Queue, QueueChange, Row, Rule, SpeedTracker, Watcher,
 };
 use tauri::menu::{Menu, MenuItem};
 use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
@@ -186,6 +186,16 @@ async fn remove_category(app: State<'_, App>, id: i64) -> Result<Vec<Category>> 
 }
 
 #[tauri::command]
+async fn get_rules(app: State<'_, App>) -> Result<Vec<Rule>> {
+    app.engine.rules().await
+}
+
+#[tauri::command]
+async fn set_rules(app: State<'_, App>, rules: Vec<Rule>) -> Result<Vec<Rule>> {
+    app.engine.set_rules(rules).await
+}
+
+#[tauri::command]
 async fn get_queues(app: State<'_, App>) -> Result<Vec<Queue>> {
     app.engine.queues().await
 }
@@ -351,6 +361,8 @@ pub fn run() {
             set_extension_settings,
             get_details,
             read_clipboard,
+            get_rules,
+            set_rules,
             get_queues,
             add_queue,
             rename_queue,

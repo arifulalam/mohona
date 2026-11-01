@@ -32,7 +32,11 @@
       }
 
       * { box-sizing: border-box; }
-      html, body { overflow-x: hidden; }
+      html, body { overflow: hidden; }
+      /* The popup never scrolls as a whole: header and footer stay, the middle part scrolls. */
+      body { display: flex; flex-direction: column; max-height: 600px; }
+      main { flex: 1 1 auto; min-height: 0; overflow-x: hidden; overflow-y: auto; scrollbar-width: thin; scrollbar-color: var(--line) transparent; }
+      header, footer { flex: none; }
       /* Long text never widens the page: it wraps, and a long message scrolls inside its own box. */
       p, small, li, .empty, .muted, label { overflow-wrap: anywhere; min-width: 0; }
       .scrollbox { max-height: 6.5em; overflow: auto; overflow-wrap: anywhere; word-break: break-all; min-width: 0; padding-right: 2px; scrollbar-width: thin; scrollbar-color: var(--line) transparent; }
@@ -53,7 +57,7 @@
       .dot.stopped { background: #ffd166; }
       .dot.broken { background: #ff7b72; }
 
-      main { padding: 0 12px 12px; }
+      main { padding: 10px 12px 12px; }
       .stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin: -12px 0 12px; position: relative; }
       .stat { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 8px 6px; text-align: center; box-shadow: 0 2px 6px rgba(0,0,0,.08); }
       .stat b { display: block; font-size: 18px; line-height: 1.1; }
