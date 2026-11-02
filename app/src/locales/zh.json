@@ -239,5 +239,7 @@
   "Up to {count} connections": "最多 {count} 个连接",
   "Use profile “{name}”": "使用配置“{name}”",
   "User agent (optional)": "User-Agent（可选）",
-  "User agent: {value}": "User-Agent：{value}"
+  "User agent: {value}": "User-Agent：{value}",
+  "General": "常规",
+  "Settings groups": "设置分组"
 }

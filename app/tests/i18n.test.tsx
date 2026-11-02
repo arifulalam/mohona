@@ -79,8 +79,8 @@ describe("the window in another language", () => {
 
   it("switches the words, remembers the choice and sets the direction", async () => {
     render(<App api={api} every={50} />);
-    expect(await screen.findByRole("button", { name: "Settings" })).toBeTruthy();
-    await userEvent.selectOptions(screen.getByLabelText("Language"), "bn");
+    await userEvent.click(await screen.findByRole("button", { name: "Settings" }));
+    await userEvent.selectOptions(await screen.findByLabelText("Language"), "bn");
     expect(await screen.findByRole("button", { name: "সেটিংস" })).toBeTruthy();
     expect(screen.getByRole("button", { name: "সময়সূচি" })).toBeTruthy();
     expect(localStorage.getItem("mohona.language")).toBe("bn");

@@ -1,19 +1,14 @@
 import { useEffect, useMemo, useState } from "react";
-import { I18n, label, LANGUAGES, loadLanguage, saveLanguage, translator, useT } from "./i18n";
+import { I18n, LANGUAGES, loadLanguage, saveLanguage, translator, useT } from "./i18n";
 import { AddDialog, Modal } from "./AddDialog";
-import { CategoriesDialog } from "./CategoriesDialog";
 import { loadClipboardWatch, saveClipboardWatch, useClipboardOffer } from "./clipboard";
 import { DetailsDialog } from "./DetailsDialog";
 import { categoryCounts, categoryOf, SORTS, sortRows, type SortKey } from "./organize";
 import { allowed, counts, FILTERS, matches, type Filter } from "./filters";
 import { List } from "./List";
-import { QueuesDialog } from "./QueuesDialog";
-import { RulesDialog } from "./RulesDialog";
-import { ProfilesDialog } from "./ProfilesDialog";
-import { ScheduleDialog } from "./ScheduleDialog";
 import { actionName } from "./schedule";
-import { SettingsDialog } from "./SettingsDialog";
-import { applyTheme, loadTheme, saveTheme, THEMES, type Theme } from "./theme";
+import { SettingsWindow } from "./SettingsWindow";
+import { applyTheme, loadTheme, saveTheme, type Theme } from "./theme";
 import type { Api, Category } from "./types";
 import { useDownloads } from "./useDownloads";
 
@@ -52,12 +47,7 @@ function Main({ api, every, language, onLanguage }: { api: Api; every?: number; 
   const [adding, setAdding] = useState(false);
   const [removing, setRemoving] = useState(false);
   const [settings, setSettings] = useState(false);
-  const [schedule, setSchedule] = useState(false);
-  const [queuesOpen, setQueuesOpen] = useState(false);
-  const [rulesOpen, setRulesOpen] = useState(false);
-  const [profilesOpen, setProfilesOpen] = useState(false);
   const [queueList, setQueueList] = useState<{ id: number; name: string }[]>([]);
-  const [categories, setCategories] = useState(false);
   const [cats, setCats] = useState<Category[]>([]);
   const [category, setCategory] = useState<string | null>(null);
   const [sort, setSort] = useState<SortKey>(loadSort());
@@ -74,8 +64,8 @@ function Main({ api, every, language, onLanguage }: { api: Api; every?: number; 
 
   const running = d.engine?.running === true;
   useEffect(() => {
-    if (running && !categories) api.categories().then(setCats).catch(() => undefined);
-  }, [api, running, categories]);
+    if (running && !settings) api.categories().then(setCats).catch(() => undefined);
+  }, [api, running, settings]);
   useEffect(() => {
     try {
       localStorage.setItem("mohona.sort", sort);
@@ -142,38 +132,9 @@ function Main({ api, every, language, onLanguage }: { api: Api; every?: number; 
           {d.engine === null ? t("Connecting…") : running ? `${t("Engine running")}${d.engine.version ? ` (${d.engine.version})` : ""}` : t("Engine stopped")}
         </span>
         <div className="flex-1" />
-        <button className="btn" onClick={() => setCategories(true)} disabled={!running}>
-          {t("Categories")}
-        </button>
-        <button className="btn" onClick={() => setQueuesOpen(true)} disabled={!running}>
-          {t("Queues")}
-        </button>
-        <button className="btn" onClick={() => setRulesOpen(true)} disabled={!running}>
-          {t("Rules")}
-        </button>
-        <button className="btn" onClick={() => setProfilesOpen(true)} disabled={!running}>
-          {t("Site profiles")}
-        </button>
-        <button className="btn" onClick={() => setSchedule(true)} disabled={!running}>
-          {t("Schedule")}
-        </button>
-        <button className="btn" onClick={() => setSettings(true)} disabled={!running}>
+        <button className="btn" onClick={() => setSettings(true)}>
           {t("Settings")}
         </button>
-        <select className="btn" value={language} onChange={(e) => onLanguage(e.target.value)} aria-label={t("Language")} title={t("Language")}>
-          {LANGUAGES.map((l) => (
-            <option key={l.code} value={l.code} lang={l.code}>
-              {label(l)}
-            </option>
-          ))}
-        </select>
-        <select className="btn" value={theme} onChange={(e) => setTheme(e.target.value as Theme)} aria-label={t("Colour theme")} title={t("Colour theme")}>
-          {THEMES.map((th) => (
-            <option key={th.id} value={th.id}>
-              {t(th.label)}
-            </option>
-          ))}
-        </select>
       </header>
 
       {!running && d.engine !== null && (
@@ -324,12 +285,9 @@ function Main({ api, every, language, onLanguage }: { api: Api; every?: number; 
       {detailsId !== null && d.rows.some((r) => r.id === detailsId) && (
         <DetailsDialog api={api} row={d.rows.find((r) => r.id === detailsId)!} onClose={() => setDetailsId(null)} />
       )}
-      {categories && <CategoriesDialog api={api} onClose={() => setCategories(false)} />}
-      {queuesOpen && <QueuesDialog api={api} onClose={() => setQueuesOpen(false)} />}
-      {rulesOpen && <RulesDialog api={api} queues={queueList} onClose={() => setRulesOpen(false)} />}
-      {profilesOpen && <ProfilesDialog api={api} onClose={() => setProfilesOpen(false)} />}
-      {schedule && <ScheduleDialog api={api} onClose={() => setSchedule(false)} />}
-      {settings && <SettingsDialog api={api} clipboard={watchClipboard} onClipboard={setWatchClipboard} onClose={() => setSettings(false)} />}
+      {settings && (
+        <SettingsWindow api={api} running={running} language={language} onLanguage={onLanguage} theme={theme} onTheme={setTheme} clipboard={watchClipboard} onClipboard={setWatchClipboard} onClose={() => setSettings(false)} />
+      )}
       {adding && <AddDialog onAdd={addAll} queues={queueList} onBrowse={() => api.pickFolder()} defaultFolder={defaultFolder} onClose={() => setAdding(false)} />}
       {removing && (
         <Modal title={t("Remove from the list")} onClose={() => setRemoving(false)}>

@@ -9,6 +9,14 @@ const row = (id: number, name: string, status: string, extra: Partial<Row> = {})
   error: null, path: null, expired: false, ...extra,
 });
 
+/** Opens the settings window on one of its groups. */
+async function openGroup(name: string) {
+  await userEvent.click(await screen.findByRole("button", { name: "Settings" }));
+  const dialog = await screen.findByRole("dialog");
+  if (name !== "General") await userEvent.click(await within(dialog).findByRole("button", { name }));
+  return dialog;
+}
+
 function fake(initial: Row[], running = true) {
   let rows = initial;
   let clip: string | null = null;
@@ -174,7 +182,7 @@ describe("App", () => {
   it("saves the settings: limit, simultaneous downloads, and the browser's list of sites", async () => {
     const api = fake([]);
     render(<App api={api} every={50} />);
-    await userEvent.click(await screen.findByRole("button", { name: "Settings" }));
+    await openGroup("Downloads");
     const dialog = await screen.findByRole("dialog");
     await userEvent.type(await within(dialog).findByLabelText("Speed limit"), "2");
     const active = within(dialog).getByLabelText("Simultaneous downloads");
@@ -195,7 +203,7 @@ describe("App", () => {
   it("keeps the settings open and shows the reason when something is refused", async () => {
     const api = fake([]);
     render(<App api={api} every={50} />);
-    await userEvent.click(await screen.findByRole("button", { name: "Settings" }));
+    await openGroup("Downloads");
     const dialog = await screen.findByRole("dialog");
     await userEvent.type(await within(dialog).findByLabelText("Speed limit"), "abc");
     await userEvent.click(within(dialog).getByRole("button", { name: "Save" }));
@@ -225,7 +233,7 @@ describe("App", () => {
   it("saves a schedule window and the end action", async () => {
     const api = fake([]);
     render(<App api={api} every={50} />);
-    await userEvent.click(await screen.findByRole("button", { name: "Schedule" }));
+    await openGroup("Schedule");
     const dialog = await screen.findByRole("dialog");
     await userEvent.click(await within(dialog).findByRole("button", { name: "Add window" }));
     expect(within(dialog).getByText("Every day 23:00–06:00")).toBeTruthy();
@@ -239,7 +247,7 @@ describe("App", () => {
   it("refuses a bad window with a reason and keeps the dialog open", async () => {
     const api = fake([]);
     render(<App api={api} every={50} />);
-    await userEvent.click(await screen.findByRole("button", { name: "Schedule" }));
+    await openGroup("Schedule");
     const dialog = await screen.findByRole("dialog");
     const end = await within(dialog).findByLabelText("Window end");
     await userEvent.clear(end);
@@ -275,7 +283,7 @@ describe("App", () => {
   it("lists, adds and removes categories, and shows why one is refused", async () => {
     const api = fake([]);
     render(<App api={api} every={50} />);
-    await userEvent.click(await screen.findByRole("button", { name: "Categories" }));
+    await openGroup("Categories");
     const dialog = await screen.findByRole("dialog");
     expect(await within(dialog).findByText("Compressed")).toBeTruthy();
     await userEvent.type(within(dialog).getByLabelText("Category name"), "Archives");
@@ -295,7 +303,7 @@ describe("App", () => {
   it("adds site profiles with checks, shows their settings, and switches or removes them", async () => {
     const api = fake([]);
     render(<App api={api} every={50} />);
-    await userEvent.click(await screen.findByRole("button", { name: "Site profiles" }));
+    await openGroup("Site profiles");
     const dialog = await screen.findByRole("dialog");
     expect(await within(dialog).findByText("No site profiles yet.")).toBeTruthy();
     const add = () => userEvent.click(within(dialog).getByRole("button", { name: "Add" }));
@@ -326,7 +334,7 @@ describe("App", () => {
   it("lists rules, adds one with checks, switches it off, reorders and removes it", async () => {
     const api = fake([]);
     render(<App api={api} every={50} />);
-    await userEvent.click(await screen.findByRole("button", { name: "Rules" }));
+    await openGroup("Rules");
     const dialog = await screen.findByRole("dialog");
     expect(await within(dialog).findByText("No rules yet.")).toBeTruthy();
     // Checks come before anything is sent.
@@ -366,7 +374,7 @@ describe("App", () => {
   it("adds a queue, changes its limits, and sends new downloads to it", async () => {
     const api = fake([]);
     render(<App api={api} every={50} />);
-    await userEvent.click(await screen.findByRole("button", { name: "Queues" }));
+    await openGroup("Queues");
     let dialog = await screen.findByRole("dialog");
     await userEvent.type(await within(dialog).findByLabelText("New queue name"), "Main");
     await userEvent.click(within(dialog).getByRole("button", { name: "Add" }));
@@ -424,9 +432,40 @@ describe("App", () => {
     await waitFor(async () => expect((await list()).map((t) => t.slice(0, 7))).toEqual(["a.zipCo", "b.zipCo", "movie.m", "notes.t"]));
   });
 
+  it("has one Settings button; its window lists the groups on the left and shows the chosen one on the right", async () => {
+    render(<App api={fake([])} every={50} />);
+    for (const gone of ["Categories", "Queues", "Rules", "Site profiles", "Schedule"]) expect(screen.queryByRole("button", { name: gone })).toBeNull();
+    expect(screen.queryByLabelText("Language")).toBeNull();
+    await userEvent.click(await screen.findByRole("button", { name: "Settings" }));
+    const dialog = await screen.findByRole("dialog", { name: "Settings" });
+    const nav = within(dialog).getByRole("navigation", { name: "Settings groups" });
+    expect(within(nav).getAllByRole("button").map((b) => b.textContent)).toEqual(["General", "Downloads", "Categories", "Queues", "Schedule", "Rules", "Site profiles"]);
+    // General is first and holds language and theme.
+    expect(within(dialog).getByLabelText("Language")).toBeTruthy();
+    expect(within(dialog).getByLabelText("Colour theme")).toBeTruthy();
+    await userEvent.click(within(nav).getByRole("button", { name: "Queues" }));
+    expect(await within(dialog).findByLabelText("New queue name")).toBeTruthy();
+    expect(within(dialog).queryByLabelText("Language")).toBeNull();
+    expect(within(nav).getByRole("button", { name: "Queues" }).getAttribute("aria-current")).toBe("page");
+    await userEvent.keyboard("{Escape}");
+    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+  });
+
+  it("keeps language and theme usable while the engine is stopped, and disables the groups that need it", async () => {
+    render(<App api={fake([], false)} every={50} />);
+    await userEvent.click(await screen.findByRole("button", { name: "Settings" }));
+    const dialog = await screen.findByRole("dialog");
+    expect(within(dialog).getByLabelText("Language")).toBeTruthy();
+    for (const name of ["Downloads", "Categories", "Queues", "Schedule", "Rules", "Site profiles"]) {
+      expect((within(dialog).getByRole("button", { name }) as HTMLButtonElement).disabled).toBe(true);
+    }
+    expect((within(dialog).getByRole("button", { name: "General" }) as HTMLButtonElement).disabled).toBe(false);
+  });
+
   it("changes the colour theme from the list of themes and remembers it", async () => {
     const api = fake([]);
     render(<App api={api} every={50} />);
+    await openGroup("General");
     await userEvent.selectOptions(await screen.findByLabelText("Colour theme"), "Forest");
     expect(document.documentElement.getAttribute("data-theme")).toBe("forest");
     expect(localStorage.getItem("mohona.theme")).toBe("forest");

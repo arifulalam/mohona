@@ -239,5 +239,7 @@
   "Up to {count} connections": "زیادہ سے زیادہ {count} کنکشنز",
   "Use profile “{name}”": "پروفائل “{name}” استعمال کریں",
   "User agent (optional)": "یوزر ایجنٹ (اختیاری)",
-  "User agent: {value}": "یوزر ایجنٹ: {value}"
+  "User agent: {value}": "یوزر ایجنٹ: {value}",
+  "General": "عمومی",
+  "Settings groups": "ترتیبات کے گروپ"
 }

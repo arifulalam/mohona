@@ -215,7 +215,7 @@ The window cannot be built where the tests run (it needs the system web view), s
 16. Folders and categories: in the Add dialog press "Browse…": Windows' folder dialog opens; the chosen folder appears in the box; a download added there lands in that folder. Cancelling the dialog leaves the box as it was. Same button in Settings for the default folder.
 17. "Categories": the standard ones are listed. Add "Books" with `epub, mobi`: it appears. Add "Archives" with `zip`: refused with "already belongs to Compressed". A name like `a/b`, file types like `z!p`, or a folder like `..\\x` are refused with a reason. Remove "Books".
 18. Sorting: tick "Sort finished downloads into folders by type" in Settings, download a `.zip` and a `.mp4` (also one from the browser): the files end up in `Compressed` and `Video` folders inside the download folder. Untick: new downloads stay in the download folder.
-19. Queues: press "Queues", add "Night": it appears in the list. Adding "night" again is refused. Select Night, set "Downloads at once" to 1 and a speed limit of 200 KB/s, Save. In "+ Add" a "Queue" choice appears; add two large downloads to Night: one runs, one waits, and the speed stays near 200 KB/s while Main downloads are not limited. Give Night a window that is closed now: its downloads wait ("queued") while Main's run. Remove Night: its downloads continue in Main. Main has no working "Remove queue" button.
+19. Queues: press "Settings", then "Queues" in the list on the left, add "Night": it appears in the list. Adding "night" again is refused. Select Night, set "Downloads at once" to 1 and a speed limit of 200 KB/s, Save. In "+ Add" a "Queue" choice appears; add two large downloads to Night: one runs, one waits, and the speed stays near 200 KB/s while Main downloads are not limited. Give Night a window that is closed now: its downloads wait ("queued") while Main's run. Remove Night: its downloads continue in Main. Main has no working "Remove queue" button.
 20. Details: start a large download and press "Details" (or double-click the row): totals, speed and time left update every second; a table lists the connections (usually 2 to 8) with their part of the file, their own progress bar and speed; the bar above it fills in several places at once. Pause the download: the window says the connections show while it is running. Add a small file: finished downloads have no Details button. While a download runs the progress bar must never move backwards.
 21. Categories in the list: every row has a category label. Click "Compressed" (or any) in the sidebar: only its files show; click it again or "All types": all show. The numbers next to the categories follow the status filter ("Finished", ...). "Sort by": Name, Size, Category and type, Status each reorder the list; the choice is still there after restarting the app.
 22. Themes: the box at the top right lists System, Light, Dark, Desert, Forest, Sunny, Orange, Leaf, Earth, Sky & cloud, River, Water. Each one changes the whole window at once, the header text is readable on every one, and the choice is still there after restarting.
@@ -246,6 +246,12 @@ The window cannot be built where the tests run (it needs the system web view), s
 6. Open any website, press F12, Console, and run `fetch("http://127.0.0.1:6791/v1/ping")`. The page must not be able to read the answer (a CORS error), and `fetch("http://127.0.0.1:6791/v1/downloads", {headers:{Authorization:"Bearer x"}})` must fail too.
 7. Windows Firewall must not ask anything when the daemon starts (it listens on 127.0.0.1 only). If port 6791 is in use by another program, the daemon still starts on another port (`mohona api` shows it).
 
+## Settings window
+
+1. The top bar has one "Settings" button (no Categories, Queues, Rules, Site profiles, Schedule, Language or Theme buttons). It opens a window with the groups on the left: General, Downloads, Categories, Queues, Schedule, Rules, Site profiles.
+2. General holds the language and the colour theme; changing them acts at once. Press each group: its settings appear on the right. Esc, a click outside, or a Close/Cancel button closes the window.
+3. With Mohona stopped, only General can be opened; the other groups are greyed out.
+
 ## Rules
 
 1. With the daemon or app running: `mohona rules add "Zips" --ext zip --folder ZipTest`. `mohona rules list` shows it.
@@ -253,14 +259,14 @@ The window cannot be built where the tests run (it needs the system web view), s
 3. Add a link of another type: it goes to the normal folder.
 4. `mohona rules add "Block" --contains blockme --block`, then add a link that contains "blockme": it is refused with a message naming the rule. `mohona rules disable 2` lets it through again.
 5. `mohona rules test https://example.com/a.zip` names the rule without adding anything.
-6. In the app press "Rules": the rules above are listed. Add one (name, site `example.com`, a folder), switch it off and on, move it with the arrows, remove it. A folder such as `..\x` is refused with a message.
+6. In the app press "Settings", then "Rules": the rules above are listed. Add one (name, site `example.com`, a folder), switch it off and on, move it with the arrows, remove it. A folder such as `..\x` is refused with a message.
 
 ## Site profiles
 
 1. `mohona profiles add "Test" --host speed.hetzner.de --connections 2 --speed 1M` (or any site with a big test file). Add a big file from that site in the app.
 2. Open its Details window: at most 2 connections are shown, and the total speed stays near 1 MB/s.
 3. `mohona profiles disable 1`, add the same kind of file again: it goes with the normal number of connections and full speed.
-4. In the app press "Site profiles": the profile is listed; add one with a wrong site such as `https://a.test/x` and see the message; switch one off and on; remove it.
+4. In the app press "Settings", then "Site profiles": the profile is listed; add one with a wrong site such as `https://a.test/x` and see the message; switch one off and on; remove it.
 
 ## Store packaging
 

@@ -239,5 +239,7 @@
   "Up to {count} connections": "Até {count} conexões",
   "Use profile “{name}”": "Usar o perfil “{name}”",
   "User agent (optional)": "User agent (opcional)",
-  "User agent: {value}": "User agent: {value}"
+  "User agent: {value}": "User agent: {value}",
+  "General": "Geral",
+  "Settings groups": "Grupos de configurações"
 }

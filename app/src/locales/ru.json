@@ -239,5 +239,7 @@
   "Up to {count} connections": "До {count} соединений",
   "Use profile “{name}”": "Использовать профиль «{name}»",
   "User agent (optional)": "User agent (необязательно)",
-  "User agent: {value}": "User agent: {value}"
+  "User agent: {value}": "User agent: {value}",
+  "General": "Общие",
+  "Settings groups": "Группы настроек"
 }

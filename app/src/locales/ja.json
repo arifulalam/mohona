@@ -239,5 +239,7 @@
   "Up to {count} connections": "最大 {count} 接続",
   "Use profile “{name}”": "プロファイル「{name}」を使う",
   "User agent (optional)": "ユーザーエージェント（任意）",
-  "User agent: {value}": "ユーザーエージェント: {value}"
+  "User agent: {value}": "ユーザーエージェント: {value}",
+  "General": "一般",
+  "Settings groups": "設定のグループ"
 }

@@ -239,5 +239,7 @@
   "Up to {count} connections": "حتى {count} اتصالات",
   "Use profile “{name}”": "استخدام الملف الشخصي «{name}»",
   "User agent (optional)": "وكيل المستخدم (اختياري)",
-  "User agent: {value}": "وكيل المستخدم: {value}"
+  "User agent: {value}": "وكيل المستخدم: {value}",
+  "General": "عام",
+  "Settings groups": "مجموعات الإعدادات"
 }

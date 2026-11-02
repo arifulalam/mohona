@@ -239,5 +239,7 @@
   "Up to {count} connections": "अधिकतम {count} कनेक्शन",
   "Use profile “{name}”": "प्रोफ़ाइल “{name}” का उपयोग करें",
   "User agent (optional)": "यूज़र एजेंट (वैकल्पिक)",
-  "User agent: {value}": "यूज़र एजेंट: {value}"
+  "User agent: {value}": "यूज़र एजेंट: {value}",
+  "General": "सामान्य",
+  "Settings groups": "सेटिंग समूह"
 }

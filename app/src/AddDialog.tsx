@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { createContext, useContext, useEffect, useRef, useState } from "react";
 import { useT } from "./i18n";
 
 interface Props {
@@ -110,12 +110,18 @@ export function AddDialog({ onAdd, onBrowse, queues, defaultFolder, onClose }: P
   );
 }
 
+/** Inside the settings window a dialog shows only its content: the window has the frame. */
+export const Embedded = createContext(false);
+
 export function Modal({ title, onClose, children }: { title: string; onClose(): void; children: React.ReactNode }) {
+  const embedded = useContext(Embedded);
   useEffect(() => {
+    if (embedded) return;
     const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [onClose]);
+  }, [onClose, embedded]);
+  if (embedded) return <div className="flex min-w-0 flex-col">{children}</div>;
   return (
     <div className="fixed inset-0 z-10 flex items-center justify-center bg-black/40 p-4" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
       <div role="dialog" aria-modal="true" aria-label={title} className="w-full max-w-lg rounded-xl border border-[var(--line)] bg-[var(--panel)] p-5 shadow-xl">

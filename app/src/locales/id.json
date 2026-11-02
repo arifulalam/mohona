@@ -239,5 +239,7 @@
   "Up to {count} connections": "Hingga {count} koneksi",
   "Use profile “{name}”": "Pakai profil “{name}”",
   "User agent (optional)": "User agent (opsional)",
-  "User agent: {value}": "User agent: {value}"
+  "User agent: {value}": "User agent: {value}",
+  "General": "Umum",
+  "Settings groups": "Kelompok pengaturan"
 }

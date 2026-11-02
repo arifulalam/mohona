@@ -239,5 +239,7 @@
   "Up to {count} connections": "En çok {count} bağlantı",
   "Use profile “{name}”": "“{name}” profilini kullan",
   "User agent (optional)": "Kullanıcı aracısı (isteğe bağlı)",
-  "User agent: {value}": "Kullanıcı aracısı: {value}"
+  "User agent: {value}": "Kullanıcı aracısı: {value}",
+  "General": "Genel",
+  "Settings groups": "Ayar grupları"
 }

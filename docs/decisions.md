@@ -635,3 +635,11 @@ A `401` now becomes its own error (`NetError::Unauthorized`) that names the kind
 **Where it is edited.** `mohona profiles list|add|remove|enable|disable`, `GET`/`PUT /v1/profiles` (change needs the admin scope), and the app's "Site profiles" window (name, site, connections, speed limit, user agent, referrer; extra headers can be set only from the command line and the API, and are kept when the window saves).
 
 **Not included.** A cap on how many downloads from one site run at once (the queue limits do that for everything), proxies and certificates per site, and applying a profile to a download that was added before the profile.
+
+## ADR-0062: One Settings window
+
+**What.** The top bar has a single "Settings" button. It opens one window with the groups listed on the left (General, Downloads, Categories, Queues, Schedule, Rules, Site profiles) and the chosen group on the right. General holds the language and the colour theme and works even when the engine is stopped; the other groups need the engine and are greyed out without it. New kinds of settings are added as a new group, not a new button.
+
+**How.** The groups are the earlier dialogs shown without their own frame: a dialog that finds itself inside the settings window draws only its content, and the window supplies the frame, the title and the Esc key. So each group keeps its own checks and tests. "Save", "Cancel" and "Close" in a group close the whole window, as before; groups that apply their changes at once (categories, rules, site profiles, language, theme) have only "Close".
+
+**Not changed.** The language and theme are still kept in the same places (the browser's storage), and the extension's popup has its own language and theme choice.
