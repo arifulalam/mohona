@@ -1,4 +1,4 @@
-import type { Api, Category, Config, ConfigChange, EngineStatus, ExtensionSettings, Details, Plan, PlanWindow, Queue, Row, Rule } from "./types";
+import type { Api, Category, Config, ConfigChange, EngineStatus, ExtensionSettings, Details, Plan, PlanWindow, Queue, Row, Rule, SiteProfile } from "./types";
 
 /** True inside the Tauri window; false in a plain browser (development, tests). */
 export function insideTauri(): boolean {
@@ -20,6 +20,8 @@ function tauriApi(): Api {
     list: () => call<Row[]>("list_downloads"),
     add: (url, folder, queue) => call<number>("add_download", { url, folder, queue }),
     details: (id) => call<Details>("get_details", { id }),
+    profiles: () => call<SiteProfile[]>("get_profiles"),
+    setProfiles: (profiles) => call<SiteProfile[]>("set_profiles", { profiles }),
     rules: () => call<Rule[]>("get_rules"),
     setRules: (rules) => call<Rule[]>("set_rules", { rules }),
     queues: () => call<Queue[]>("get_queues"),
@@ -79,6 +81,8 @@ export function demoApi(tick = 1000): Api {
   let nextQueue = 2;
   let ruleList: Rule[] = [];
   let nextRule = 1;
+  let profileList: SiteProfile[] = [];
+  let nextProfile = 1;
   const checkName = (name: string) => {
     const n = name.trim();
     if (!n || n.length > 40) throw new Error("a queue's name must be 1 to 40 characters");
@@ -135,6 +139,17 @@ export function demoApi(tick = 1000): Api {
             })
           : [],
       };
+    },
+    profiles: async () => (need(), profileList),
+    setProfiles: async (profiles) => {
+      need();
+      profiles.forEach((p, n) => {
+        if (!p.name.trim()) throw new Error(`profile ${n + 1}: the name must be 1 to 60 characters`);
+        if (!/^[a-z0-9.*_-]+$/i.test(p.host.trim()) || p.host.trim() === "*") throw new Error(`profile ${n + 1}: the site is a name such as example.com (or *.example.com), not an address`);
+        if (p.connections !== null && (p.connections < 1 || p.connections > 32)) throw new Error(`profile ${n + 1}: connections must be from 1 to 32`);
+        if (p.connections === null && !p.speedLimit && !p.userAgent && !p.referrer && !p.headers.length) throw new Error(`profile ${n + 1}: give it something to set`);
+      });
+      return (profileList = profiles.map((p) => ({ ...p, host: p.host.trim().toLowerCase(), id: p.id > 0 ? p.id : nextProfile++ })));
     },
     rules: async () => (need(), ruleList),
     setRules: async (rules) => {

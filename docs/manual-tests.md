@@ -255,6 +255,13 @@ The window cannot be built where the tests run (it needs the system web view), s
 5. `mohona rules test https://example.com/a.zip` names the rule without adding anything.
 6. In the app press "Rules": the rules above are listed. Add one (name, site `example.com`, a folder), switch it off and on, move it with the arrows, remove it. A folder such as `..\x` is refused with a message.
 
+## Site profiles
+
+1. `mohona profiles add "Test" --host speed.hetzner.de --connections 2 --speed 1M` (or any site with a big test file). Add a big file from that site in the app.
+2. Open its Details window: at most 2 connections are shown, and the total speed stays near 1 MB/s.
+3. `mohona profiles disable 1`, add the same kind of file again: it goes with the normal number of connections and full speed.
+4. In the app press "Site profiles": the profile is listed; add one with a wrong site such as `https://a.test/x` and see the message; switch one off and on; remove it.
+
 ## Store packaging
 
 1. `cd extension && npm run package`, unzip `dist/store/mohona-chromium-0.0.1.zip` into an empty folder and load it unpacked in Chrome: it loads without errors, shows the Mohona icon, and its id is different from the development id (it has no `key`), so the popup says not connected until the host is registered for that id.

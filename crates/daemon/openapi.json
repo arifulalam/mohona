@@ -1089,6 +1089,67 @@
           }
         }
       }
+    },
+    "/v1/profiles": {
+      "get": {
+        "operationId": "getProfiles",
+        "summary": "How to talk to particular sites; the first enabled profile for a site is used.",
+        "x-scope": "read",
+        "responses": {
+          "200": {
+            "description": "Done."
+          },
+          "400": {
+            "$ref": "#/components/responses/Error"
+          },
+          "401": {
+            "$ref": "#/components/responses/Error"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      },
+      "put": {
+        "operationId": "setProfiles",
+        "summary": "Replace the whole list; the answer is the saved list.",
+        "x-scope": "admin",
+        "responses": {
+          "200": {
+            "description": "Done."
+          },
+          "400": {
+            "$ref": "#/components/responses/Error"
+          },
+          "401": {
+            "$ref": "#/components/responses/Error"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "profiles"
+                ],
+                "properties": {
+                  "profiles": {
+                    "type": "array",
+                    "items": {
+                      "$ref": "#/components/schemas/Profile"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
@@ -1207,6 +1268,55 @@
               "block": {
                 "type": "boolean"
               }
+            }
+          }
+        }
+      },
+      "Profile": {
+        "type": "object",
+        "required": [
+          "name",
+          "host"
+        ],
+        "properties": {
+          "id": {
+            "type": "integer"
+          },
+          "name": {
+            "type": "string"
+          },
+          "enabled": {
+            "type": "boolean",
+            "default": true
+          },
+          "host": {
+            "type": "string",
+            "description": "example.com (also subdomains), *.example.com or a pattern with *"
+          },
+          "connections": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 32
+          },
+          "speed_limit": {
+            "type": "integer",
+            "description": "Bytes per second for each download"
+          },
+          "user_agent": {
+            "type": "string"
+          },
+          "referrer": {
+            "type": "string"
+          },
+          "headers": {
+            "type": "array",
+            "items": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "minItems": 2,
+              "maxItems": 2
             }
           }
         }

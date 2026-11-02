@@ -9,6 +9,7 @@
 pub mod api;
 mod client;
 mod info;
+pub mod profiles;
 mod protocol;
 pub mod receive;
 pub mod rules;

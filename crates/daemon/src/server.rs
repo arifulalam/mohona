@@ -513,6 +513,17 @@ fn done(result: Result<(), ManagerError>) -> Response {
     }
 }
 
+async fn load_profiles(state: &State) -> Vec<crate::profiles::Profile> {
+    let text = state
+        .manager
+        .setting(crate::profiles::SETTING)
+        .await
+        .ok()
+        .flatten()
+        .unwrap_or_default();
+    serde_json::from_str(&text).unwrap_or_default()
+}
+
 async fn load_rules(state: &State) -> Vec<crate::rules::Rule> {
     let text = state
         .manager
@@ -595,15 +606,39 @@ pub(crate) async fn handle(state: &State, call: Call) -> Response {
             request.queue_id = queue;
             // Only what a browser session legitimately carries: nothing that
             // weakens certificate checks or names proxies or key files.
+            // The site's profile fills in what the caller left open.
+            let profiles = load_profiles(state).await;
+            let profile = crate::profiles::find(&profiles, &request.url).cloned();
+            let mut headers = headers;
+            let (mut referrer, mut user_agent) = (referrer, user_agent);
+            let mut connections = None;
+            if let Some(p) = &profile {
+                referrer = referrer.or_else(|| p.referrer.clone());
+                user_agent = user_agent.or_else(|| p.user_agent.clone());
+                for (name, value) in &p.headers {
+                    if !headers.iter().any(|(n, _)| n.eq_ignore_ascii_case(name)) {
+                        headers.push((name.clone(), value.clone()));
+                    }
+                }
+                connections = p.connections;
+            }
             request.context = RequestContext {
                 cookies,
                 referrer,
                 user_agent,
                 headers,
+                connections,
                 ..RequestContext::default()
             };
             match manager.add_checked(request).await {
-                Ok(AddResult::Added(id)) => Response::Added { id },
+                Ok(AddResult::Added(id)) => {
+                    if let Some(limit) = profile.as_ref().and_then(|p| p.speed_limit) {
+                        let _ = manager
+                            .set_speed_limit(mohona_manager::SpeedTarget::Download(id), Some(limit))
+                            .await;
+                    }
+                    Response::Added { id }
+                }
                 Ok(AddResult::Skipped(why)) => Response::Skipped {
                     reason: why.to_string(),
                 },
@@ -619,6 +654,21 @@ pub(crate) async fn handle(state: &State, call: Call) -> Response {
                 Err(message) => Response::Error { message },
                 Ok(clean) => match serde_json::to_string(&clean) {
                     Ok(text) => done(manager.set_setting(crate::rules::SETTING, &text).await),
+                    Err(e) => Response::Error {
+                        message: e.to_string(),
+                    },
+                },
+            }
+        }
+        Call::GetProfiles => Response::Profiles {
+            profiles: load_profiles(state).await,
+        },
+        Call::SetProfiles { profiles } => {
+            let old = load_profiles(state).await;
+            match crate::profiles::check(profiles, &old) {
+                Err(message) => Response::Error { message },
+                Ok(clean) => match serde_json::to_string(&clean) {
+                    Ok(text) => done(manager.set_setting(crate::profiles::SETTING, &text).await),
                     Err(e) => Response::Error {
                         message: e.to_string(),
                     },

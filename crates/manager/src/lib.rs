@@ -1760,7 +1760,12 @@ impl Actor {
         request.limits = self.limits_for(&row);
         if let Ok(Some(json)) = self.store.headers_json(row.id) {
             match RequestContext::from_json(&json) {
-                Ok(context) => request.context = context,
+                Ok(context) => {
+                    if let Some(n) = context.connections {
+                        request.connections = (n as usize).clamp(1, 32);
+                    }
+                    request.context = context;
+                }
                 Err(error) => {
                     let _ = self.store.add_log(
                         row.id,

@@ -623,3 +623,15 @@ A `401` now becomes its own error (`NetError::Unauthorized`) that names the kind
 **In the app (added later).** The "Rules" button opens a window that lists the rules (switch on or off, move up or down, remove) and adds one: name, site, file types, text in the address, and either "block" or a folder and a queue. The same checks as the engine's run first. Conditions the window does not show (the page a link was on, sorting) are kept when the list is saved.
 
 **Not included yet.** Conditions on the file size or type reported by the server (they are known only after the first request), renaming files, rules for streams, blob links and torrents.
+
+## ADR-0061: Site profiles
+
+**What.** A profile says how downloads from one site are made: at most so many connections (1 to 32), a speed limit for each download, a user agent, a referrer, and up to ten extra headers. The site is written like in rules (`example.com` includes its subdomains, `*.example.com`, or a pattern with `*`). The first enabled profile for a download's site is used. Profiles are separate from rules on purpose: a rule says where a download goes, a profile says how to fetch it, and both apply to the same download.
+
+**Where it runs.** In the daemon's `Add`, so it covers the extension, app, API and command line. Anything the caller sent with the download (referrer, user agent, a header of the same name) wins over the profile. The connection cap is kept with the download (in its saved request context, so it survives restarts and needs no database change) and the engine uses it when the download starts. The speed limit is set as that download's own limit; the global and queue limits still apply, and the slowest wins.
+
+**What a profile cannot hold.** Cookies, `Authorization`, `Host`, `Range`, `User-Agent` and `Referer` as plain headers (the last two have their own fields) and anything that changes how a request is framed. Cookies and logins come from the browser or are typed per download, so no secret is kept in a profile (profiles are saved as plain text in the engine's settings).
+
+**Where it is edited.** `mohona profiles list|add|remove|enable|disable`, `GET`/`PUT /v1/profiles` (change needs the admin scope), and the app's "Site profiles" window (name, site, connections, speed limit, user agent, referrer; extra headers can be set only from the command line and the API, and are kept when the window saves).
+
+**Not included.** A cap on how many downloads from one site run at once (the queue limits do that for everything), proxies and certificates per site, and applying a profile to a download that was added before the profile.

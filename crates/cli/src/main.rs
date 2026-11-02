@@ -14,6 +14,7 @@ use tokio::sync::mpsc;
 
 mod daemon;
 mod history;
+mod profiles;
 mod queue;
 mod rules;
 mod stream;
@@ -55,6 +56,14 @@ enum Command {
     Rules {
         #[command(subcommand)]
         command: rules::RulesCommand,
+        /// The daemon's connection file (default: your application-data folder)
+        #[arg(long)]
+        info: Option<PathBuf>,
+    },
+    /// Per-site profiles: connections, speed and headers for one site (the daemon must be running)
+    Profiles {
+        #[command(subcommand)]
+        command: profiles::ProfilesCommand,
         /// The daemon's connection file (default: your application-data folder)
         #[arg(long)]
         info: Option<PathBuf>,
@@ -559,6 +568,7 @@ async fn main() -> ExitCode {
                 ExitCode::FAILURE
             }
         },
+        Some(Command::Profiles { command, info }) => profiles::run(command, info).await,
         Some(Command::Rules { command, info }) => rules::run(command, info).await,
         Some(Command::Queue { command }) => match queue::run(command, cli.db).await {
             Ok(()) => ExitCode::SUCCESS,

@@ -104,6 +104,21 @@ export interface Rule {
   block: boolean;
 }
 
+/** How downloads from one site are made. */
+export interface SiteProfile {
+  /** 0 for a profile that is not saved yet. */
+  id: number;
+  name: string;
+  enabled: boolean;
+  host: string;
+  connections: number | null;
+  /** Bytes per second for each download from the site; null for no limit. */
+  speedLimit: number | null;
+  userAgent: string | null;
+  referrer: string | null;
+  headers: [string, string][];
+}
+
 /** One connection of a running download. */
 export interface Connection {
   number: number;
@@ -144,6 +159,9 @@ export interface Api {
   list(): Promise<Row[]>;
   add(url: string, folder: string | null, queue?: number): Promise<number>;
   details(id: number): Promise<Details>;
+  profiles(): Promise<SiteProfile[]>;
+  /** Replaces the whole list; resolves with what was saved. */
+  setProfiles(profiles: SiteProfile[]): Promise<SiteProfile[]>;
   rules(): Promise<Rule[]>;
   /** Replaces the whole list; resolves with what was saved. */
   setRules(rules: Rule[]): Promise<Rule[]>;

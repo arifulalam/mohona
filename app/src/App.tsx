@@ -9,6 +9,7 @@ import { allowed, counts, FILTERS, matches, type Filter } from "./filters";
 import { List } from "./List";
 import { QueuesDialog } from "./QueuesDialog";
 import { RulesDialog } from "./RulesDialog";
+import { ProfilesDialog } from "./ProfilesDialog";
 import { ScheduleDialog } from "./ScheduleDialog";
 import { actionName } from "./schedule";
 import { SettingsDialog } from "./SettingsDialog";
@@ -54,6 +55,7 @@ function Main({ api, every, language, onLanguage }: { api: Api; every?: number; 
   const [schedule, setSchedule] = useState(false);
   const [queuesOpen, setQueuesOpen] = useState(false);
   const [rulesOpen, setRulesOpen] = useState(false);
+  const [profilesOpen, setProfilesOpen] = useState(false);
   const [queueList, setQueueList] = useState<{ id: number; name: string }[]>([]);
   const [categories, setCategories] = useState(false);
   const [cats, setCats] = useState<Category[]>([]);
@@ -148,6 +150,9 @@ function Main({ api, every, language, onLanguage }: { api: Api; every?: number; 
         </button>
         <button className="btn" onClick={() => setRulesOpen(true)} disabled={!running}>
           {t("Rules")}
+        </button>
+        <button className="btn" onClick={() => setProfilesOpen(true)} disabled={!running}>
+          {t("Site profiles")}
         </button>
         <button className="btn" onClick={() => setSchedule(true)} disabled={!running}>
           {t("Schedule")}
@@ -322,6 +327,7 @@ function Main({ api, every, language, onLanguage }: { api: Api; every?: number; 
       {categories && <CategoriesDialog api={api} onClose={() => setCategories(false)} />}
       {queuesOpen && <QueuesDialog api={api} onClose={() => setQueuesOpen(false)} />}
       {rulesOpen && <RulesDialog api={api} queues={queueList} onClose={() => setRulesOpen(false)} />}
+      {profilesOpen && <ProfilesDialog api={api} onClose={() => setProfilesOpen(false)} />}
       {schedule && <ScheduleDialog api={api} onClose={() => setSchedule(false)} />}
       {settings && <SettingsDialog api={api} clipboard={watchClipboard} onClipboard={setWatchClipboard} onClose={() => setSettings(false)} />}
       {adding && <AddDialog onAdd={addAll} queues={queueList} onBrowse={() => api.pickFolder()} defaultFolder={defaultFolder} onClose={() => setAdding(false)} />}

@@ -166,6 +166,62 @@ impl From<mohona_daemon::rules::Rule> for Rule {
     }
 }
 
+/// One site profile, as the page shows it.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SiteProfile {
+    /// 0 for a profile that is not saved yet.
+    #[serde(default)]
+    pub id: i64,
+    pub name: String,
+    #[serde(default)]
+    pub enabled: bool,
+    pub host: String,
+    #[serde(default)]
+    pub connections: Option<u32>,
+    /// Bytes per second for each download from the site.
+    #[serde(default)]
+    pub speed_limit: Option<u64>,
+    #[serde(default)]
+    pub user_agent: Option<String>,
+    #[serde(default)]
+    pub referrer: Option<String>,
+    #[serde(default)]
+    pub headers: Vec<(String, String)>,
+}
+
+impl From<mohona_daemon::profiles::Profile> for SiteProfile {
+    fn from(p: mohona_daemon::profiles::Profile) -> Self {
+        SiteProfile {
+            id: p.id,
+            name: p.name,
+            enabled: p.enabled,
+            host: p.host,
+            connections: p.connections,
+            speed_limit: p.speed_limit,
+            user_agent: p.user_agent,
+            referrer: p.referrer,
+            headers: p.headers,
+        }
+    }
+}
+
+impl From<SiteProfile> for mohona_daemon::profiles::Profile {
+    fn from(p: SiteProfile) -> Self {
+        mohona_daemon::profiles::Profile {
+            id: p.id,
+            name: p.name,
+            enabled: p.enabled,
+            host: p.host,
+            connections: p.connections,
+            speed_limit: p.speed_limit,
+            user_agent: p.user_agent,
+            referrer: p.referrer,
+            headers: p.headers,
+        }
+    }
+}
+
 /// One connection of a running download, as the page shows it.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -572,6 +628,24 @@ impl Engine {
                 .collect()),
             _ => Err(AppError::Engine("unexpected answer from the engine".into())),
         }
+    }
+
+    /// The site profiles in the order they are tried.
+    pub async fn profiles(&self) -> Result<Vec<SiteProfile>, AppError> {
+        match self.call(Call::GetProfiles).await? {
+            Response::Profiles { profiles } => Ok(profiles.into_iter().map(Into::into).collect()),
+            _ => Err(AppError::Engine("unexpected answer from the engine".into())),
+        }
+    }
+
+    /// Replaces the whole list (checked by the engine) and returns what was saved.
+    pub async fn set_profiles(
+        &self,
+        profiles: Vec<SiteProfile>,
+    ) -> Result<Vec<SiteProfile>, AppError> {
+        let profiles = profiles.into_iter().map(Into::into).collect();
+        self.call(Call::SetProfiles { profiles }).await?;
+        self.profiles().await
     }
 
     /// The rules in the order they are tried.

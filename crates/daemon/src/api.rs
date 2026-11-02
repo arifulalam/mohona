@@ -123,6 +123,8 @@ pub const ROUTES: &[Route] = routes![
     ("GET", "/v1/rules", "getRules", Scope::Read),
     ("PUT", "/v1/rules", "setRules", Scope::Admin),
     ("POST", "/v1/rules/test", "testRules", Scope::Read),
+    ("GET", "/v1/profiles", "getProfiles", Scope::Read),
+    ("PUT", "/v1/profiles", "setProfiles", Scope::Admin),
     ("GET", "/v1/plan", "getPlan", Scope::Read),
     ("PUT", "/v1/plan", "setPlan", Scope::Admin),
     (
@@ -705,6 +707,15 @@ async fn dispatch(
             }
         }
         "testRules" => ask(state, call("test_rules", object(&req)?)?).await,
+        "getProfiles" => ask(state, Call::GetProfiles).await,
+        "setProfiles" => {
+            let saved = ask(state, call("set_profiles", object(&req)?)?).await;
+            if saved.status >= 400 {
+                saved
+            } else {
+                ask(state, Call::GetProfiles).await
+            }
+        }
         "getPlan" => ask(state, Call::GetPlan).await,
         "setPlan" => ask(state, call("set_plan", object(&req)?)?).await,
         "setAfterAction" => ask(state, call("set_after_action", object(&req)?)?).await,

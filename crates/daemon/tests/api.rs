@@ -925,3 +925,111 @@ async fn rules_sort_route_and_block_downloads_from_every_door() {
     assert_eq!(s, 201);
     api.shutdown.notify_one();
 }
+
+#[tokio::test]
+async fn a_site_profile_sets_headers_connections_and_speed_but_the_caller_wins() {
+    let dir = tempfile::tempdir().unwrap();
+    let api = start(dir.path()).await;
+    let server = files().await;
+    let host = server.ip().to_string();
+
+    let (s, b) = admin(
+        &api,
+        "PUT",
+        "/v1/profiles",
+        Some(json!({ "profiles": [{
+            "name": "Local test server", "host": host,
+            "connections": 1, "speed_limit": 400000,
+            "user_agent": "ProfileAgent/1", "referrer": "https://from.profile/", "headers": [["X-Profile", "yes"], ["X-Both", "profile"]]
+        }]})),
+    )
+    .await;
+    assert_eq!(s, 200, "{b}");
+    assert_eq!(b["profiles"][0]["id"], 1);
+
+    // Headers: the profile's are sent, the caller's own win.
+    let (s, b) = admin(
+        &api,
+        "POST",
+        "/v1/downloads",
+        Some(json!({ "url": format!("http://{server}/echo"), "referrer": "https://from.caller/" })),
+    )
+    .await;
+    assert_eq!(s, 201, "{b}");
+    let id = b["id"].as_i64().unwrap();
+    until_done(&api, id).await;
+    let (_, d) = admin(&api, "GET", &format!("/v1/downloads/{id}"), None).await;
+    let text = std::fs::read_to_string(d["path"].as_str().unwrap()).unwrap();
+    assert!(text.contains("x-profile: yes"), "{text}");
+    assert!(
+        text.to_lowercase().contains("user-agent: profileagent/1"),
+        "{text}"
+    );
+    assert!(text.contains("referer: https://from.caller/"), "{text}");
+    assert!(!text.contains("from.profile"), "{text}");
+
+    // One connection and the speed limit: a 2 MB file at 400 kB/s takes a while, on one connection.
+    let (_, b) = admin(
+        &api,
+        "POST",
+        "/v1/downloads",
+        Some(json!({ "url": format!("http://{server}/file?size=2000000") })),
+    )
+    .await;
+    let id = b["id"].as_i64().unwrap();
+    tokio::time::sleep(Duration::from_millis(1500)).await;
+    let (_, d) = admin(&api, "GET", &format!("/v1/downloads/{id}/details"), None).await;
+    assert!(d["connections"].as_array().unwrap().len() <= 1, "{d}");
+    assert!(d["speed"].as_u64().unwrap() <= 600_000, "{d}");
+    assert_ne!(d["status"], "completed", "the limit did not slow it: {d}");
+    admin(&api, "POST", &format!("/v1/downloads/{id}/cancel"), None).await;
+
+    // Another site is untouched.
+    let (_, b) = admin(
+        &api,
+        "POST",
+        "/v1/rules/test",
+        Some(json!({ "url": "http://x.test/a" })),
+    )
+    .await;
+    assert_eq!(b["rule"], Value::Null);
+
+    // Bad lists change nothing; a read token cannot change.
+    for bad in [
+        json!({ "profiles": [{ "name": "x", "host": "https://a.test/x", "connections": 2 }] }),
+        json!({ "profiles": [{ "name": "x", "host": "a.test", "connections": 99 }] }),
+        json!({ "profiles": [{ "name": "x", "host": "a.test", "headers": [["Cookie", "a=b"]] }] }),
+        json!({ "profiles": [{ "name": "x", "host": "a.test" }] }),
+    ] {
+        assert_eq!(admin(&api, "PUT", "/v1/profiles", Some(bad)).await.0, 400);
+    }
+    assert_eq!(
+        admin(&api, "GET", "/v1/profiles", None).await.1["profiles"]
+            .as_array()
+            .unwrap()
+            .len(),
+        1
+    );
+    let (_, t) = admin(
+        &api,
+        "POST",
+        "/v1/tokens",
+        Some(json!({ "name": "r", "scope": "read" })),
+    )
+    .await;
+    let read = t["token"].as_str().unwrap().to_string();
+    assert_eq!(call(&api, &read, "GET", "/v1/profiles", None).await.0, 200);
+    assert_eq!(
+        call(
+            &api,
+            &read,
+            "PUT",
+            "/v1/profiles",
+            Some(json!({ "profiles": [] }))
+        )
+        .await
+        .0,
+        403
+    );
+    api.shutdown.notify_one();
+}

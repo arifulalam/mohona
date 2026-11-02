@@ -106,6 +106,10 @@ pub struct RequestContext {
     /// with the main address, and moves on to another when one fails.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub mirrors: Vec<String>,
+    /// Use at most this many connections for this download (a site that
+    /// bans many connections); without it the engine's setting applies.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub connections: Option<u32>,
 }
 
 /// SSH settings for one download. A key's passphrase is not part of this: it

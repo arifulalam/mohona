@@ -113,7 +113,7 @@ fn glob(pattern: &str, text: &str) -> bool {
     pi == p.len()
 }
 
-fn host_matches(pattern: &str, host: &str) -> bool {
+pub(crate) fn host_matches(pattern: &str, host: &str) -> bool {
     let pattern = pattern.trim();
     if pattern.contains('*') {
         glob(pattern, host)

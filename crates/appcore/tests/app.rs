@@ -3,7 +3,7 @@ use std::path::Path;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
-use mohona_appcore::{AppError, Engine, Rule, SpeedTracker};
+use mohona_appcore::{AppError, Engine, Rule, SiteProfile, SpeedTracker};
 use mohona_daemon::{serve, DaemonInfo, ServerConfig};
 use mohona_manager::{Manager, ManagerConfig};
 use mohona_net::{ClientConfig, HttpClient};
@@ -412,5 +412,35 @@ async fn rules_are_saved_numbered_and_checked() {
     bad.folder = Some("../x".into());
     assert!(engine.set_rules(vec![bad]).await.is_err());
     assert_eq!(engine.rules().await.unwrap().len(), 1);
+    shutdown.notify_one();
+}
+
+#[tokio::test]
+async fn site_profiles_are_saved_numbered_and_checked() {
+    let dir = tempfile::tempdir().unwrap();
+    let (engine, shutdown) = engine(dir.path()).await;
+    assert!(engine.profiles().await.unwrap().is_empty());
+    let profile = |host: &str| SiteProfile {
+        id: 0,
+        name: "Slow".into(),
+        enabled: true,
+        host: host.into(),
+        connections: Some(2),
+        speed_limit: Some(500_000),
+        user_agent: None,
+        referrer: None,
+        headers: vec![],
+    };
+    let saved = engine
+        .set_profiles(vec![profile("A.test"), profile("b.test")])
+        .await
+        .unwrap();
+    assert_eq!(saved.iter().map(|p| p.id).collect::<Vec<_>>(), vec![1, 2]);
+    assert_eq!(saved[0].host, "a.test");
+    assert!(engine
+        .set_profiles(vec![profile("https://x.test/y")])
+        .await
+        .is_err());
+    assert_eq!(engine.profiles().await.unwrap().len(), 2);
     shutdown.notify_one();
 }

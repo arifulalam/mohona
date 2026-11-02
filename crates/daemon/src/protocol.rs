@@ -90,6 +90,12 @@ pub enum Call {
         #[serde(default)]
         referrer: Option<String>,
     },
+    /// How to talk to particular sites (connections, speed, headers).
+    GetProfiles,
+    /// Replace the whole list of site profiles (checked first; new ones get ids).
+    SetProfiles {
+        profiles: Vec<crate::profiles::Profile>,
+    },
     /// Every queue, with its limits and schedule.
     GetQueues,
     /// A new queue (a unique name of 1 to 40 characters).
@@ -347,6 +353,9 @@ pub enum Response {
     },
     Rules {
         rules: Vec<crate::rules::Rule>,
+    },
+    Profiles {
+        profiles: Vec<crate::profiles::Profile>,
     },
     /// The rule that applies, if any.
     RuleMatch {

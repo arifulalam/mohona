@@ -2,7 +2,7 @@ import { cleanup, render, screen, waitFor, within } from "@testing-library/react
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { App } from "../src/App";
-import type { Api, Category, Config, ConfigChange, EngineStatus, ExtensionSettings, Details, Plan, PlanWindow, Queue, Row, Rule } from "../src/types";
+import type { Api, Category, Config, ConfigChange, EngineStatus, ExtensionSettings, Details, Plan, PlanWindow, Queue, Row, Rule, SiteProfile } from "../src/types";
 
 const row = (id: number, name: string, status: string, extra: Partial<Row> = {}): Row => ({
   id, name, url: `https://x.test/${name}`, status, downloaded: 50, size: 100, percent: 50, speed: 0, eta: null,
@@ -19,6 +19,7 @@ function fake(initial: Row[], running = true) {
   let ext: ExtensionSettings = { intercept: true, minSizeBytes: 0, excludedHosts: [], videoButton: true, buttonHiddenHosts: [], autoRefresh: true };
   let queues: Queue[] = [{ id: 1, name: "Main", maxActive: 4, speedLimit: null, windows: [], openNow: true }];
   let rules: Rule[] = [];
+  let profiles: SiteProfile[] = [];
   const status = (): EngineStatus => ({ running: engine, version: engine ? "9.9" : null, message: null });
   const api = {
     status: vi.fn(async () => status()),
@@ -47,6 +48,12 @@ function fake(initial: Row[], running = true) {
           { number: 2, start: 50, end: 100, received: 10, speed: 2048, state: "active" },
         ],
       };
+    }),
+    profiles: vi.fn(async () => profiles),
+    setProfiles: vi.fn(async (next: SiteProfile[]) => {
+      if (next.some((p) => p.host.includes("/"))) throw new Error("profile: the site is a name such as example.com, not an address");
+      let id = profiles.reduce((m, p) => Math.max(m, p.id), 0);
+      return (profiles = next.map((p) => ({ ...p, id: p.id || ++id })));
     }),
     rules: vi.fn(async () => rules),
     setRules: vi.fn(async (next: Rule[]) => {
@@ -283,6 +290,37 @@ describe("App", () => {
     expect(await within(dialog).findByText("Archives")).toBeTruthy();
     await userEvent.click(within(dialog).getByRole("button", { name: "Remove category Archives" }));
     await waitFor(() => expect(within(dialog).queryByText("Archives")).toBeNull());
+  });
+
+  it("adds site profiles with checks, shows their settings, and switches or removes them", async () => {
+    const api = fake([]);
+    render(<App api={api} every={50} />);
+    await userEvent.click(await screen.findByRole("button", { name: "Site profiles" }));
+    const dialog = await screen.findByRole("dialog");
+    expect(await within(dialog).findByText("No site profiles yet.")).toBeTruthy();
+    const add = () => userEvent.click(within(dialog).getByRole("button", { name: "Add" }));
+    await add();
+    expect((await within(dialog).findByRole("alert")).textContent).toContain("name");
+    await userEvent.type(within(dialog).getByLabelText("Profile name"), "Slow site");
+    await add();
+    expect((await within(dialog).findByRole("alert")).textContent).toContain("example.com");
+    await userEvent.type(within(dialog).getByLabelText("Site (such as example.com)"), "files.example.com");
+    await add();
+    expect((await within(dialog).findByRole("alert")).textContent).toContain("at least one thing");
+    await userEvent.type(within(dialog).getByLabelText("Most connections"), "40");
+    await add();
+    expect((await within(dialog).findByRole("alert")).textContent).toContain("1 to 32");
+    expect(api.setProfiles).not.toHaveBeenCalled();
+    await userEvent.clear(within(dialog).getByLabelText("Most connections"));
+    await userEvent.type(within(dialog).getByLabelText("Most connections"), "2");
+    await userEvent.type(within(dialog).getByLabelText("Speed limit per download"), "500");
+    await add();
+    await waitFor(() => expect(api.setProfiles).toHaveBeenLastCalledWith([expect.objectContaining({ host: "files.example.com", connections: 2, speedLimit: 500 * 1024, enabled: true })]));
+    expect(await within(dialog).findByText("files.example.com → Up to 2 connections 500 KB/s per download")).toBeTruthy();
+    await userEvent.click(within(dialog).getByLabelText("Use profile “Slow site”"));
+    await waitFor(() => expect(api.setProfiles.mock.lastCall![0][0]?.enabled).toBe(false));
+    await userEvent.click(within(dialog).getByRole("button", { name: "Remove" }));
+    await waitFor(() => expect(within(dialog).getByText("No site profiles yet.")).toBeTruthy());
   });
 
   it("lists rules, adds one with checks, switches it off, reorders and removes it", async () => {
