@@ -1,0 +1,137 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Mohona remote</title>
+<style>
+:root{--bg:#f6f7f9;--card:#fff;--ink:#16181d;--mute:#667085;--line:#e3e6eb;--accent:#0f766e;--bad:#b42318}
+@media (prefers-color-scheme:dark){:root{--bg:#101215;--card:#181b20;--ink:#eceff4;--mute:#98a2b3;--line:#2a2f37;--accent:#2dd4bf;--bad:#f97066}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.4 system-ui,sans-serif}
+main{max-width:720px;margin:0 auto;padding:16px}
+h1{font-size:18px;margin:0 0 12px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:12px;margin-bottom:10px}
+input{width:100%;padding:10px;border:1px solid var(--line);border-radius:8px;background:var(--bg);color:var(--ink);font:inherit}
+button{padding:8px 12px;border:1px solid var(--line);border-radius:8px;background:var(--card);color:var(--ink);font:inherit;cursor:pointer}
+button.primary{background:var(--accent);border-color:var(--accent);color:#fff}
+.row{display:flex;gap:8px;align-items:center}
+.row>input{flex:1}
+.name{font-weight:600;overflow-wrap:anywhere}
+.meta{color:var(--mute);font-size:13px;overflow-wrap:anywhere}
+.bar{height:6px;border-radius:3px;background:var(--line);margin:8px 0;overflow:hidden}
+.bar>i{display:block;height:100%;background:var(--accent)}
+.err{color:var(--bad);font-size:13px;overflow-wrap:anywhere}
+.acts{display:flex;gap:6px;flex-wrap:wrap;margin-top:6px}
+#top{display:flex;justify-content:space-between;align-items:center}
+.hide{display:none}
+</style>
+</head>
+<body>
+<main>
+<div id="top"><h1>Mohona remote</h1><button id="out" class="hide">Sign out</button></div>
+<div id="login" class="card">
+  <p class="meta">Enter the token made with <code>mohona remote token</code> on the computer.</p>
+  <div class="row"><input id="tok" type="password" autocomplete="off" placeholder="Token"><button id="go" class="primary">Sign in</button></div>
+  <p id="lerr" class="err"></p>
+</div>
+<div id="app" class="hide">
+  <div class="card row"><input id="url" placeholder="Paste a link to download"><button id="add" class="primary">Add</button></div>
+  <p id="aerr" class="err"></p>
+  <div id="list"></div>
+</div>
+</main>
+<script>
+"use strict";
+var token = "", timer = null;
+try { token = sessionStorage.getItem("mohona.token") || ""; } catch (e) {}
+function $(id) { return document.getElementById(id); }
+function size(n) {
+  if (n == null) return "?";
+  var u = ["B", "KB", "MB", "GB", "TB"], i = 0;
+  while (n >= 1024 && i < u.length - 1) { n /= 1024; i++; }
+  return (i ? n.toFixed(1) : n) + " " + u[i];
+}
+function call(method, path, body) {
+  return fetch(path, {
+    method: method,
+    headers: Object.assign({ Authorization: "Bearer " + token }, body ? { "Content-Type": "application/json" } : {}),
+    body: body ? JSON.stringify(body) : undefined
+  }).then(function (r) {
+    return r.json().catch(function () { return {}; }).then(function (j) {
+      if (!r.ok) { var e = new Error((j.error && j.error.message) || "error " + r.status); e.status = r.status; throw e; }
+      return j;
+    });
+  });
+}
+function show(signedIn) {
+  $("login").classList.toggle("hide", signedIn);
+  $("app").classList.toggle("hide", !signedIn);
+  $("out").classList.toggle("hide", !signedIn);
+}
+function button(text, fn) {
+  var b = document.createElement("button");
+  b.textContent = text;
+  b.onclick = function () { b.disabled = true; fn().then(refresh, function (e) { $("aerr").textContent = e.message; b.disabled = false; }); };
+  return b;
+}
+function card(d) {
+  var c = document.createElement("div"); c.className = "card";
+  var n = document.createElement("div"); n.className = "name";
+  n.textContent = d.filename || d.url;
+  var m = document.createElement("div"); m.className = "meta";
+  var pct = d.size ? Math.min(100, Math.floor(d.downloaded * 100 / d.size)) : null;
+  m.textContent = d.status + " · " + size(d.downloaded) + (d.size ? " / " + size(d.size) : "");
+  c.appendChild(n); c.appendChild(m);
+  if (pct !== null) {
+    var bar = document.createElement("div"); bar.className = "bar";
+    var i = document.createElement("i"); i.style.width = pct + "%"; bar.appendChild(i); c.appendChild(bar);
+  }
+  if (d.error) { var e = document.createElement("div"); e.className = "err"; e.textContent = d.error; c.appendChild(e); }
+  var a = document.createElement("div"); a.className = "acts";
+  var base = "/v1/downloads/" + d.id;
+  if (d.status === "downloading" || d.status === "queued") a.appendChild(button("Pause", function () { return call("POST", base + "/pause"); }));
+  if (d.status === "paused" || d.status === "failed") a.appendChild(button("Resume", function () { return call("POST", base + "/resume"); }));
+  if (d.status !== "completed") a.appendChild(button("Cancel", function () { return call("POST", base + "/cancel"); }));
+  a.appendChild(button("Remove", function () { return call("DELETE", base); }));
+  c.appendChild(a);
+  return c;
+}
+function refresh() {
+  return call("GET", "/v1/downloads").then(function (r) {
+    show(true);
+    var list = $("list"); list.textContent = "";
+    var items = (r.downloads || []).slice().reverse();
+    if (!items.length) { var p = document.createElement("p"); p.className = "meta"; p.textContent = "No downloads."; list.appendChild(p); }
+    items.forEach(function (d) { list.appendChild(card(d)); });
+    $("lerr").textContent = "";
+  }, function (e) {
+    if (e.status === 401 || e.status === 403) { signOut(); $("lerr").textContent = e.message; }
+    else { $("aerr").textContent = e.message; }
+  });
+}
+function start() {
+  show(true); refresh();
+  if (timer) clearInterval(timer);
+  timer = setInterval(function () { if (!document.hidden) refresh(); }, 2500);
+}
+function signOut() {
+  token = ""; if (timer) clearInterval(timer); timer = null;
+  try { sessionStorage.removeItem("mohona.token"); } catch (e) {}
+  show(false);
+}
+$("go").onclick = function () {
+  token = $("tok").value.trim(); $("tok").value = "";
+  try { sessionStorage.setItem("mohona.token", token); } catch (e) {}
+  start();
+};
+$("out").onclick = signOut;
+$("add").onclick = function () {
+  var u = $("url").value.trim(); if (!u) return;
+  $("aerr").textContent = "";
+  call("POST", "/v1/downloads", { url: u }).then(function () { $("url").value = ""; refresh(); }, function (e) { $("aerr").textContent = e.message; });
+};
+if (token) start(); else show(false);
+</script>
+</body>
+</html>

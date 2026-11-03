@@ -670,3 +670,16 @@ A `401` now becomes its own error (`NetError::Unauthorized`) that names the kind
 **How.** `mohona_daemon::cloud::resolve` is a pure function in the daemon's `Add`, so the app, the extension, the CLI and the API all get it. Only exact host names match (`drive.google.com.evil.example` does not) and file ids must look like ids. Rules and site profiles are matched against the address the person pasted; the download uses the direct one. Cookies sent with the request are dropped when the host changes. `mohona resolve URL` and `POST /v1/resolve` show the result without adding anything.
 
 **Not included.** Folders, files that need a sign-in, Google's "too large to scan" pages beyond the `confirm=t` shortcut, and services not listed. An unknown address is downloaded as it is.
+
+## ADR-0065: Remote web companion
+
+**What.** An optional small web page, served by the daemon on its own port, that lists the downloads and lets a phone or another computer on the same network add, pause, resume, cancel and remove them. It is off by default. `mohona remote enable [--port 6792]` switches it on (after the daemon restarts), `mohona remote token [--read-only]` makes a login token, `mohona remote status` shows the address. `MOHONA_REMOTE_PORT` overrides the setting.
+
+**Safety.**
+- It is a separate listener from the local API (which stays on 127.0.0.1 only), and it listens on all network interfaces only when switched on.
+- Every request but the page itself needs a token. The master token is refused here; only tokens made with `mohona remote token` (or `POST /v1/tokens` locally) work, and an admin-scope token is treated as write. Administration (settings, queues, rules, profiles, tokens) therefore stays on this computer.
+- A phone cannot choose the folder a file is saved in, cannot send cookies, and cannot delete files from disk when removing a download.
+- Requests from other web pages (a foreign `Origin`) are refused; the companion's own page is same-origin. The page has a strict Content-Security-Policy and builds its text with `textContent`.
+- Wrong tokens wait 250 ms before the answer, as in the local API.
+
+**Not included.** HTTPS (the traffic, including the token, is readable on the network; use it on a home network or put it behind a VPN or an HTTPS proxy), live events (the page asks again every 2.5 s), pairing by QR code, per-token revoking from the app, and reaching the computer from outside the home network.

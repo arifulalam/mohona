@@ -312,6 +312,16 @@ Use your own small test files, shared with "anyone with the link".
 - [ ] `mohona resolve <link>` prints the direct address; a normal link prints "Not a share link" and exits with 1.
 - [ ] A private (not shared) Drive link fails with a clear error instead of saving an HTML page.
 
+## Remote companion
+
+- [ ] `mohona remote enable`, then close the daemon (or the app) and start it again. `mohona remote status` shows `http://<your PC address>:6792/`. Windows Firewall asks: allow for private networks only.
+- [ ] `mohona remote token --name phone` shows a token. On a phone on the same Wi-Fi, open the address, sign in with it: the downloads are listed and the page has no sideways scroll.
+- [ ] Paste a link in the page and tap Add: the download starts on the PC and appears in the app, in the PC's download folder.
+- [ ] Pause, Resume, Cancel and Remove work from the phone. Remove leaves the file on the PC.
+- [ ] A wrong token shows an error; Sign out forgets the token. The master token from `mohona api` is refused.
+- [ ] A token made with `--read-only` can see downloads but Add and the buttons show an error.
+- [ ] `mohona remote disable`, restart: the address no longer answers.
+
 ## Add new items here
 
 When a step adds something that can't be tested on this PC (FTP server, SFTP server, WebDAV, a custom CA, a mirror site, a browser, an Android phone), add it to this list in the same step.

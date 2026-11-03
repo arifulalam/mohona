@@ -16,6 +16,7 @@ mod daemon;
 mod history;
 mod profiles;
 mod queue;
+mod remote;
 mod resolve;
 mod rules;
 mod stream;
@@ -65,6 +66,14 @@ enum Command {
     Resolve {
         /// The share link
         url: String,
+    },
+    /// The web companion for a phone or another computer on your network (the daemon must be running)
+    Remote {
+        #[command(subcommand)]
+        command: remote::RemoteCommand,
+        /// The daemon's connection file (default: your application-data folder)
+        #[arg(long)]
+        info: Option<PathBuf>,
     },
     /// Per-site profiles: connections, speed and headers for one site (the daemon must be running)
     Profiles {
@@ -575,6 +584,7 @@ async fn main() -> ExitCode {
             }
         },
         Some(Command::Resolve { url }) => resolve::run(&url),
+        Some(Command::Remote { command, info }) => remote::run(command, info).await,
         Some(Command::Profiles { command, info }) => profiles::run(command, info).await,
         Some(Command::Rules { command, info }) => rules::run(command, info).await,
         Some(Command::Queue { command }) => match queue::run(command, cli.db).await {

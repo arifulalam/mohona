@@ -96,6 +96,17 @@ pub enum Call {
     SetProfiles {
         profiles: Vec<crate::profiles::Profile>,
     },
+    /// The remote companion's port (0 = off) and the port it listens on now.
+    GetRemote,
+    /// Choose the companion's port (0 = off). Takes effect when the daemon restarts.
+    SetRemote {
+        port: u16,
+    },
+    /// A new token for the companion (scope `read` or `write`), shown once.
+    MakeToken {
+        name: String,
+        scope: String,
+    },
     /// Every queue, with its limits and schedule.
     GetQueues,
     /// A new queue (a unique name of 1 to 40 characters).
@@ -356,6 +367,18 @@ pub enum Response {
     },
     Profiles {
         profiles: Vec<crate::profiles::Profile>,
+    },
+    Remote {
+        /// Chosen port, 0 for off.
+        port: u16,
+        /// The port it listens on now, 0 for not listening.
+        listening: u16,
+    },
+    Token {
+        id: i64,
+        name: String,
+        scope: String,
+        token: String,
     },
     /// The rule that applies, if any.
     RuleMatch {

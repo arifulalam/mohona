@@ -617,6 +617,10 @@ mohona profiles disable 1     # also: enable, remove
 
 `mohona resolve URL` prints the service and the direct download address for a Google Drive, Google Docs, Dropbox, OneDrive or GitHub link (exit code 1 if it is not one). Adding such a link does this by itself. API: `POST /v1/resolve` with `{"url": ...}` returns `{url, service}` (both null if unknown).
 
+## `remote` — the web companion
+
+`mohona remote status` shows whether the companion is on and its address; `enable [--port N]` / `disable` change the setting (they take effect when the daemon starts again); `token [--name NAME] [--read-only]` makes a login token and shows it once. Open the address in a phone's browser and type the token. Plain HTTP, so only on a network you trust. A phone can add, pause, resume, cancel and remove downloads (the file stays on disk), but not change settings or choose folders.
+
 ## BitTorrent
 
 Add a magnet link or a `.torrent` web address to the daemon the same way as any address (the app's "+ Add", the extension, `POST /v1/downloads`, or `mohona queue add`). Quote magnet links in the shell, because they contain `&`:

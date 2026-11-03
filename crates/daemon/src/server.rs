@@ -41,6 +41,8 @@ pub(crate) struct State {
     receiver: crate::receive::Receiver,
     action: std::sync::Mutex<ActionState>,
     live: std::sync::Mutex<std::collections::HashMap<i64, Live>>,
+    /// The port the remote companion listens on (0: not listening).
+    remote_port: std::sync::atomic::AtomicU16,
 }
 
 /// The newest numbers about a running download, from the manager's events.
@@ -60,6 +62,26 @@ struct LivePart {
     speed: f64,
     moved_at: std::time::Instant,
     sampled: std::time::Instant,
+}
+
+const REMOTE_KEY: &str = "remote.port";
+
+/// The companion's chosen port: the environment first, then the setting; 0 means off.
+async fn remote_setting(state: &State) -> u16 {
+    if let Some(p) = std::env::var("MOHONA_REMOTE_PORT")
+        .ok()
+        .and_then(|p| p.parse().ok())
+    {
+        return p;
+    }
+    state
+        .manager
+        .setting(REMOTE_KEY)
+        .await
+        .ok()
+        .flatten()
+        .and_then(|t| t.trim().parse().ok())
+        .unwrap_or(0)
 }
 
 /// What the person armed for the end of the downloads, and how far it is.
@@ -115,8 +137,21 @@ pub async fn serve(manager: Manager, config: ServerConfig) -> std::io::Result<()
         receiver: crate::receive::Receiver::default(),
         action: std::sync::Mutex::new(ActionState::default()),
         live: std::sync::Mutex::new(std::collections::HashMap::new()),
+        remote_port: std::sync::atomic::AtomicU16::new(0),
     });
     watch_action(&state);
+    // The remote companion: off unless MOHONA_REMOTE_PORT or the setting `remote.port` names a port.
+    let wanted = remote_setting(&state).await;
+    if wanted != 0 {
+        if let Ok(listener) = crate::api::bind_remote(wanted).await {
+            if let Ok(addr) = listener.local_addr() {
+                state
+                    .remote_port
+                    .store(addr.port(), std::sync::atomic::Ordering::Relaxed);
+            }
+            tokio::spawn(crate::api::serve_remote(listener, Arc::clone(&state)));
+        }
+    }
     if let Some(api_listener) = api_listener {
         tokio::spawn(crate::api::serve(api_listener, Arc::clone(&state)));
     }
@@ -672,6 +707,22 @@ pub(crate) async fn handle(state: &State, call: Call) -> Response {
                         message: e.to_string(),
                     },
                 },
+            }
+        }
+        Call::GetRemote => Response::Remote {
+            port: remote_setting(state).await,
+            listening: state.remote_port.load(std::sync::atomic::Ordering::Relaxed),
+        },
+        Call::SetRemote { port } => done(manager.set_setting(REMOTE_KEY, &port.to_string()).await),
+        Call::MakeToken { name, scope } => {
+            match crate::api::make_token(state, name.clone(), scope.clone()).await {
+                Ok((id, token)) => Response::Token {
+                    id,
+                    name,
+                    scope,
+                    token,
+                },
+                Err(message) => Response::Error { message },
             }
         }
         Call::GetProfiles => Response::Profiles {

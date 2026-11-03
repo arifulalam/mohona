@@ -146,6 +146,8 @@ pub const ROUTES: &[Route] = routes![
 ];
 
 struct Req {
+    /// Arrived on the remote companion's port (LAN), not the local API.
+    remote: bool,
     method: String,
     path: String,
     query: HashMap<String, String>,
@@ -215,6 +217,63 @@ pub(crate) async fn serve(listener: TcpListener, state: Arc<State>) {
             .await;
         });
     }
+}
+
+const REMOTE_PAGE: &str = include_str!("remote.html");
+
+/// The remote companion: the same operations for write-scope tokens, plus its one web page, on the LAN.
+pub async fn bind_remote(port: u16) -> std::io::Result<TcpListener> {
+    TcpListener::bind(("0.0.0.0", port)).await
+}
+
+pub(crate) async fn serve_remote(listener: TcpListener, state: Arc<State>) {
+    let port = listener.local_addr().map(|a| a.port()).unwrap_or(0);
+    loop {
+        let Ok((stream, _peer)) = listener.accept().await else {
+            continue;
+        };
+        let state = Arc::clone(&state);
+        tokio::spawn(async move {
+            let _ = tokio::time::timeout(
+                Duration::from_secs(60),
+                remote_connection(stream, state, port),
+            )
+            .await;
+        });
+    }
+}
+
+async fn remote_connection(
+    mut stream: TcpStream,
+    state: Arc<State>,
+    port: u16,
+) -> std::io::Result<()> {
+    let mut request =
+        match tokio::time::timeout(Duration::from_secs(10), read_request(&mut stream)).await {
+            Ok(Ok(request)) => request,
+            Ok(Err(reply)) => return write_reply(&mut stream, reply).await,
+            Err(_) => return Ok(()),
+        };
+    request.remote = true;
+    if request.method == "GET" && (request.path == "/" || request.path == "/index.html") {
+        let head = format!(
+            "HTTP/1.1 200 OK\r\nContent-Type: text/html; charset=utf-8\r\nContent-Length: {}\r\nCache-Control: no-store\r\nX-Content-Type-Options: nosniff\r\nX-Frame-Options: DENY\r\nReferrer-Policy: no-referrer\r\nContent-Security-Policy: default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; connect-src 'self'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'\r\nConnection: close\r\n\r\n",
+            REMOTE_PAGE.len()
+        );
+        stream.write_all(head.as_bytes()).await?;
+        stream.write_all(REMOTE_PAGE.as_bytes()).await?;
+        return stream.shutdown().await;
+    }
+    // No event stream here (the page asks again every few seconds), and no local-only addresses.
+    let answer = if request.path == "/v1/events" {
+        failure(404, "not_found", "there is no such address")
+    } else {
+        match prepare(&state, &request, port).await {
+            Ok((route, scope, params)) => run(&state, route, scope, params, request).await,
+            Err(reply) => reply,
+        }
+    };
+    write_reply(&mut stream, answer).await
 }
 
 async fn connection(mut stream: TcpStream, state: Arc<State>, port: u16) -> std::io::Result<()> {
@@ -348,6 +407,7 @@ async fn read_request(stream: &mut TcpStream) -> Result<Req, Reply> {
         })
         .collect();
     Ok(Req {
+        remote: false,
         method: method.to_string(),
         path: path.to_string(),
         query,
@@ -463,18 +523,30 @@ async fn prepare(
     req: &Req,
     port: u16,
 ) -> Result<(&'static Route, Scope, Params), Reply> {
-    if !req.headers.get("host").is_some_and(|h| host_ok(h, port)) {
+    if !req.remote && !req.headers.get("host").is_some_and(|h| host_ok(h, port)) {
         return Err(failure(
             421,
             "bad_host",
             "the Host header must be 127.0.0.1, localhost or [::1] with this port",
         ));
     }
-    if req.headers.contains_key("origin")
-        || req
+    // The companion's own page is same-origin; anything else from a web page is refused.
+    let same_origin = req.remote
+        && match (req.headers.get("origin"), req.headers.get("host")) {
+            (None, _) => true,
+            (Some(o), Some(h)) => o == &format!("http://{h}"),
+            _ => false,
+        }
+        && req
             .headers
             .get("sec-fetch-site")
-            .is_some_and(|v| v != "none")
+            .is_none_or(|v| matches!(v.as_str(), "same-origin" | "none"));
+    if !same_origin
+        && (req.headers.contains_key("origin")
+            || req
+                .headers
+                .get("sec-fetch-site")
+                .is_some_and(|v| v != "none"))
     {
         return Err(failure(
             403,
@@ -496,7 +568,19 @@ async fn prepare(
     let scope = if route.scope == Scope::None {
         Scope::None
     } else {
-        let have = scope_of(state, token_from(req).unwrap_or("")).await;
+        let given = token_from(req).unwrap_or("");
+        if req.remote && same_token(given, &state.token) {
+            tokio::time::sleep(Duration::from_millis(250)).await;
+            return Err(failure(
+                403,
+                "master_token_local_only",
+                "the master token works only on this computer; make a smaller one with `mohona remote token`",
+            ));
+        }
+        let mut have = scope_of(state, given).await;
+        if req.remote {
+            have = have.min(Scope::Write); // administration stays on this computer
+        }
         if have == Scope::None {
             tokio::time::sleep(Duration::from_millis(250)).await; // slows guessing
             return Err(failure(
@@ -648,6 +732,11 @@ async fn dispatch(
             if let Some(folder) = body.remove("folder") {
                 body.entry("dest_dir").or_insert(folder);
             }
+            if req.remote {
+                // A phone may not choose where on this computer a file is written.
+                body.remove("dest_dir");
+                body.remove("cookies");
+            }
             ask(state, call("add", body)?).await
         }
         "removeDownload" => {
@@ -655,7 +744,9 @@ async fn dispatch(
             fields.insert("id".into(), id.into());
             fields.insert(
                 "delete_file".into(),
-                Value::Bool(req.query.get("delete_file").is_some_and(|v| v == "true")),
+                Value::Bool(
+                    !req.remote && req.query.get("delete_file").is_some_and(|v| v == "true"),
+                ),
             );
             ask(state, call("remove", fields)?).await
         }
@@ -744,6 +835,31 @@ async fn dispatch(
 /// A stored token without its hash.
 fn public_token(record: Value) -> Value {
     json!({ "id": record["id"], "name": record["name"], "scope": record["scope"], "created": record["created"] })
+}
+
+/// A new token for the CLI (the companion's phone login). Only read and write.
+pub(crate) async fn make_token(
+    state: &State,
+    name: String,
+    scope: String,
+) -> Result<(i64, String), String> {
+    if scope != "read" && scope != "write" {
+        return Err("scope must be read or write".into());
+    }
+    let mut body = Map::new();
+    body.insert("name".into(), Value::String(name));
+    body.insert("scope".into(), Value::String(scope));
+    let made = create_token(state, body).await;
+    if made.status != 201 {
+        return Err(made.body["error"]["message"]
+            .as_str()
+            .unwrap_or("could not make the token")
+            .to_string());
+    }
+    Ok((
+        made.body["id"].as_i64().unwrap_or(0),
+        made.body["token"].as_str().unwrap_or("").to_string(),
+    ))
 }
 
 async fn create_token(state: &State, body: Map<String, Value>) -> Reply {
