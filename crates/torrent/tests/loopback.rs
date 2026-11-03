@@ -121,7 +121,27 @@ async fn a_torrent_is_downloaded_from_a_seeder_and_can_be_stopped() {
     .unwrap();
     assert_eq!(again.path, done.path);
 
-    // A torrent nobody has can be stopped.
+    // A torrent nobody has can be stopped. (Not the seeded one: the engine may find a seeder on this
+    // computer by itself, e.g. through local peer discovery on Windows.)
+    let other = origin.join("nobody.bin");
+    std::fs::write(
+        &other,
+        data(300_000).iter().map(|b| b ^ 0x5a).collect::<Vec<u8>>(),
+    )
+    .unwrap();
+    let unseeded = create_torrent(
+        &other,
+        CreateTorrentOptions {
+            piece_length: Some(32 * 1024),
+            ..CreateTorrentOptions::default()
+        },
+        &librqbit::spawn_utils::BlockingSpawner::new(1),
+    )
+    .await
+    .unwrap()
+    .as_bytes()
+    .unwrap()
+    .to_vec();
     let lonely = Torrents::new(dir.path().join("state2"));
     let cancel = CancelToken::new();
     let stopper = cancel.clone();
@@ -132,7 +152,7 @@ async fn a_torrent_is_downloaded_from_a_seeder_and_can_be_stopped() {
     let started = Instant::now();
     let result = lonely
         .run(
-            Source::File(torrent),
+            Source::File(unseeded),
             &dir.path().join("out2"),
             vec![],
             &cancel,
