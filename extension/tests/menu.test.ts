@@ -21,6 +21,7 @@ describe("targetOf", () => {
     expect(targetOf({ linkUrl: "https://a/l.zip", srcUrl: "https://a/i.png" })).toBe("https://a/l.zip");
     expect(targetOf({ srcUrl: "https://a/v.mp4" })).toBe("https://a/v.mp4");
     expect(targetOf({ srcUrl: "ftp://a/v.mp4" })).toBe("ftp://a/v.mp4");
+    expect(targetOf({ linkUrl: "magnet:?xt=urn:btih:abc&dn=x" })).toBe("magnet:?xt=urn:btih:abc&dn=x");
   });
   it("refuses what cannot be downloaded", () => {
     expect(targetOf({})).toBeNull();

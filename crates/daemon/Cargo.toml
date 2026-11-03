@@ -20,6 +20,7 @@ thiserror = "2"
 tokio = { workspace = true, features = ["process"] }
 
 [dev-dependencies]
+librqbit = { version = "9.1.0", default-features = false, features = ["rust-tls"] }
 mohona-core = { path = "../core" }
 mohona-testserver = { path = "../../tools/testserver" }
 tempfile = "3"

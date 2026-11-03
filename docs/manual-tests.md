@@ -268,6 +268,15 @@ The window cannot be built where the tests run (it needs the system web view), s
 3. `mohona profiles disable 1`, add the same kind of file again: it goes with the normal number of connections and full speed.
 4. In the app press "Settings", then "Site profiles": the profile is listed; add one with a wrong site such as `https://a.test/x` and see the message; switch one off and on; remove it.
 
+## BitTorrent
+
+1. In the app press "+ Add" and paste a magnet link of a legal torrent (for example the Ubuntu or Debian desktop image from their download page). Windows Firewall may ask once: allow it on private networks.
+2. The row shows the name once the torrent's description is found (a few seconds), then size, progress and speed. Pause, resume, cancel and remove work as for other downloads.
+3. When it finishes, the file or folder is in the download folder and no upload continues (check Task Manager's network use drops).
+4. Close the app and the daemon in the middle of a torrent, start again: it continues, after a short check of the files.
+5. In the browser, right-click a magnet link: "Download with Mohona" adds it. A `.torrent` file link from a site is taken over like other downloads and the torrent's contents are downloaded.
+6. Add a link of a torrent nobody seeds: it keeps "probing"; it can be paused and removed.
+
 ## Store packaging
 
 1. `cd extension && npm run package`, unzip `dist/store/mohona-chromium-0.0.1.zip` into an empty folder and load it unpacked in Chrome: it loads without errors, shows the Mohona icon, and its id is different from the development id (it has no `key`), so the popup says not connected until the host is registered for that id.

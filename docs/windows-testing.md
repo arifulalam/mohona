@@ -142,6 +142,7 @@ Numbers are the steps of the "Desktop app" section.
 - [ ] C24 Quiet when idle: with the window hidden for 10 minutes, Task Manager shows the app near 0% CPU
 - [ ] C25 Local API: `mohona api`, then the steps of "Local API" in `docs/manual-tests.md` (token works, web page refused, read-only token cannot add)
 - [ ] C26 Rules: the steps of "Rules" in `docs/manual-tests.md` (folder routing, block, test, and the app's Rules window)
+- [ ] C29 BitTorrent: the steps of "BitTorrent" in `docs/manual-tests.md` (magnet link, resume, firewall prompt, no seeding after finish)
 - [ ] C28 Settings window: the steps of "Settings window" in `docs/manual-tests.md` (one button, groups on the left, language and theme in General)
 - [ ] C27 Site profiles: the steps of "Site profiles" in `docs/manual-tests.md` (connection cap, speed cap, the app's window)
 - [ ] B3 Extension popup: a very long link in an error message wraps inside its own small scrolling box; the popup page gets no horizontal scrollbar

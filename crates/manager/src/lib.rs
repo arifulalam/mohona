@@ -511,6 +511,11 @@ impl Manager {
             .unwrap_or(0);
         let net = network::Watch::new(config.network.0.state(), std::time::Instant::now());
         let for_checks = client.clone();
+        let torrents_dir = store
+            .path()
+            .and_then(|p| p.parent())
+            .map_or_else(std::env::temp_dir, std::path::Path::to_path_buf)
+            .join("torrents");
         let actor = Actor {
             store,
             client,
@@ -530,6 +535,7 @@ impl Manager {
             countdown: None,
             generation: 0,
             net,
+            torrents: Arc::new(mohona_torrent::Torrents::new(torrents_dir)),
         };
         tokio::spawn(actor.run());
         Ok(Manager {
@@ -890,6 +896,8 @@ struct Actor {
     countdown: Option<(u64, u32)>,
     generation: u64,
     net: network::Watch,
+    /// BitTorrent downloads; its session starts with the first torrent.
+    torrents: Arc<mohona_torrent::Torrents>,
 }
 
 impl Actor {
@@ -1744,6 +1752,24 @@ impl Actor {
             },
         );
         self.set_status(row.id, Status::Probing, None);
+        if mohona_torrent::is_torrent_address(&row.url) {
+            let route = row
+                .auto_category
+                .then(|| self.store.categories().ok())
+                .flatten()
+                .map(|categories| (PathBuf::from(&row.dest_dir), categories));
+            tokio::spawn(run_torrent(
+                self.torrents.clone(),
+                row.url.clone(),
+                PathBuf::from(&row.dest_dir),
+                cancel,
+                row.id,
+                self.commands.clone(),
+                self.events.clone(),
+                route,
+            ));
+            return;
+        }
         let mut request = DownloadRequest::new(row.url.clone(), row.dest_dir.clone());
         request.connections = self.config.connections;
         request.retry = self.config.retry.clone();
@@ -1789,6 +1815,113 @@ impl Actor {
             route,
         ));
     }
+}
+
+/// A torrent: the same story as `run_download`, told by the torrent engine.
+#[allow(clippy::too_many_arguments)]
+async fn run_torrent(
+    torrents: Arc<mohona_torrent::Torrents>,
+    url: String,
+    dest: PathBuf,
+    cancel: CancelToken,
+    id: i64,
+    commands: mpsc::Sender<Command>,
+    events: broadcast::Sender<ManagerEvent>,
+    route: Option<(PathBuf, Vec<CategoryRow>)>,
+) {
+    let (tx, mut rx) = mpsc::unbounded_channel::<mohona_torrent::Update>();
+    let engine = {
+        let url = url.clone();
+        let cancel = cancel.clone();
+        async move {
+            torrents
+                .run(
+                    mohona_torrent::Source::Address(url),
+                    &dest,
+                    Vec::new(),
+                    &cancel,
+                    move |update| {
+                        let _ = tx.send(update);
+                    },
+                )
+                .await
+        }
+    };
+    tokio::pin!(engine);
+    let mut last_save = Instant::now();
+    let mut latest = 0u64;
+    let mut started = false;
+    let result = loop {
+        tokio::select! {
+            result = &mut engine => break result,
+            Some(update) = rx.recv() => {
+                if !started {
+                    if let Some(name) = &update.name {
+                        started = true;
+                        let _ = commands
+                            .send(Command::Started {
+                                id,
+                                url: url.clone(),
+                                filename: name.clone(),
+                                total: update.total,
+                                resumed: 0,
+                            })
+                            .await;
+                    }
+                }
+                if started {
+                    latest = update.downloaded;
+                    let _ = events.send(ManagerEvent::Progress { id, downloaded: update.downloaded, total: update.total });
+                    if last_save.elapsed() >= SAVE_INTERVAL {
+                        last_save = Instant::now();
+                        let _ = commands.send(Command::Saved { id, downloaded: update.downloaded }).await;
+                    }
+                }
+            }
+        }
+    };
+    if result.is_err() && latest > 0 {
+        let _ = commands
+            .send(Command::Saved {
+                id,
+                downloaded: latest,
+            })
+            .await;
+    }
+    let result = match result {
+        Ok(done) => Ok(Outcome {
+            path: done.path,
+            bytes: done.bytes,
+            final_url: url,
+            connections: 0,
+            verified: None,
+        }),
+        Err(mohona_torrent::TorrentError::Cancelled) => Err(CoreError::Cancelled),
+        Err(mohona_torrent::TorrentError::Failed(reason)) => Err(CoreError::Stream(reason)),
+    };
+    // A one-file torrent can be sorted into its category's folder; a folder stays as it is.
+    let mut category = None;
+    let result = match (result, route) {
+        (Ok(mut outcome), Some((base, categories))) if outcome.path.is_file() => {
+            let path = outcome.path.clone();
+            let sorted =
+                tokio::task::spawn_blocking(move || routing::sort_file(&path, &base, &categories))
+                    .await;
+            if let Ok(Ok((new_path, found))) = sorted {
+                outcome.path = new_path;
+                category = found;
+            }
+            Ok(outcome)
+        }
+        (other, _) => other,
+    };
+    let _ = commands
+        .send(Command::Ended {
+            id,
+            result,
+            category,
+        })
+        .await;
 }
 
 async fn run_download(

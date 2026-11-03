@@ -9,6 +9,7 @@ members = [
     "crates/appcore",
     "crates/store",
     "crates/manager",
+    "crates/torrent",
     "crates/cli",
     "tools/testserver",
 ]

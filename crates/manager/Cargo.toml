@@ -11,6 +11,7 @@ chrono = { version = "0.4", default-features = false, features = ["clock", "std"
 mohona-core = { path = "../core" }
 mohona-net = { version = "0.0.1", path = "../net" }
 mohona-store = { path = "../store" }
+mohona-torrent = { path = "../torrent" }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 thiserror = "2"

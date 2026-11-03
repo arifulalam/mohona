@@ -613,6 +613,16 @@ mohona profiles disable 1     # also: enable, remove
 
 `--host` is `example.com` (also its subdomains), `*.example.com` or a pattern with `*`; `--connections` is 1 to 32; `--speed` is per download (`500K`, `2M`). API: `GET`/`PUT /v1/profiles`.
 
+## BitTorrent
+
+Add a magnet link or a `.torrent` web address to the daemon the same way as any address (the app's "+ Add", the extension, `POST /v1/downloads`, or `mohona queue add`). Quote magnet links in the shell, because they contain `&`:
+
+```
+mohona queue add 'magnet:?xt=urn:btih:...&dn=name'
+```
+
+Finished torrents are not seeded. Mohona's speed limits do not apply to torrents yet.
+
 # The local HTTP API
 
 The daemon (`mohona daemon`, or the desktop app) serves it on `127.0.0.1:6791`. Set `MOHONA_API_PORT` to use another port or `off` to turn it off. Requests need `Authorization: Bearer <token>`; the full description is `crates/daemon/openapi.json` (also at `/v1/openapi.json`).

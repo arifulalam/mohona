@@ -414,10 +414,11 @@ impl Engine {
         let lower = url.to_ascii_lowercase();
         if !(lower.starts_with("http://")
             || lower.starts_with("https://")
-            || lower.starts_with("ftp://"))
+            || lower.starts_with("ftp://")
+            || lower.starts_with("magnet:?"))
         {
             return Err(AppError::Input(
-                "the address must start with http://, https:// or ftp://".into(),
+                "the address must start with http://, https://, ftp:// or magnet:?".into(),
             ));
         }
         let folder = folder.map(str::trim).filter(|f| !f.is_empty());

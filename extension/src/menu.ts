@@ -22,7 +22,7 @@ export interface MenuDeps {
   add(details: AddDetails): Promise<Outcome>;
 }
 
-const SCHEMES = new Set(["http:", "https:", "ftp:"]);
+const SCHEMES = new Set(["http:", "https:", "ftp:", "magnet:"]);
 
 /**
  * The address to download: the link when the click was on one (even when it

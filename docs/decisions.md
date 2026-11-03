@@ -643,3 +643,22 @@ A `401` now becomes its own error (`NetError::Unauthorized`) that names the kind
 **How.** The groups are the earlier dialogs shown without their own frame: a dialog that finds itself inside the settings window draws only its content, and the window supplies the frame, the title and the Esc key. So each group keeps its own checks and tests. "Save", "Cancel" and "Close" in a group close the whole window, as before; groups that apply their changes at once (categories, rules, site profiles, language, theme) have only "Close".
 
 **Not changed.** The language and theme are still kept in the same places (the browser's storage), and the extension's popup has its own language and theme choice.
+
+## ADR-0063: BitTorrent through librqbit
+
+**What.** A magnet link (`magnet:?...`) or the web address of a `.torrent` file can be added like any download: in the app, with the extension (also from the right-click menu on a magnet link), through the API, or with `mohona queue`. It shows in the same list with the torrent's name, size, progress and speed, and can be paused, resumed, cancelled and removed.
+
+**Engine.** [librqbit](https://crates.io/crates/librqbit) 9, used as a library, without its web interface (`crates/torrent` is the thin layer). The session (sockets, DHT, peer table) starts with the first torrent, not with the program. The manager chooses the torrent path when the address is a magnet link or ends with `.torrent`; everything else, queues, the "start only when a slot is free" rule, states, logs, the list and events, is the same code as for HTTP.
+
+**Choices.**
+- No seeding. A finished torrent leaves the session at once; its files stay. Uploading while downloading is part of the protocol and stays on.
+- Pause and cancel stop the torrent and keep the files; resuming checks the files that are there and fetches what is missing (so a restart of the program also resumes).
+- A `.torrent` address is fetched by the engine itself, so a proxy, cookies and site profiles do not apply to that one request.
+- A one-file torrent can be sorted into its category's folder; a torrent of several files stays in its own folder.
+- The speed limits of Mohona (global, queue, download) do not apply to torrents yet.
+- The engine opens a listening port (the system picks it). Windows Firewall asks once on the first torrent; the answer is the person's.
+- Tracker addresses in the engine need an IPv6-capable socket layer; the engine falls back to IPv4-only for its own sockets. (This sandbox's kernel has none, so the tests that run real transfers skip themselves there; set `MOHONA_FORCE_TORRENT_TESTS=1` to run them anyway.)
+
+**Tested.** A seeder and Mohona's engine on this computer transfer a file, finish at once on a second request for the same files, and stop when asked; and through the daemon a magnet link whose tracker (a tiny local HTTP tracker) names the seeder is downloaded to a byte-identical file, while a magnet link nobody serves waits and can be paused and removed. These ran with a local copy of librqbit's tracker crate patched to fall back to IPv4 for its UDP socket (needed only on a computer with no IPv6 at all).
+
+**Not included.** Choosing which files of a torrent to download, seeding to a ratio, per-torrent limits, a peers window, torrent creation, opening `.torrent` files from disk, and the browser handing `magnet:` links to Mohona by itself (the right-click menu does it).
