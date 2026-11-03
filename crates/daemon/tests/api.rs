@@ -1033,3 +1033,69 @@ async fn a_site_profile_sets_headers_connections_and_speed_but_the_caller_wins()
     );
     api.shutdown.notify_one();
 }
+
+#[tokio::test]
+async fn cloud_share_links_are_turned_into_direct_addresses() {
+    let dir = tempfile::tempdir().unwrap();
+    let api = start(dir.path()).await;
+    let id = "1AbCdEfGhIjKlMnOpQrStUvWxYz_0123-45";
+
+    let (s, b) = admin(
+        &api,
+        "POST",
+        "/v1/resolve",
+        Some(json!({ "url": format!("https://drive.google.com/file/d/{id}/view?usp=sharing") })),
+    )
+    .await;
+    assert_eq!(s, 200, "{b}");
+    assert_eq!(b["service"], "Google Drive");
+    assert_eq!(
+        b["url"],
+        format!("https://drive.usercontent.google.com/download?id={id}&export=download&confirm=t")
+    );
+    let (_, b) = admin(
+        &api,
+        "POST",
+        "/v1/resolve",
+        Some(json!({ "url": "https://example.com/a.zip" })),
+    )
+    .await;
+    assert_eq!(
+        (b["url"].clone(), b["service"].clone()),
+        (Value::Null, Value::Null)
+    );
+    assert_eq!(
+        admin(&api, "POST", "/v1/resolve", Some(json!({ "nope": 1 })))
+            .await
+            .0,
+        400
+    );
+    // A read token may ask; no token may not.
+    assert_eq!(
+        raw(
+            api.port,
+            "POST",
+            "/v1/resolve",
+            &[],
+            Some("{\"url\":\"x\"}")
+        )
+        .await
+        .0,
+        401
+    );
+
+    // Adding a share link stores the direct address (the file itself is not reachable from here).
+    let (s, b) = admin(
+        &api,
+        "POST",
+        "/v1/downloads",
+        Some(json!({ "url": "https://www.dropbox.com/s/abc123/report.pdf?dl=0" })),
+    )
+    .await;
+    assert_eq!(s, 201, "{b}");
+    let added = b["id"].as_i64().unwrap();
+    let (_, d) = admin(&api, "GET", &format!("/v1/downloads/{added}"), None).await;
+    assert_eq!(d["url"], "https://www.dropbox.com/s/abc123/report.pdf?dl=1");
+    admin(&api, "POST", &format!("/v1/downloads/{added}/cancel"), None).await;
+    api.shutdown.notify_one();
+}

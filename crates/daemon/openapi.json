@@ -1150,6 +1150,45 @@
           }
         }
       }
+    },
+    "/v1/resolve": {
+      "post": {
+        "operationId": "resolveLink",
+        "summary": "The direct download address for a cloud share link (Google Drive, Google Docs, Dropbox, OneDrive, GitHub), or null.",
+        "x-scope": "read",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "url"
+                ],
+                "properties": {
+                  "url": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "url and service, both null when the link is not recognised."
+          },
+          "400": {
+            "$ref": "#/components/responses/Error"
+          },
+          "401": {
+            "$ref": "#/components/responses/Error"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
     }
   },
   "components": {

@@ -8,6 +8,7 @@
 
 pub mod api;
 mod client;
+pub mod cloud;
 mod info;
 pub mod profiles;
 mod protocol;

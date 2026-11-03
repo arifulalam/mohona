@@ -302,6 +302,16 @@ The window cannot be built where the tests run (it needs the system web view), s
 - [ ] A fast real server (not one that limits per address): `get URL -c 8` is faster than `-c 1`.
 - [ ] `-l 500K` really holds the speed near 500 KB/s.
 
+## Cloud links
+
+Use your own small test files, shared with "anyone with the link".
+- [ ] Google Drive: add the share link in the app; the file downloads with its real name and size, not a web page.
+- [ ] Dropbox link (`...?dl=0`): downloads the file.
+- [ ] OneDrive link (`1drv.ms/...`): downloads the file.
+- [ ] GitHub `blob` link of a file: downloads the raw file.
+- [ ] `mohona resolve <link>` prints the direct address; a normal link prints "Not a share link" and exits with 1.
+- [ ] A private (not shared) Drive link fails with a clear error instead of saving an HTML page.
+
 ## Add new items here
 
 When a step adds something that can't be tested on this PC (FTP server, SFTP server, WebDAV, a custom CA, a mirror site, a browser, an Android phone), add it to this list in the same step.

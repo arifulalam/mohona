@@ -662,3 +662,11 @@ A `401` now becomes its own error (`NetError::Unauthorized`) that names the kind
 **Tested.** A seeder and Mohona's engine on this computer transfer a file, finish at once on a second request for the same files, and stop when asked; and through the daemon a magnet link whose tracker (a tiny local HTTP tracker) names the seeder is downloaded to a byte-identical file, while a magnet link nobody serves waits and can be paused and removed. These ran with a local copy of librqbit's tracker crate patched to fall back to IPv4 for its UDP socket (needed only on a computer with no IPv6 at all).
 
 **Not included.** Choosing which files of a torrent to download, seeding to a ratio, per-torrent limits, a peers window, torrent creation, opening `.torrent` files from disk, and the browser handing `magnet:` links to Mohona by itself (the right-click menu does it).
+
+## ADR-0064: Cloud share links
+
+**What.** Pasting a share link of a cloud service downloads the file itself, not the web page around it. Known: Google Drive files (`/file/d/ID`, `open?id=`, `uc?id=`), Google Docs, Sheets and Slides (exported as .docx, .xlsx, .pptx), Dropbox (`dl=1`), OneDrive (`1drv.ms` and `onedrive.live.com`, through the public shares API) and GitHub `blob` pages (the raw file).
+
+**How.** `mohona_daemon::cloud::resolve` is a pure function in the daemon's `Add`, so the app, the extension, the CLI and the API all get it. Only exact host names match (`drive.google.com.evil.example` does not) and file ids must look like ids. Rules and site profiles are matched against the address the person pasted; the download uses the direct one. Cookies sent with the request are dropped when the host changes. `mohona resolve URL` and `POST /v1/resolve` show the result without adding anything.
+
+**Not included.** Folders, files that need a sign-in, Google's "too large to scan" pages beyond the `confirm=t` shortcut, and services not listed. An unknown address is downloaded as it is.

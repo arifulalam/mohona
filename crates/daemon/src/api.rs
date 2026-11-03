@@ -120,6 +120,7 @@ pub const ROUTES: &[Route] = routes![
         "removeCategory",
         Scope::Admin
     ),
+    ("POST", "/v1/resolve", "resolveLink", Scope::Read),
     ("GET", "/v1/rules", "getRules", Scope::Read),
     ("PUT", "/v1/rules", "setRules", Scope::Admin),
     ("POST", "/v1/rules/test", "testRules", Scope::Read),
@@ -696,6 +697,16 @@ async fn dispatch(
         "removeCategory" => {
             fields.insert("id".into(), id_of(&params)?.into());
             ask(state, call("remove_category", fields)?).await
+        }
+        "resolveLink" => {
+            let body = object(&req)?;
+            let Some(url) = body.get("url").and_then(Value::as_str) else {
+                return Err(failure(400, "bad_body", "url: the address to look at"));
+            };
+            match crate::cloud::resolve(url) {
+                Some(link) => reply(200, json!({ "url": link.url, "service": link.service })),
+                None => reply(200, json!({ "url": null, "service": null })),
+            }
         }
         "getRules" => ask(state, Call::GetRules).await,
         "setRules" => {

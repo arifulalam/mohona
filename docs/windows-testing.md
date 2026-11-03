@@ -145,6 +145,7 @@ Numbers are the steps of the "Desktop app" section.
 - [ ] C29 BitTorrent: the steps of "BitTorrent" in `docs/manual-tests.md` (magnet link, resume, firewall prompt, no seeding after finish)
 - [ ] C28 Settings window: the steps of "Settings window" in `docs/manual-tests.md` (one button, groups on the left, language and theme in General)
 - [ ] C27 Site profiles: the steps of "Site profiles" in `docs/manual-tests.md` (connection cap, speed cap, the app's window)
+- [ ] C30 Cloud links: the steps of "Cloud links" in `docs/manual-tests.md` (a Drive, Dropbox, OneDrive and GitHub link each download the real file)
 - [ ] B3 Extension popup: a very long link in an error message wraps inside its own small scrolling box; the popup page gets no horizontal scrollbar
 
 ## What to send back

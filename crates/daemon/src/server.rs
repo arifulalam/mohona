@@ -597,6 +597,20 @@ pub(crate) async fn handle(state: &State, call: Call) -> Response {
                 }
                 rule_sort = rule.then.sort;
             }
+            // A share link of a cloud service becomes the address of the file itself. Rules and
+            // profiles above and below look at the address as it was pasted.
+            let pasted = url.clone();
+            let mut cookies = cookies;
+            let url = match crate::cloud::resolve(&url) {
+                Some(link) => {
+                    // The file is on another host: the page's login cookies do not go there.
+                    if crate::rules::host_of(&link.url) != crate::rules::host_of(&pasted) {
+                        cookies = None;
+                    }
+                    link.url
+                }
+                None => url,
+            };
             let mut request = AddRequest::new(url, folder_or_default(state, dest_dir).await);
             request.sort_into_categories = match rule_sort {
                 Some(on) if !sort => on,
@@ -608,7 +622,7 @@ pub(crate) async fn handle(state: &State, call: Call) -> Response {
             // weakens certificate checks or names proxies or key files.
             // The site's profile fills in what the caller left open.
             let profiles = load_profiles(state).await;
-            let profile = crate::profiles::find(&profiles, &request.url).cloned();
+            let profile = crate::profiles::find(&profiles, &pasted).cloned();
             let mut headers = headers;
             let (mut referrer, mut user_agent) = (referrer, user_agent);
             let mut connections = None;

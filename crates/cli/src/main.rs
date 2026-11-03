@@ -16,6 +16,7 @@ mod daemon;
 mod history;
 mod profiles;
 mod queue;
+mod resolve;
 mod rules;
 mod stream;
 mod tools;
@@ -59,6 +60,11 @@ enum Command {
         /// The daemon's connection file (default: your application-data folder)
         #[arg(long)]
         info: Option<PathBuf>,
+    },
+    /// Show the direct download address of a cloud share link (Google Drive, Dropbox, OneDrive, GitHub ...)
+    Resolve {
+        /// The share link
+        url: String,
     },
     /// Per-site profiles: connections, speed and headers for one site (the daemon must be running)
     Profiles {
@@ -568,6 +574,7 @@ async fn main() -> ExitCode {
                 ExitCode::FAILURE
             }
         },
+        Some(Command::Resolve { url }) => resolve::run(&url),
         Some(Command::Profiles { command, info }) => profiles::run(command, info).await,
         Some(Command::Rules { command, info }) => rules::run(command, info).await,
         Some(Command::Queue { command }) => match queue::run(command, cli.db).await {

@@ -613,6 +613,10 @@ mohona profiles disable 1     # also: enable, remove
 
 `--host` is `example.com` (also its subdomains), `*.example.com` or a pattern with `*`; `--connections` is 1 to 32; `--speed` is per download (`500K`, `2M`). API: `GET`/`PUT /v1/profiles`.
 
+## `resolve` — the direct address of a share link
+
+`mohona resolve URL` prints the service and the direct download address for a Google Drive, Google Docs, Dropbox, OneDrive or GitHub link (exit code 1 if it is not one). Adding such a link does this by itself. API: `POST /v1/resolve` with `{"url": ...}` returns `{url, service}` (both null if unknown).
+
 ## BitTorrent
 
 Add a magnet link or a `.torrent` web address to the daemon the same way as any address (the app's "+ Add", the extension, `POST /v1/downloads`, or `mohona queue add`). Quote magnet links in the shell, because they contain `&`:
@@ -650,6 +654,7 @@ curl -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
 | `GET`/`PUT /v1/config` | read / admin | engine settings |
 | `GET`/`POST /v1/queues`, `PUT`/`DELETE /v1/queues/{id}` | read / admin | queues |
 | `GET`/`POST /v1/categories`, `DELETE /v1/categories/{id}` | read / admin | categories |
+| `POST /v1/resolve` | read | direct address of a cloud share link |
 | `GET`/`PUT /v1/rules`, `POST /v1/rules/test` | read / admin (test: read) | rules; `PUT` replaces the whole list |
 | `GET`/`PUT /v1/profiles` | read / admin | site profiles; `PUT` replaces the whole list |
 | `GET`/`PUT /v1/plan`, `PUT`/`DELETE /v1/plan/after-action` | read / admin | schedule and the "when finished" action |
