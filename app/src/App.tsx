@@ -124,6 +124,16 @@ function Main({ api, every, language, onLanguage }: { api: Api; every?: number; 
     return problems.length ? problems.join("\n") : null;
   }
 
+  async function addTorrent(url: string, folder: string | null, queue: number | null, files: number[]): Promise<string | null> {
+    try {
+      await (queue === null ? api.add(url, folder, undefined, files) : api.add(url, folder, queue, files));
+    } catch (e) {
+      return (e as Error).message;
+    }
+    await d.act(async () => undefined);
+    return null;
+  }
+
   return (
     <div className="flex h-full flex-col">
       <header className="app-header flex items-center gap-3 border-b border-[var(--line)] px-4 py-2">
@@ -288,7 +298,7 @@ function Main({ api, every, language, onLanguage }: { api: Api; every?: number; 
       {settings && (
         <SettingsWindow api={api} running={running} language={language} onLanguage={onLanguage} theme={theme} onTheme={setTheme} clipboard={watchClipboard} onClipboard={setWatchClipboard} onClose={() => setSettings(false)} />
       )}
-      {adding && <AddDialog onAdd={addAll} queues={queueList} onBrowse={() => api.pickFolder()} defaultFolder={defaultFolder} onClose={() => setAdding(false)} />}
+      {adding && <AddDialog onAdd={addAll} onTorrentFiles={(u) => api.torrentFiles(u)} onAddTorrent={addTorrent} queues={queueList} onBrowse={() => api.pickFolder()} defaultFolder={defaultFolder} onClose={() => setAdding(false)} />}
       {removing && (
         <Modal title={t("Remove from the list")} onClose={() => setRemoving(false)}>
           <p className="mt-0">

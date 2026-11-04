@@ -79,11 +79,29 @@ fn failed(error: impl std::fmt::Display) -> TorrentError {
 }
 
 /// What to download.
+#[derive(Clone)]
 pub enum Source {
     /// A magnet link, or the web address of a `.torrent` file.
     Address(String),
     /// A `.torrent` file's contents.
     File(Vec<u8>),
+}
+
+/// One file of a torrent.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct FileEntry {
+    /// Its number in the torrent (what `only` takes).
+    pub index: u32,
+    /// Its path inside the torrent, with `/` between folders.
+    pub path: String,
+    pub size: u64,
+}
+
+/// What a torrent holds.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Listing {
+    pub name: String,
+    pub files: Vec<FileEntry>,
 }
 
 /// The torrent engine of one Mohona process. The session (its sockets, DHT
@@ -127,6 +145,49 @@ impl Torrents {
             .await
     }
 
+    /// What the torrent holds, without downloading anything. A magnet link first has to find its
+    /// description from peers, which can take a while: `cancel` ends the wait.
+    pub async fn list(
+        &self,
+        source: Source,
+        peers: Vec<SocketAddr>,
+        cancel: &CancelToken,
+    ) -> Result<Listing, TorrentError> {
+        let session = self.session().await?;
+        let add = match source {
+            Source::Address(url) => AddTorrent::from_url(url),
+            Source::File(bytes) => AddTorrent::from_bytes(bytes),
+        };
+        let options = AddTorrentOptions {
+            list_only: true,
+            initial_peers: (!peers.is_empty()).then_some(peers),
+            ..AddTorrentOptions::default()
+        };
+        let added = tokio::select! {
+            () = cancel.cancelled() => return Err(TorrentError::Cancelled),
+            added = session.add_torrent(add, Some(options)) => added.map_err(failed)?,
+        };
+        let AddTorrentResponse::ListOnly(listed) = added else {
+            return Err(TorrentError::Failed("the torrent was not listed".into()));
+        };
+        let info = &listed.info;
+        let files: Vec<FileEntry> = info
+            .iter_file_details()
+            .enumerate()
+            .map(|(i, f)| FileEntry {
+                index: u32::try_from(i).unwrap_or(u32::MAX),
+                path: f.filename.to_string(),
+                size: f.len,
+            })
+            .collect();
+        let name = info
+            .name()
+            .map(|n| n.into_owned())
+            .filter(|n| !n.is_empty())
+            .unwrap_or_else(|| "torrent".into());
+        Ok(Listing { name, files })
+    }
+
     /// Download into `dest` until done, cancelled or failed. `peers` are tried
     /// first (used by tests and for magnet links that name peers).
     pub async fn run(
@@ -134,10 +195,21 @@ impl Torrents {
         source: Source,
         dest: &Path,
         peers: Vec<SocketAddr>,
+        only: Option<Vec<u32>>,
         cancel: &CancelToken,
         mut report: impl FnMut(Update) + Send,
     ) -> Result<Done, TorrentError> {
         let session = self.session().await?;
+        // The engine puts the files of a torrent straight into the folder it is given, so a torrent
+        // of several files gets a folder of its own (its name) instead of spilling into `dest`.
+        let listing = self.list(source.clone(), peers.clone(), cancel).await?;
+        let root = if listing.files.len() > 1 {
+            dest.join(folder_name(&listing.name))
+        } else {
+            dest.to_path_buf()
+        };
+        let many = listing.files.len() > 1;
+        let dest = root.as_path();
         std::fs::create_dir_all(dest).map_err(failed)?;
         let add = match source {
             Source::Address(url) => AddTorrent::from_url(url),
@@ -148,6 +220,8 @@ impl Torrents {
             overwrite: true,
             output_folder: Some(dest.display().to_string()),
             initial_peers: (!peers.is_empty()).then_some(peers),
+            // Only the chosen files (all of them when none were chosen).
+            only_files: only.map(|o| o.into_iter().map(|i| i as usize).collect()),
             ..AddTorrentOptions::default()
         };
         let added = tokio::select! {
@@ -202,10 +276,10 @@ impl Torrents {
                 forget().await;
                 let name = name.unwrap_or_else(|| "torrent".into());
                 let inside = dest.join(&name);
-                let path = if inside.exists() {
-                    inside
-                } else {
+                let path = if many || !inside.exists() {
                     dest.to_path_buf()
+                } else {
+                    inside
                 };
                 return Ok(Done {
                     name,
@@ -217,9 +291,42 @@ impl Torrents {
     }
 }
 
+/// A torrent's name as one safe folder name.
+fn folder_name(name: &str) -> String {
+    let cleaned: String = name
+        .rsplit(['/', '\\'])
+        .next()
+        .unwrap_or("")
+        .chars()
+        .map(|c| {
+            if c.is_control() || "<>:\"|?*".contains(c) {
+                '_'
+            } else {
+                c
+            }
+        })
+        .collect();
+    let cleaned = cleaned.trim().trim_end_matches('.').trim().to_string();
+    if cleaned.is_empty() {
+        "torrent".into()
+    } else {
+        cleaned.chars().take(120).collect()
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_torrents_name_becomes_one_safe_folder_name() {
+        assert_eq!(folder_name("Album"), "Album");
+        assert_eq!(folder_name("../../etc"), "etc");
+        assert_eq!(folder_name("a\\b\\c"), "c");
+        assert_eq!(folder_name(".."), "torrent");
+        assert_eq!(folder_name("what?*:name."), "what___name");
+        assert_eq!(folder_name(""), "torrent");
+    }
 
     #[test]
     fn magnet_links_and_torrent_files_are_recognised() {

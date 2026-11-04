@@ -241,5 +241,12 @@
   "User agent (optional)": "यूज़र एजेंट (वैकल्पिक)",
   "User agent: {value}": "यूज़र एजेंट: {value}",
   "General": "सामान्य",
-  "Settings groups": "सेटिंग समूह"
+  "Settings groups": "सेटिंग समूह",
+  "Back": "वापस",
+  "Choose files": "फ़ाइलें चुनें",
+  "Choose files…": "फ़ाइलें चुनें…",
+  "Finding the files…": "फ़ाइलें खोजी जा रही हैं…",
+  "Select all": "सभी चुनें",
+  "Select none": "कोई नहीं",
+  "Selected": "चुनी गईं"
 }

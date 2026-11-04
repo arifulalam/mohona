@@ -241,5 +241,12 @@
   "User agent (optional)": "User-Agent (optional)",
   "User agent: {value}": "User-Agent: {value}",
   "General": "Allgemein",
-  "Settings groups": "Einstellungsgruppen"
+  "Settings groups": "Einstellungsgruppen",
+  "Back": "Zurück",
+  "Choose files": "Dateien auswählen",
+  "Choose files…": "Dateien auswählen …",
+  "Finding the files…": "Dateien werden gesucht …",
+  "Select all": "Alle auswählen",
+  "Select none": "Keine auswählen",
+  "Selected": "Ausgewählt"
 }

@@ -241,5 +241,12 @@
   "User agent (optional)": "Kullanıcı aracısı (isteğe bağlı)",
   "User agent: {value}": "Kullanıcı aracısı: {value}",
   "General": "Genel",
-  "Settings groups": "Ayar grupları"
+  "Settings groups": "Ayar grupları",
+  "Back": "Geri",
+  "Choose files": "Dosyaları seç",
+  "Choose files…": "Dosyaları seç…",
+  "Finding the files…": "Dosyalar aranıyor…",
+  "Select all": "Tümünü seç",
+  "Select none": "Hiçbirini seçme",
+  "Selected": "Seçili"
 }

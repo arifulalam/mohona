@@ -241,5 +241,12 @@
   "User agent (optional)": "User agent (opsional)",
   "User agent: {value}": "User agent: {value}",
   "General": "Umum",
-  "Settings groups": "Kelompok pengaturan"
+  "Settings groups": "Kelompok pengaturan",
+  "Back": "Kembali",
+  "Choose files": "Pilih berkas",
+  "Choose files…": "Pilih berkas…",
+  "Finding the files…": "Mencari berkas…",
+  "Select all": "Pilih semua",
+  "Select none": "Batalkan pilihan",
+  "Selected": "Dipilih"
 }

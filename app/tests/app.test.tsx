@@ -33,7 +33,15 @@ function fake(initial: Row[], running = true) {
     status: vi.fn(async () => status()),
     start: vi.fn(async () => ((engine = true), status())),
     list: vi.fn(async () => rows),
-    add: vi.fn(async (url: string, _folder?: string | null, _queue?: number) => {
+    torrentFiles: vi.fn(async (_url: string) => ({
+      name: "Distro",
+      files: [
+        { index: 0, path: "Distro/disc.iso", size: 2_000_000 },
+        { index: 1, path: "Distro/README.txt", size: 1_000 },
+        { index: 2, path: "Distro/docs.pdf", size: 5_000 },
+      ],
+    })),
+    add: vi.fn(async (url: string, _folder?: string | null, _queue?: number, _files?: number[]) => {
       if (url.includes("bad")) throw new Error("the address must start with http://");
       rows = [...rows, row(99, "new.zip", "downloading")];
       return 99;
@@ -105,6 +113,35 @@ function fake(initial: Row[], running = true) {
 afterEach(cleanup);
 
 describe("App", () => {
+  it("lets the person choose which files of a torrent to download", async () => {
+    const api = fake([]);
+    render(<App api={api} every={50} />);
+    await userEvent.click(await screen.findByRole("button", { name: "+ Add" }));
+    // Not for an ordinary link.
+    const box = screen.getByLabelText("Addresses (one per line)");
+    await userEvent.type(box, "https://example.com/a.zip");
+    expect(screen.queryByRole("button", { name: "Choose files…" })).toBeNull();
+    await userEvent.clear(box);
+    await userEvent.type(box, "magnet:?xt=urn:btih:abc");
+    await userEvent.click(screen.getByRole("button", { name: "Choose files…" }));
+    expect(await screen.findByText("Distro/disc.iso")).toBeTruthy();
+    expect(screen.getByText(/Selected: 3\/3/)).toBeTruthy();
+    await userEvent.click(screen.getByRole("checkbox", { name: /disc\.iso/ }));
+    expect(screen.getByText(/Selected: 2\/3/)).toBeTruthy();
+    await userEvent.click(screen.getByRole("button", { name: "Download" }));
+    await waitFor(() => expect(api.add).toHaveBeenCalledWith("magnet:?xt=urn:btih:abc", null, undefined, [1, 2]));
+    // Nothing chosen cannot be added; everything chosen is added as an ordinary torrent.
+    await userEvent.click(await screen.findByRole("button", { name: "+ Add" }));
+    await userEvent.type(screen.getByLabelText("Addresses (one per line)"), "magnet:?xt=urn:btih:def");
+    await userEvent.click(screen.getByRole("button", { name: "Choose files…" }));
+    await screen.findByText("Distro/disc.iso");
+    await userEvent.click(screen.getByRole("button", { name: "Select none" }));
+    expect((screen.getByRole("button", { name: "Download" }) as HTMLButtonElement).disabled).toBe(true);
+    await userEvent.click(screen.getByRole("button", { name: "Select all" }));
+    await userEvent.click(screen.getByRole("button", { name: "Download" }));
+    await waitFor(() => expect(api.add).toHaveBeenLastCalledWith("magnet:?xt=urn:btih:def", null));
+  });
+
   it("lists downloads with their state and the engine's state", async () => {
     render(<App api={fake([row(1, "a.iso", "downloading", { speed: 2048, eta: 30 }), row(2, "b.zip", "completed")])} every={50} />);
     expect(await screen.findByText("a.iso")).toBeTruthy();

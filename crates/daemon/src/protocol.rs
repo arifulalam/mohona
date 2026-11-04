@@ -176,6 +176,13 @@ pub enum Call {
         /// The queue to put it in; default: the main queue.
         #[serde(default)]
         queue: Option<i64>,
+        /// A torrent: only these files (numbers from `TorrentFiles`); default: all.
+        #[serde(default)]
+        files: Option<Vec<u32>>,
+    },
+    /// What is inside a torrent (a magnet link or a `.torrent` address); can take up to 90 seconds.
+    TorrentFiles {
+        url: String,
     },
     /// Download an HLS or DASH stream by running `mohona stream` for it.
     Stream {
@@ -269,6 +276,14 @@ pub struct DownloadInfo {
     /// which usually means the link expired and a fresh one may work.
     #[serde(default)]
     pub expired: bool,
+}
+
+/// One file inside a torrent.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct TorrentFileInfo {
+    pub index: u32,
+    pub path: String,
+    pub size: u64,
 }
 
 /// One connection of a running download.
@@ -384,6 +399,10 @@ pub enum Response {
     },
     Profiles {
         profiles: Vec<crate::profiles::Profile>,
+    },
+    TorrentFiles {
+        name: String,
+        files: Vec<TorrentFileInfo>,
     },
     Plugins {
         /// Where plugins are kept.

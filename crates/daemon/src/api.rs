@@ -121,6 +121,7 @@ pub const ROUTES: &[Route] = routes![
         Scope::Admin
     ),
     ("POST", "/v1/resolve", "resolveLink", Scope::Read),
+    ("POST", "/v1/torrent/files", "torrentFiles", Scope::Read),
     ("GET", "/v1/rules", "getRules", Scope::Read),
     ("PUT", "/v1/rules", "setRules", Scope::Admin),
     ("POST", "/v1/rules/test", "testRules", Scope::Read),
@@ -799,6 +800,7 @@ async fn dispatch(
                 None => reply(200, json!({ "url": null, "service": null })),
             }
         }
+        "torrentFiles" => ask(state, call("torrent_files", object(&req)?)?).await,
         "getRules" => ask(state, Call::GetRules).await,
         "setRules" => {
             let saved = ask(state, call("set_rules", object(&req)?)?).await;

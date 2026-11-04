@@ -106,6 +106,7 @@ fn add(url: String) -> Call {
         sort: false,
         duplicates: None,
         queue: None,
+        files: None,
     }
 }
 

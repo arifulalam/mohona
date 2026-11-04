@@ -241,5 +241,12 @@
   "User agent (optional)": "وكيل المستخدم (اختياري)",
   "User agent: {value}": "وكيل المستخدم: {value}",
   "General": "عام",
-  "Settings groups": "مجموعات الإعدادات"
+  "Settings groups": "مجموعات الإعدادات",
+  "Back": "رجوع",
+  "Choose files": "اختيار الملفات",
+  "Choose files…": "اختيار الملفات…",
+  "Finding the files…": "جارٍ البحث عن الملفات…",
+  "Select all": "تحديد الكل",
+  "Select none": "إلغاء التحديد",
+  "Selected": "المحدد"
 }

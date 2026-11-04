@@ -637,7 +637,14 @@ Add a magnet link or a `.torrent` web address to the daemon the same way as any 
 mohona queue add 'magnet:?xt=urn:btih:...&dn=name'
 ```
 
-Finished torrents are not seeded. Mohona's speed limits do not apply to torrents yet.
+To download only some files, list them first and then name the numbers:
+
+```
+mohona torrent files 'magnet:?xt=urn:btih:...'
+mohona torrent add 'magnet:?xt=urn:btih:...' --files 0,2 [--folder D:\\Torrents]
+```
+
+A torrent of several files is saved in a folder named after the torrent, inside the download folder. Finished torrents are not seeded. Mohona's speed limits do not apply to torrents yet.
 
 # The local HTTP API
 

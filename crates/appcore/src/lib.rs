@@ -123,6 +123,23 @@ pub struct Queue {
     pub open_now: bool,
 }
 
+/// One file inside a torrent.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TorrentFile {
+    pub index: u32,
+    pub path: String,
+    pub size: u64,
+}
+
+/// What a torrent holds.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TorrentList {
+    pub name: String,
+    pub files: Vec<TorrentFile>,
+}
+
 /// One rule, as the page shows it: what to look for, and what to do.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, serde::Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -407,6 +424,54 @@ impl Engine {
         folder: Option<&str>,
         queue: Option<i64>,
     ) -> Result<i64, AppError> {
+        self.add_with(url, folder, queue, None).await
+    }
+
+    /// What is inside a torrent (a magnet link can take up to 90 seconds while peers are found).
+    pub async fn torrent_files(&self, url: &str) -> Result<TorrentList, AppError> {
+        let url = url.trim();
+        match self
+            .call(Call::TorrentFiles {
+                url: url.to_string(),
+            })
+            .await?
+        {
+            Response::TorrentFiles { name, files } => Ok(TorrentList {
+                name,
+                files: files
+                    .into_iter()
+                    .map(|f| TorrentFile {
+                        index: f.index,
+                        path: f.path,
+                        size: f.size,
+                    })
+                    .collect(),
+            }),
+            _ => Err(AppError::Engine("unexpected answer from the engine".into())),
+        }
+    }
+
+    /// Add a torrent and download only the chosen files (numbers from [`Engine::torrent_files`]).
+    pub async fn add_torrent(
+        &self,
+        url: &str,
+        folder: Option<&str>,
+        queue: Option<i64>,
+        files: Vec<u32>,
+    ) -> Result<i64, AppError> {
+        if files.is_empty() {
+            return Err(AppError::Input("choose at least one file".into()));
+        }
+        self.add_with(url, folder, queue, Some(files)).await
+    }
+
+    async fn add_with(
+        &self,
+        url: &str,
+        folder: Option<&str>,
+        queue: Option<i64>,
+        files: Option<Vec<u32>>,
+    ) -> Result<i64, AppError> {
         let url = url.trim();
         if url.is_empty() || url.chars().any(char::is_control) {
             return Err(AppError::Input("type or paste an address".into()));
@@ -433,6 +498,7 @@ impl Engine {
                 sort: false,
                 duplicates: Some("skip".into()),
                 queue,
+                files,
             })
             .await?
         {

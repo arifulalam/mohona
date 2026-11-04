@@ -175,6 +175,13 @@
                   },
                   "queue": {
                     "type": "integer"
+                  },
+                  "files": {
+                    "type": "array",
+                    "items": {
+                      "type": "integer"
+                    },
+                    "description": "A torrent: only these file numbers (from /v1/torrent/files); default all."
                   }
                 },
                 "required": [
@@ -1177,6 +1184,45 @@
         "responses": {
           "200": {
             "description": "url and service, both null when the link is not recognised."
+          },
+          "400": {
+            "$ref": "#/components/responses/Error"
+          },
+          "401": {
+            "$ref": "#/components/responses/Error"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/v1/torrent/files": {
+      "post": {
+        "operationId": "torrentFiles",
+        "summary": "The files inside a torrent (magnet link or .torrent address). A magnet link can take up to 90 seconds while peers are found.",
+        "x-scope": "read",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "url"
+                ],
+                "properties": {
+                  "url": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "name and files: [{index, path, size}]."
           },
           "400": {
             "$ref": "#/components/responses/Error"

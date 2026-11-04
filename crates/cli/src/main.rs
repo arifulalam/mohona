@@ -23,6 +23,7 @@ mod rules;
 mod stream;
 mod sync;
 mod tools;
+mod torrent;
 
 #[derive(Parser)]
 #[command(
@@ -68,6 +69,14 @@ enum Command {
     Resolve {
         /// The share link
         url: String,
+    },
+    /// Torrents: look inside one and download only some of its files (the daemon must be running)
+    Torrent {
+        #[command(subcommand)]
+        command: torrent::TorrentCommand,
+        /// The daemon's connection file (default: your application-data folder)
+        #[arg(long)]
+        info: Option<PathBuf>,
     },
     /// Plugins: small programs that teach Mohona about one site (the daemon must be running)
     Plugins {
@@ -602,6 +611,7 @@ async fn main() -> ExitCode {
             }
         },
         Some(Command::Resolve { url }) => resolve::run(&url),
+        Some(Command::Torrent { command, info }) => torrent::run(command, info).await,
         Some(Command::Plugins { command, info }) => plugins::run(command, info).await,
         Some(Command::Sync { command, info }) => sync::run(command, info).await,
         Some(Command::Remote { command, info }) => remote::run(command, info).await,

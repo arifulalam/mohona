@@ -110,6 +110,9 @@ pub struct RequestContext {
     /// bans many connections); without it the engine's setting applies.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub connections: Option<u32>,
+    /// A torrent: only these files (numbers from the torrent's file list); without it, all of them.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub torrent_files: Option<Vec<u32>>,
 }
 
 /// SSH settings for one download. A key's passphrase is not part of this: it

@@ -199,6 +199,10 @@ The running daemon serves a small REST + WebSocket API on `127.0.0.1:6791` for s
 
 Paste a Google Drive, Google Docs, Dropbox, OneDrive or GitHub share link and Mohona downloads the file itself. `mohona resolve URL` shows the direct address.
 
+## Torrent file selection
+
+Paste a magnet link, press "Choose files…", and download only the files you tick. Details: ADR-0068.
+
 ## Plugins
 
 A plugin is a small program that turns a link of one site into the real download address. Off until you enable it. How to write one: `docs/plugins.md`.

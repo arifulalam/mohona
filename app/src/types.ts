@@ -89,6 +89,19 @@ export interface QueueChange {
   windows?: PlanWindow[];
 }
 
+/** One file inside a torrent. */
+export interface TorrentFile {
+  index: number;
+  path: string;
+  size: number;
+}
+
+/** What a torrent holds. */
+export interface TorrentList {
+  name: string;
+  files: TorrentFile[];
+}
+
 /** One rule: what to look for in a new download, and what to do with it. */
 export interface Rule {
   /** 0 for a rule that is not saved yet. */
@@ -157,7 +170,10 @@ export interface Api {
   status(): Promise<EngineStatus>;
   start(): Promise<EngineStatus>;
   list(): Promise<Row[]>;
-  add(url: string, folder: string | null, queue?: number): Promise<number>;
+  /** `files`: for a torrent, only these file numbers (from `torrentFiles`). */
+  add(url: string, folder: string | null, queue?: number, files?: number[]): Promise<number>;
+  /** What is inside a torrent; a magnet link can take up to 90 seconds. */
+  torrentFiles(url: string): Promise<TorrentList>;
   details(id: number): Promise<Details>;
   profiles(): Promise<SiteProfile[]>;
   /** Replaces the whole list; resolves with what was saved. */

@@ -241,5 +241,12 @@
   "User agent (optional)": "یوزر ایجنٹ (اختیاری)",
   "User agent: {value}": "یوزر ایجنٹ: {value}",
   "General": "عمومی",
-  "Settings groups": "ترتیبات کے گروپ"
+  "Settings groups": "ترتیبات کے گروپ",
+  "Back": "واپس",
+  "Choose files": "فائلیں منتخب کریں",
+  "Choose files…": "فائلیں منتخب کریں…",
+  "Finding the files…": "فائلیں تلاش کی جا رہی ہیں…",
+  "Select all": "سب منتخب کریں",
+  "Select none": "کوئی نہیں",
+  "Selected": "منتخب"
 }

@@ -241,5 +241,12 @@
   "User agent (optional)": "ユーザーエージェント（任意）",
   "User agent: {value}": "ユーザーエージェント: {value}",
   "General": "一般",
-  "Settings groups": "設定のグループ"
+  "Settings groups": "設定のグループ",
+  "Back": "戻る",
+  "Choose files": "ファイルを選択",
+  "Choose files…": "ファイルを選択…",
+  "Finding the files…": "ファイルを探しています…",
+  "Select all": "すべて選択",
+  "Select none": "選択を解除",
+  "Selected": "選択中"
 }

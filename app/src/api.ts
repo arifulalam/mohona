@@ -1,4 +1,4 @@
-import type { Api, Category, Config, ConfigChange, EngineStatus, ExtensionSettings, Details, Plan, PlanWindow, Queue, Row, Rule, SiteProfile } from "./types";
+import type { Api, Category, Config, ConfigChange, EngineStatus, ExtensionSettings, Details, Plan, PlanWindow, Queue, Row, Rule, SiteProfile, TorrentList } from "./types";
 
 /** True inside the Tauri window; false in a plain browser (development, tests). */
 export function insideTauri(): boolean {
@@ -18,7 +18,8 @@ function tauriApi(): Api {
     status: () => call<EngineStatus>("engine_status"),
     start: () => call<EngineStatus>("start_engine"),
     list: () => call<Row[]>("list_downloads"),
-    add: (url, folder, queue) => call<number>("add_download", { url, folder, queue }),
+    add: (url, folder, queue, files) => call<number>("add_download", { url, folder, queue, files }),
+    torrentFiles: (url) => call<TorrentList>("torrent_files", { url }),
     details: (id) => call<Details>("get_details", { id }),
     profiles: () => call<SiteProfile[]>("get_profiles"),
     setProfiles: (profiles) => call<SiteProfile[]>("set_profiles", { profiles }),
@@ -107,6 +108,18 @@ export function demoApi(tick = 1000): Api {
       const name = decodeURIComponent(url.split("?")[0]!.split("/").filter(Boolean).pop() ?? "download");
       rows = [...rows, demoRow(id, name, "downloading", 0, 300_000_000, 5_000_000)];
       return id;
+    },
+    torrentFiles: async () => {
+      need();
+      await new Promise((r) => setTimeout(r, 300));
+      return {
+        name: "Example distribution",
+        files: [
+          { index: 0, path: "Example distribution/disc.iso", size: 2_400_000_000 },
+          { index: 1, path: "Example distribution/README.txt", size: 4_200 },
+          { index: 2, path: "Example distribution/extras/docs.pdf", size: 18_000_000 },
+        ],
+      };
     },
     pause: async (id) => (need(), set(id, { status: "paused", eta: null })),
     resume: async (id) => (need(), set(id, { status: "downloading" })),

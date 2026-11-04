@@ -149,6 +149,7 @@ Numbers are the steps of the "Desktop app" section.
 - [ ] C31 Remote companion: the steps of "Remote companion" in `docs/manual-tests.md` (phone on the same Wi-Fi, firewall prompt, read-only token)
 - [ ] C32 Settings sync: the steps of "Settings sync" in `docs/manual-tests.md` (two computers or two user accounts, one synced folder)
 - [ ] C33 Plugins: the steps of "Plugins" in `docs/manual-tests.md` (the PowerShell example plugin)
+- [ ] C34 Torrent file selection: the steps of "Torrent file selection" in `docs/manual-tests.md` (also check that a torrent of several files gets its own folder)
 - [ ] B3 Extension popup: a very long link in an error message wraps inside its own small scrolling box; the popup page gets no horizontal scrollbar
 
 ## What to send back

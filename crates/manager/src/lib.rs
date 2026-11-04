@@ -16,6 +16,7 @@ mod routing;
 mod schedule;
 
 pub use actions::{ActionRunner, AfterAction, SystemRunner};
+pub use mohona_torrent::{is_torrent_address, FileEntry as TorrentFile, Listing as TorrentListing};
 pub use network::{NetworkProbe, NetworkState, SystemNetwork};
 pub use schedule::{parse_days, Moment, Schedule, Window};
 
@@ -58,6 +59,9 @@ pub enum ManagerError {
     /// A fresh link was refused: it could not be checked, or it is not the same file.
     #[error("{0}")]
     Link(String),
+    /// A torrent's files could not be listed.
+    #[error("{0}")]
+    Torrent(String),
     /// The manager has shut down.
     #[error("the download manager has stopped")]
     Stopped,
@@ -320,6 +324,10 @@ enum Command {
     List(oneshot::Sender<Result<Vec<DownloadRow>, ManagerError>>),
     /// A download's request details and what is known about its file.
     Details(i64, oneshot::Sender<Result<Details, ManagerError>>),
+    TorrentFiles(
+        String,
+        oneshot::Sender<Result<TorrentListing, ManagerError>>,
+    ),
     GetSetting(
         String,
         oneshot::Sender<Result<Option<String>, ManagerError>>,
@@ -649,6 +657,12 @@ impl Manager {
     /// Saves a value in the settings table.
     pub async fn set_setting(&self, key: &str, value: &str) -> Result<(), ManagerError> {
         self.ask(|r| Command::PutSetting(key.to_string(), value.to_string(), r))
+            .await
+    }
+
+    /// The files inside a torrent (a magnet link first has to find them from peers: up to 90 seconds).
+    pub async fn torrent_files(&self, url: &str) -> Result<TorrentListing, ManagerError> {
+        self.ask(|r| Command::TorrentFiles(url.to_string(), r))
             .await
     }
 
@@ -1260,6 +1274,24 @@ impl Actor {
                         .map_err(ManagerError::from),
                 );
             }
+            Command::TorrentFiles(url, reply) => {
+                let torrents = self.torrents.clone();
+                tokio::spawn(async move {
+                    let cancel = CancelToken::new();
+                    let listed = tokio::time::timeout(
+                        Duration::from_secs(90),
+                        torrents.list(mohona_torrent::Source::Address(url), Vec::new(), &cancel),
+                    )
+                    .await;
+                    let _ = reply.send(match listed {
+                        Ok(Ok(listing)) => Ok(listing),
+                        Ok(Err(e)) => Err(ManagerError::Torrent(e.to_string())),
+                        Err(_) => Err(ManagerError::Torrent(
+                            "no peer sent the torrent's file list within 90 seconds".into(),
+                        )),
+                    });
+                });
+            }
             Command::Details(id, reply) => {
                 let result = self.row(id).and_then(|row| {
                     let context = self
@@ -1758,9 +1790,17 @@ impl Actor {
                 .then(|| self.store.categories().ok())
                 .flatten()
                 .map(|categories| (PathBuf::from(&row.dest_dir), categories));
+            let only = self
+                .store
+                .headers_json(row.id)
+                .ok()
+                .flatten()
+                .and_then(|json| RequestContext::from_json(&json).ok())
+                .and_then(|c| c.torrent_files);
             tokio::spawn(run_torrent(
                 self.torrents.clone(),
                 row.url.clone(),
+                only,
                 PathBuf::from(&row.dest_dir),
                 cancel,
                 row.id,
@@ -1822,6 +1862,7 @@ impl Actor {
 async fn run_torrent(
     torrents: Arc<mohona_torrent::Torrents>,
     url: String,
+    only: Option<Vec<u32>>,
     dest: PathBuf,
     cancel: CancelToken,
     id: i64,
@@ -1839,6 +1880,7 @@ async fn run_torrent(
                     mohona_torrent::Source::Address(url),
                     &dest,
                     Vec::new(),
+                    only,
                     &cancel,
                     move |update| {
                         let _ = tx.send(update);

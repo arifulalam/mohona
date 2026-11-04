@@ -7,7 +7,7 @@ use std::time::Duration;
 
 use mohona_appcore::{
     AppError, Category, Config, ConfigChange, Engine, EngineStatus, ExtensionSettings, Plan,
-    Details, PlanWindow, Queue, QueueChange, Row, Rule, SiteProfile, SpeedTracker, Watcher,
+    Details, PlanWindow, Queue, QueueChange, Row, Rule, SiteProfile, SpeedTracker, TorrentList, Watcher,
 };
 use tauri::menu::{Menu, MenuItem};
 use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
@@ -46,8 +46,21 @@ async fn add_download(
     url: String,
     folder: Option<String>,
     queue: Option<i64>,
+    files: Option<Vec<u32>>,
 ) -> Result<i64> {
-    app.engine.add_to(&url, folder.as_deref(), queue).await
+    match files {
+        Some(files) => {
+            app.engine
+                .add_torrent(&url, folder.as_deref(), queue, files)
+                .await
+        }
+        None => app.engine.add_to(&url, folder.as_deref(), queue).await,
+    }
+}
+
+#[tauri::command]
+async fn torrent_files(app: State<'_, App>, url: String) -> Result<TorrentList> {
+    app.engine.torrent_files(&url).await
 }
 
 #[tauri::command]
@@ -362,6 +375,7 @@ pub fn run() {
             start_engine,
             list_downloads,
             add_download,
+            torrent_files,
             pause_download,
             resume_download,
             cancel_download,

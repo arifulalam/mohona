@@ -73,6 +73,7 @@ async fn add(client: &Client, url: &str) -> Response {
             sort: false,
             duplicates: None,
             queue: None,
+            files: None,
         })
         .await
         .unwrap()

@@ -51,7 +51,14 @@ async fn seed(
     )
     .await
     .unwrap();
-    let parent = path.parent().unwrap().display().to_string();
+    // A folder's files are looked for in the output folder itself; a file's, next to it.
+    let parent = if path.is_dir() {
+        path
+    } else {
+        path.parent().unwrap()
+    }
+    .display()
+    .to_string();
     session
         .add_torrent(
             AddTorrent::from_bytes(bytes.clone()),
@@ -92,6 +99,7 @@ async fn a_torrent_is_downloaded_from_a_seeder_and_can_be_stopped() {
             Source::File(torrent.clone()),
             &out,
             vec![peer],
+            None,
             &CancelToken::new(),
             |u| last = Some(u),
         ),
@@ -112,6 +120,7 @@ async fn a_torrent_is_downloaded_from_a_seeder_and_can_be_stopped() {
             Source::File(torrent.clone()),
             &out,
             vec![peer],
+            None,
             &CancelToken::new(),
             |_| {},
         ),
@@ -155,10 +164,108 @@ async fn a_torrent_is_downloaded_from_a_seeder_and_can_be_stopped() {
             Source::File(unseeded),
             &dir.path().join("out2"),
             vec![],
+            None,
             &cancel,
             |_| {},
         )
         .await;
     assert!(matches!(result, Err(TorrentError::Cancelled)), "{result:?}");
     assert!(started.elapsed() < Duration::from_secs(10));
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn only_the_chosen_files_of_a_torrent_are_downloaded() {
+    if std::net::UdpSocket::bind("[::]:0").is_err()
+        && std::env::var_os("MOHONA_FORCE_TORRENT_TESTS").is_none()
+    {
+        eprintln!("skipped: this computer has no IPv6 sockets");
+        return;
+    }
+    let dir = tempfile::tempdir().unwrap();
+    let folder = dir.path().join("seed").join("album");
+    std::fs::create_dir_all(&folder).unwrap();
+    let parts = [
+        ("a.bin", 200_000usize),
+        ("b.bin", 150_000),
+        ("c.bin", 120_000),
+    ];
+    for (i, (name, len)) in parts.iter().enumerate() {
+        let bytes: Vec<u8> = data(*len).iter().map(|b| b.wrapping_add(i as u8)).collect();
+        std::fs::write(folder.join(name), bytes).unwrap();
+    }
+    let (torrent, peer, _seeder) = seed(&folder, &dir.path().join("seed-state")).await;
+
+    let torrents = Torrents::new(dir.path().join("state"));
+    // The listing names every file with its size, without downloading anything.
+    let listing = torrents
+        .list(
+            Source::File(torrent.clone()),
+            vec![peer],
+            &CancelToken::new(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(listing.name, "album");
+    let mut seen: Vec<(String, u64)> = listing
+        .files
+        .iter()
+        .map(|f| (f.path.rsplit('/').next().unwrap().to_string(), f.size))
+        .collect();
+    seen.sort();
+    assert_eq!(
+        seen,
+        parts
+            .iter()
+            .map(|(n, l)| (n.to_string(), *l as u64))
+            .collect::<Vec<_>>()
+    );
+    let wanted = listing
+        .files
+        .iter()
+        .find(|f| f.path.ends_with("b.bin"))
+        .unwrap()
+        .index;
+
+    let out = dir.path().join("out");
+    let last = std::sync::Mutex::new(None);
+    let result = tokio::time::timeout(
+        Duration::from_secs(40),
+        torrents.run(
+            Source::File(torrent),
+            &out,
+            vec![peer],
+            Some(vec![wanted]),
+            &CancelToken::new(),
+            |u| *last.lock().unwrap() = Some(u),
+        ),
+    )
+    .await;
+    let result = result
+        .unwrap_or_else(|_| panic!("did not finish; last report: {:?}", last.lock().unwrap()));
+    result.expect("and succeeds");
+    let got = out.join("album").join("b.bin");
+    assert_eq!(std::fs::metadata(&got).unwrap().len(), 150_000);
+    // The files that were not chosen are absent or empty, except the few bytes that share a
+    // piece with the chosen file (a piece is 32 KiB).
+    let chosen = std::fs::read(&got).unwrap();
+    assert_eq!(
+        chosen[..100],
+        data(150_000)[..100]
+            .iter()
+            .map(|b| b.wrapping_add(1))
+            .collect::<Vec<_>>()[..]
+    );
+    for n in ["a.bin", "c.bin"] {
+        let on_disk = out.join("album").join(n);
+        if on_disk.exists() {
+            let filled = std::fs::read(&on_disk)
+                .unwrap()
+                .iter()
+                .filter(|b| **b != 0)
+                .count();
+            assert!(filled <= 32 * 1024, "{n} was downloaded ({filled} bytes)");
+        }
+    }
+    // Nothing spilled into the download folder itself.
+    assert!(!out.join("b.bin").exists());
 }

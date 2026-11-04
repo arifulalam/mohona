@@ -1,8 +1,14 @@
 import { createContext, useContext, useEffect, useRef, useState } from "react";
+import { bytes } from "./format";
 import { useT } from "./i18n";
+import type { TorrentList } from "./types";
 
 interface Props {
   onAdd(urls: string[], folder: string | null, queue: number | null): Promise<string | null>;
+  /** What is inside a torrent (a magnet link can take a while). */
+  onTorrentFiles(url: string): Promise<TorrentList>;
+  /** Add a torrent with only the chosen files; resolves with a problem to show, or null. */
+  onAddTorrent(url: string, folder: string | null, queue: number | null, files: number[]): Promise<string | null>;
   /** The queues to choose from; the choice is shown only when there is more than one. */
   queues: { id: number; name: string }[];
   /** Opens the system's folder dialog; null when cancelled. */
@@ -12,8 +18,13 @@ interface Props {
   onClose(): void;
 }
 
+/** A magnet link, or the address of a .torrent file. */
+function isTorrent(url: string): boolean {
+  return /^magnet:\?/i.test(url) || /^https?:\/\/[^?#]*\.torrent(?:[?#]|$)/i.test(url);
+}
+
 /** One address per line. */
-export function AddDialog({ onAdd, onBrowse, queues, defaultFolder, onClose }: Props) {
+export function AddDialog({ onAdd, onTorrentFiles, onAddTorrent, onBrowse, queues, defaultFolder, onClose }: Props) {
   const t = useT();
   const [queue, setQueue] = useState<number | null>(null);
   const [folder, setFolder] = useState("");
@@ -21,6 +32,11 @@ export function AddDialog({ onAdd, onBrowse, queues, defaultFolder, onClose }: P
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const field = useRef<HTMLTextAreaElement>(null);
+  const [listing, setListing] = useState<{ url: string; list: TorrentList } | null>(null);
+  const [chosen, setChosen] = useState<Set<number>>(new Set());
+  const [finding, setFinding] = useState(false);
+  const lines = text.split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
+  const single = lines.length === 1 && isTorrent(lines[0]!) ? lines[0]! : null;
 
   useEffect(() => {
     field.current?.focus();
@@ -42,6 +58,90 @@ export function AddDialog({ onAdd, onBrowse, queues, defaultFolder, onClose }: P
     setBusy(false);
     if (problem) setError(problem);
     else onClose();
+  }
+
+  async function findFiles() {
+    if (!single) return;
+    setError(null);
+    setFinding(true);
+    try {
+      const list = await onTorrentFiles(single);
+      setListing({ url: single, list });
+      setChosen(new Set(list.files.map((f) => f.index)));
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setFinding(false);
+    }
+  }
+
+  async function addChosen() {
+    if (!listing) return;
+    setBusy(true);
+    const everything = chosen.size === listing.list.files.length;
+    const problem = everything
+      ? await onAdd([listing.url], folder.trim() || null, queue)
+      : await onAddTorrent(listing.url, folder.trim() || null, queue, [...chosen].sort((a, b) => a - b));
+    setBusy(false);
+    if (problem) setError(problem);
+    else onClose();
+  }
+
+  if (listing) {
+    const total = listing.list.files.filter((f) => chosen.has(f.index)).reduce((n, f) => n + f.size, 0);
+    return (
+      <Modal title={t("Choose files")} onClose={onClose}>
+        <div className="flex flex-col gap-3">
+          <p className="m-0 break-all font-semibold">{listing.list.name}</p>
+          <div className="flex gap-2">
+            <button type="button" className="btn" onClick={() => setChosen(new Set(listing.list.files.map((f) => f.index)))}>
+              {t("Select all")}
+            </button>
+            <button type="button" className="btn" onClick={() => setChosen(new Set())}>
+              {t("Select none")}
+            </button>
+          </div>
+          <ul className="m-0 max-h-64 list-none overflow-y-auto overflow-x-hidden rounded-md border border-[var(--line)] p-1">
+            {listing.list.files.map((f) => (
+              <li key={f.index}>
+                <label className="flex items-start gap-2 p-1">
+                  <input
+                    type="checkbox"
+                    checked={chosen.has(f.index)}
+                    onChange={(e) =>
+                      setChosen((c) => {
+                        const next = new Set(c);
+                        if (e.target.checked) next.add(f.index);
+                        else next.delete(f.index);
+                        return next;
+                      })
+                    }
+                  />
+                  <span className="min-w-0 flex-1 break-all font-mono text-[13px]">{f.path}</span>
+                  <span className="shrink-0 text-[var(--muted)]">{bytes(f.size)}</span>
+                </label>
+              </li>
+            ))}
+          </ul>
+          <p className="m-0">
+            {t("Selected")}: {chosen.size}/{listing.list.files.length} · {bytes(total)}
+          </p>
+          {error && (
+            <p role="alert" className="whitespace-pre-wrap text-[var(--bad)]">
+              {error}
+            </p>
+          )}
+          <div className="flex justify-end gap-2">
+            <button type="button" className="btn" onClick={() => (setListing(null), setError(null))}>
+              {t("Back")}
+            </button>
+            <button type="button" className="btn btn-primary" disabled={busy || chosen.size === 0} onClick={() => void addChosen()}>
+              {busy ? t("Adding…") : t("Download")}
+            </button>
+          </div>
+        </div>
+      </Modal>
+    );
   }
 
   return (
@@ -101,7 +201,12 @@ export function AddDialog({ onAdd, onBrowse, queues, defaultFolder, onClose }: P
           <button type="button" className="btn" onClick={onClose}>
             {t("Cancel")}
           </button>
-          <button type="submit" className="btn btn-primary" disabled={busy}>
+          {single && (
+            <button type="button" className="btn" disabled={busy || finding} onClick={() => void findFiles()}>
+              {finding ? t("Finding the files…") : t("Choose files…")}
+            </button>
+          )}
+          <button type="submit" className="btn btn-primary" disabled={busy || finding}>
             {busy ? t("Adding…") : t("Download")}
           </button>
         </div>

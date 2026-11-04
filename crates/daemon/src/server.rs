@@ -737,7 +737,23 @@ pub(crate) async fn handle(state: &State, call: Call) -> Response {
             sort,
             duplicates,
             queue,
+            files,
         } => {
+            let torrent_files = match files {
+                None => None,
+                Some(_) if !mohona_manager::is_torrent_address(&url) => {
+                    return error("files can only be chosen for a torrent");
+                }
+                Some(list) => {
+                    let mut list = list;
+                    list.sort_unstable();
+                    list.dedup();
+                    if list.is_empty() || list.len() > 20_000 {
+                        return error("choose at least one file of the torrent");
+                    }
+                    Some(list)
+                }
+            };
             let policy = match duplicates.as_deref() {
                 None | Some("ask") => DuplicatePolicy::Ask,
                 Some("skip") => DuplicatePolicy::Skip,
@@ -860,6 +876,7 @@ pub(crate) async fn handle(state: &State, call: Call) -> Response {
                 user_agent,
                 headers,
                 connections,
+                torrent_files,
                 ..RequestContext::default()
             };
             match manager.add_checked(request).await {
@@ -873,6 +890,26 @@ pub(crate) async fn handle(state: &State, call: Call) -> Response {
                 }
                 Ok(AddResult::Skipped(why)) => Response::Skipped {
                     reason: why.to_string(),
+                },
+                Err(e) => error(e),
+            }
+        }
+        Call::TorrentFiles { url } => {
+            if !mohona_manager::is_torrent_address(&url) {
+                return error("that is not a magnet link or a .torrent address");
+            }
+            match manager.torrent_files(&url).await {
+                Ok(listing) => Response::TorrentFiles {
+                    name: listing.name,
+                    files: listing
+                        .files
+                        .into_iter()
+                        .map(|f| crate::protocol::TorrentFileInfo {
+                            index: f.index,
+                            path: f.path,
+                            size: f.size,
+                        })
+                        .collect(),
                 },
                 Err(e) => error(e),
             }

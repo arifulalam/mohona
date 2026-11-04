@@ -241,5 +241,12 @@
   "User agent (optional)": "User agent (необязательно)",
   "User agent: {value}": "User agent: {value}",
   "General": "Общие",
-  "Settings groups": "Группы настроек"
+  "Settings groups": "Группы настроек",
+  "Back": "Назад",
+  "Choose files": "Выбор файлов",
+  "Choose files…": "Выбрать файлы…",
+  "Finding the files…": "Поиск файлов…",
+  "Select all": "Выбрать все",
+  "Select none": "Снять выбор",
+  "Selected": "Выбрано"
 }

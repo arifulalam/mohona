@@ -343,6 +343,16 @@ Needs two computers (or two Windows accounts) that both see one synced folder, f
 - [ ] Break `plugin.json` (remove a brace): `mohona plugins list` shows the folder as not usable, with the reason.
 - [ ] `mohona plugins disable "Rewrite demo"` stops it.
 
+## Torrent file selection
+
+Use a legal torrent with several files, such as a Linux distribution that comes with checksums or a multi-file public-domain collection.
+- [ ] "+ Add", paste its magnet link, press "Choose files…": the list appears (may take up to a minute), with sizes and everything ticked.
+- [ ] "Select none" leaves Download disabled; tick two small files, Download: only those two are downloaded, inside a folder named after the torrent in your download folder (not loose in it).
+- [ ] The download's size and progress count only the chosen files.
+- [ ] `mohona torrent files '<magnet>'` prints the same list; `mohona torrent add '<magnet>' --files 0` downloads just that file.
+- [ ] A torrent of one file lands directly in the download folder; "Select all" then Download adds the whole torrent.
+- [ ] A magnet link with no peers: "Choose files…" gives an error after about 90 seconds; Back and a normal Download still work.
+
 ## Add new items here
 
 When a step adds something that can't be tested on this PC (FTP server, SFTP server, WebDAV, a custom CA, a mirror site, a browser, an Android phone), add it to this list in the same step.

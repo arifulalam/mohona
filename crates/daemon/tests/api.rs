@@ -823,6 +823,7 @@ async fn rules_sort_route_and_block_downloads_from_every_door() {
         sort: false,
         duplicates: None,
         queue: None,
+        files: None,
     };
     assert!(matches!(
         client
