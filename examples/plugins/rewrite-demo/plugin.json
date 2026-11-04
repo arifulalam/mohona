@@ -1,0 +1,7 @@
+{
+  "name": "Rewrite demo",
+  "version": "1",
+  "description": "Turns https://files.example.com/view/NAME into https://files.example.com/download/NAME (an example to copy)",
+  "hosts": ["files.example.com"],
+  "command": ["powershell", "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", "resolve.ps1"]
+}

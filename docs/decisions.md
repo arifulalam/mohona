@@ -695,3 +695,13 @@ A `401` now becomes its own error (`NetError::Unauthorized`) that names the kind
 **How it merges.** Each setting has a time of its last change in the file. A computer remembers a fingerprint of each setting from its last sync, so it knows which changes are its own. Per setting the newer change wins; at the same second the larger fingerprint wins, so two computers settle on the same value. A value from the file is checked like one typed in (a rule list must be a valid rule list) and ignored if it is not; unknown settings in the file are ignored. A damaged file stops the sync with a message and changes nothing; the file is written to a temporary name and renamed.
 
 **Not included.** Merging inside a list (two computers adding different rules at once: the newer list wins whole), computers with clocks that are minutes apart (the one with the later clock wins), encryption of the file (it holds no passwords or tokens, but your rules and sites are readable by whoever can read the folder), and the download history.
+
+## ADR-0067: Plugins are resolvers run as separate programs
+
+**What.** A plugin names the real address for links of one site (see `docs/plugins.md`). It is a folder with a `plugin.json` and any program, run once per added link with the link as its last argument; it prints one JSON object. Off until the person switches it on (`mohona plugins enable NAME`).
+
+**Why this shape.** A plugin that runs inside Mohona's process (a DLL, a scripting engine) could crash it, read its memory and break with every release. A separate program is language-free, cannot touch the daemon, can be stopped by a timeout, and its whole interface is two things: a link in, a small JSON object out. It is the same job `cloud.rs` does for known cloud services, opened to the person's own sites.
+
+**Limits that keep it safe.** The command is an argument list, never a shell string; the program is a name on the PATH or a file inside the plugin's folder; the environment is cleared except a few variables; 30 seconds and 64 KiB; the answer must be an http(s) address with headers from the same allow-list as site profiles. A failing plugin fails the add with its name instead of silently downloading a web page. Plugins are never synced (ADR-0066) and cannot be installed from the API or the remote companion: only from the folder on the computer itself.
+
+**Not included.** A plugin store, signatures, sandboxing beyond the cleared environment (the program still runs with the person's rights, which the docs say plainly), per-plugin timeouts, UI in the app (the CLI lists and switches), and plugins that add windows or buttons.

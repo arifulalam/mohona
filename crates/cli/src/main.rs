@@ -14,6 +14,7 @@ use tokio::sync::mpsc;
 
 mod daemon;
 mod history;
+mod plugins;
 mod profiles;
 mod queue;
 mod remote;
@@ -67,6 +68,14 @@ enum Command {
     Resolve {
         /// The share link
         url: String,
+    },
+    /// Plugins: small programs that teach Mohona about one site (the daemon must be running)
+    Plugins {
+        #[command(subcommand)]
+        command: plugins::PluginsCommand,
+        /// The daemon's connection file (default: your application-data folder)
+        #[arg(long)]
+        info: Option<PathBuf>,
     },
     /// Keep portable settings (rules, site profiles, extension settings) the same on several computers
     Sync {
@@ -593,6 +602,7 @@ async fn main() -> ExitCode {
             }
         },
         Some(Command::Resolve { url }) => resolve::run(&url),
+        Some(Command::Plugins { command, info }) => plugins::run(command, info).await,
         Some(Command::Sync { command, info }) => sync::run(command, info).await,
         Some(Command::Remote { command, info }) => remote::run(command, info).await,
         Some(Command::Profiles { command, info }) => profiles::run(command, info).await,

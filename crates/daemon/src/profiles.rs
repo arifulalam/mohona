@@ -68,6 +68,16 @@ const FORBIDDEN: &[&str] = &[
     "referer",
 ];
 
+/// Whether a header may be set by something other than the person's own profile.
+pub(crate) fn header_ok(name: &str, value: &str) -> bool {
+    !name.is_empty()
+        && name.len() <= 60
+        && name.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'-')
+        && value.len() <= 500
+        && !value.chars().any(char::is_control)
+        && !FORBIDDEN.contains(&name.to_ascii_lowercase().as_str())
+}
+
 fn clean(text: &mut Option<String>, at: &str, what: &str, max: usize) -> Result<(), String> {
     if let Some(t) = text {
         *t = t.trim().to_string();

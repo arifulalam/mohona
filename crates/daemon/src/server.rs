@@ -43,6 +43,7 @@ pub(crate) struct State {
     live: std::sync::Mutex<std::collections::HashMap<i64, Live>>,
     /// The port the remote companion listens on (0: not listening).
     remote_port: std::sync::atomic::AtomicU16,
+    plugins_dir: PathBuf,
 }
 
 /// The newest numbers about a running download, from the manager's events.
@@ -62,6 +63,62 @@ struct LivePart {
     speed: f64,
     moved_at: std::time::Instant,
     sampled: std::time::Instant,
+}
+
+async fn enabled_plugins(state: &State) -> Vec<String> {
+    state
+        .manager
+        .setting(crate::plugins::ENABLED_SETTING)
+        .await
+        .ok()
+        .flatten()
+        .and_then(|t| serde_json::from_str(&t).ok())
+        .unwrap_or_default()
+}
+
+async fn plugin_list(state: &State) -> Vec<crate::plugins::PluginInfo> {
+    let on = enabled_plugins(state).await;
+    crate::plugins::discover(&state.plugins_dir)
+        .into_iter()
+        .map(|(label, found)| match found {
+            Ok(p) => crate::plugins::PluginInfo {
+                enabled: on.contains(&p.name),
+                name: p.name,
+                version: p.version,
+                description: p.description,
+                hosts: p.hosts,
+                problem: None,
+            },
+            Err(why) => crate::plugins::PluginInfo {
+                name: label,
+                version: String::new(),
+                description: String::new(),
+                hosts: Vec::new(),
+                enabled: false,
+                problem: Some(why),
+            },
+        })
+        .collect()
+}
+
+/// Runs the enabled plugin for `url`'s site, if there is one: its name and what it said.
+async fn plugin_for(
+    state: &State,
+    url: &str,
+) -> Option<(String, Result<crate::plugins::Resolved, String>)> {
+    let on = enabled_plugins(state).await;
+    if on.is_empty() {
+        return None;
+    }
+    let plugins: Vec<_> = crate::plugins::discover(&state.plugins_dir)
+        .into_iter()
+        .filter_map(|(_, p)| p.ok())
+        .collect();
+    let plugin = crate::plugins::find(&plugins, &on, url)?;
+    Some((
+        plugin.name.clone(),
+        crate::plugins::resolve(plugin, url).await,
+    ))
 }
 
 async fn sync_folder(state: &State) -> Option<String> {
@@ -215,6 +272,10 @@ pub async fn serve(manager: Manager, config: ServerConfig) -> std::io::Result<()
         action: std::sync::Mutex::new(ActionState::default()),
         live: std::sync::Mutex::new(std::collections::HashMap::new()),
         remote_port: std::sync::atomic::AtomicU16::new(0),
+        plugins_dir: config
+            .info_path
+            .parent()
+            .map_or_else(|| PathBuf::from("plugins"), |p| p.join("plugins")),
     });
     watch_action(&state);
     // The remote companion: off unless MOHONA_REMOTE_PORT or the setting `remote.port` names a port.
@@ -735,6 +796,30 @@ pub(crate) async fn handle(state: &State, call: Call) -> Response {
                 }
                 None => url,
             };
+            // A plugin for the site may give the real address (and what the site wants with it).
+            let mut from_plugin = None;
+            let url = if url == pasted {
+                match plugin_for(state, &pasted).await {
+                    Some((name, Err(why))) => {
+                        return Response::Error {
+                            message: format!(
+                                "the plugin \"{name}\" could not handle this link: {why}"
+                            ),
+                        }
+                    }
+                    Some((_, Ok(found))) => {
+                        if crate::rules::host_of(&found.url) != crate::rules::host_of(&pasted) {
+                            cookies = None;
+                        }
+                        let address = found.url.clone();
+                        from_plugin = Some(found);
+                        address
+                    }
+                    None => url,
+                }
+            } else {
+                url
+            };
             let mut request = AddRequest::new(url, folder_or_default(state, dest_dir).await);
             request.sort_into_categories = match rule_sort {
                 Some(on) if !sort => on,
@@ -749,6 +834,15 @@ pub(crate) async fn handle(state: &State, call: Call) -> Response {
             let profile = crate::profiles::find(&profiles, &pasted).cloned();
             let mut headers = headers;
             let (mut referrer, mut user_agent) = (referrer, user_agent);
+            if let Some(found) = from_plugin {
+                referrer = referrer.or(found.referrer);
+                user_agent = user_agent.or(found.user_agent);
+                for (name, value) in found.headers {
+                    if !headers.iter().any(|(n, _)| n.eq_ignore_ascii_case(&name)) {
+                        headers.push((name, value));
+                    }
+                }
+            }
             let mut connections = None;
             if let Some(p) = &profile {
                 referrer = referrer.or_else(|| p.referrer.clone());
@@ -795,6 +889,36 @@ pub(crate) async fn handle(state: &State, call: Call) -> Response {
                     Err(e) => Response::Error {
                         message: e.to_string(),
                     },
+                },
+            }
+        }
+        Call::GetPlugins => Response::Plugins {
+            folder: state.plugins_dir.display().to_string(),
+            plugins: plugin_list(state).await,
+        },
+        Call::SetPlugin { name, enabled } => {
+            if !plugin_list(state)
+                .await
+                .iter()
+                .any(|p| p.name == name && p.problem.is_none())
+            {
+                return Response::Error {
+                    message: format!("there is no plugin named \"{name}\""),
+                };
+            }
+            let mut on = enabled_plugins(state).await;
+            on.retain(|n| *n != name);
+            if enabled {
+                on.push(name);
+            }
+            match serde_json::to_string(&on) {
+                Ok(text) => done(
+                    manager
+                        .set_setting(crate::plugins::ENABLED_SETTING, &text)
+                        .await,
+                ),
+                Err(e) => Response::Error {
+                    message: e.to_string(),
                 },
             }
         }

@@ -333,6 +333,16 @@ Needs two computers (or two Windows accounts) that both see one synced folder, f
 - [ ] Damage the file by hand: `mohona sync now` says it is damaged and changes nothing. Delete the file: the next sync writes it again.
 - [ ] `mohona sync off` stops it; the file stays.
 
+## Plugins
+
+- [ ] `mohona plugins list` prints the plugins folder. Copy `examples/plugins/rewrite-demo` into it as a folder; `mohona plugins list` shows "Rewrite demo", off.
+- [ ] While it is off, adding `https://files.example.com/view/a.zip` in the app's Add dialog (the daemon must be running) adds the link as it is (check the address in the download's details).
+- [ ] `mohona plugins enable "Rewrite demo"`, add the same link again in the app: the details show `https://files.example.com/download/a.zip` (the example site does not exist, so the download then fails; the address is what matters).
+- [ ] Edit `resolve.ps1` to `exit 1`: adding the link in the app now fails with a message naming "Rewrite demo". Make it print `nonsense`: the message says it did not print JSON.
+- [ ] No PowerShell window flashes on screen while it runs.
+- [ ] Break `plugin.json` (remove a brace): `mohona plugins list` shows the folder as not usable, with the reason.
+- [ ] `mohona plugins disable "Rewrite demo"` stops it.
+
 ## Add new items here
 
 When a step adds something that can't be tested on this PC (FTP server, SFTP server, WebDAV, a custom CA, a mirror site, a browser, an Android phone), add it to this list in the same step.

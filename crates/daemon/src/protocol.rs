@@ -117,6 +117,13 @@ pub enum Call {
         folder: Option<String>,
     },
     GetSync,
+    /// The plugins found in the plugins folder.
+    GetPlugins,
+    /// Switch a plugin on or off (by its name).
+    SetPlugin {
+        name: String,
+        enabled: bool,
+    },
     /// Every queue, with its limits and schedule.
     GetQueues,
     /// A new queue (a unique name of 1 to 40 characters).
@@ -377,6 +384,11 @@ pub enum Response {
     },
     Profiles {
         profiles: Vec<crate::profiles::Profile>,
+    },
+    Plugins {
+        /// Where plugins are kept.
+        folder: String,
+        plugins: Vec<crate::plugins::PluginInfo>,
     },
     Synced {
         /// Settings changed on this computer.

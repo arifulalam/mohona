@@ -617,6 +617,10 @@ mohona profiles disable 1     # also: enable, remove
 
 `mohona resolve URL` prints the service and the direct download address for a Google Drive, Google Docs, Dropbox, OneDrive or GitHub link (exit code 1 if it is not one). Adding such a link does this by itself. API: `POST /v1/resolve` with `{"url": ...}` returns `{url, service}` (both null if unknown).
 
+## `plugins` — teach Mohona about a site
+
+`mohona plugins list` shows the plugins folder and the plugins in it (and why a folder is not usable); `enable NAME` / `disable NAME` switch one (off by default). A plugin turns a link of its site into the address to download. How to write one: `docs/plugins.md`.
+
 ## `sync` — the same settings on several computers
 
 `mohona sync set FOLDER` chooses a folder that your cloud service already syncs and does a first sync; the daemon repeats it every 5 minutes. Do the same on each computer. `sync now [FOLDER]` syncs at once, `sync status` shows the folder, `sync off` stops. Rules, site profiles, the extension's settings and three switches travel; folders, queues, tokens and speed limits do not. See ADR-0066.
