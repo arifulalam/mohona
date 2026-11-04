@@ -683,3 +683,15 @@ A `401` now becomes its own error (`NetError::Unauthorized`) that names the kind
 - Wrong tokens wait 250 ms before the answer, as in the local API.
 
 **Not included.** HTTPS (the traffic, including the token, is readable on the network; use it on a home network or put it behind a VPN or an HTTPS proxy), live events (the page asks again every 2.5 s), pairing by QR code, per-token revoking from the app, and reaching the computer from outside the home network.
+
+## ADR-0066: Settings sync through a folder you already sync
+
+**What.** `mohona sync set FOLDER` points Mohona at a folder that OneDrive, Dropbox, Google Drive, Syncthing or similar already copies between your computers. Mohona keeps one file in it, `mohona-settings.json`, and merges with it at once and then every 5 minutes while the daemon runs. `mohona sync now [FOLDER]`, `off` and `status` do the rest.
+
+**Why not a server.** A server would need accounts, money and trust. A folder the person already syncs needs none, and the person can see and delete the file.
+
+**What travels.** Rules, site profiles, the browser extension's settings, and the switches for notifications, keeping in the tray and sorting by type. **What does not:** download folders, categories and queues (they hold paths), the speed limit, the API and companion tokens and ports, and the download list itself. Rules that name a full folder path only make sense on a computer that has that path; a folder name inside the download folder works everywhere.
+
+**How it merges.** Each setting has a time of its last change in the file. A computer remembers a fingerprint of each setting from its last sync, so it knows which changes are its own. Per setting the newer change wins; at the same second the larger fingerprint wins, so two computers settle on the same value. A value from the file is checked like one typed in (a rule list must be a valid rule list) and ignored if it is not; unknown settings in the file are ignored. A damaged file stops the sync with a message and changes nothing; the file is written to a temporary name and renamed.
+
+**Not included.** Merging inside a list (two computers adding different rules at once: the newer list wins whole), computers with clocks that are minutes apart (the one with the later clock wins), encryption of the file (it holds no passwords or tokens, but your rules and sites are readable by whoever can read the folder), and the download history.

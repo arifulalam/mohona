@@ -9,7 +9,7 @@ Mohona is a free, open-source download manager. It splits each file across many 
 ## Goals
 
 - Everything a classic download manager does: segmented downloads, resume, queues, scheduler, speed limiter, browser capture, video grabber, site grabber
-- And more: HLS and DASH streams, SFTP and WebDAV, BitTorrent, cloud share links, a remote web companion, a scriptable CLI and local API, a rules engine, checksum verification, dark mode
+- And more: HLS and DASH streams, SFTP and WebDAV, BitTorrent, cloud share links, a remote web companion, settings sync between computers, a scriptable CLI and local API, a rules engine, checksum verification, dark mode
 - Reliable: a crash, power cut or network switch never corrupts a download
 
 ## Repository layout
@@ -198,6 +198,10 @@ The running daemon serves a small REST + WebSocket API on `127.0.0.1:6791` for s
 ## Cloud share links
 
 Paste a Google Drive, Google Docs, Dropbox, OneDrive or GitHub share link and Mohona downloads the file itself. `mohona resolve URL` shows the direct address.
+
+## Settings sync
+
+`mohona sync set FOLDER` with a folder your cloud service already syncs keeps rules, site profiles and extension settings the same on all your computers. No server; see ADR-0066.
 
 ## Remote web companion
 

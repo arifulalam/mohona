@@ -107,6 +107,16 @@ pub enum Call {
         name: String,
         scope: String,
     },
+    /// Merge settings with the file in a synced folder (the chosen one when `folder` is empty).
+    SyncNow {
+        #[serde(default)]
+        folder: Option<String>,
+    },
+    /// Choose the folder that is synced every few minutes (none: stop).
+    SetSync {
+        folder: Option<String>,
+    },
+    GetSync,
     /// Every queue, with its limits and schedule.
     GetQueues,
     /// A new queue (a unique name of 1 to 40 characters).
@@ -367,6 +377,15 @@ pub enum Response {
     },
     Profiles {
         profiles: Vec<crate::profiles::Profile>,
+    },
+    Synced {
+        /// Settings changed on this computer.
+        applied: Vec<String>,
+        /// Settings written to the file.
+        wrote: Vec<String>,
+    },
+    SyncFolder {
+        folder: Option<String>,
     },
     Remote {
         /// Chosen port, 0 for off.

@@ -147,6 +147,7 @@ Numbers are the steps of the "Desktop app" section.
 - [ ] C27 Site profiles: the steps of "Site profiles" in `docs/manual-tests.md` (connection cap, speed cap, the app's window)
 - [ ] C30 Cloud links: the steps of "Cloud links" in `docs/manual-tests.md` (a Drive, Dropbox, OneDrive and GitHub link each download the real file)
 - [ ] C31 Remote companion: the steps of "Remote companion" in `docs/manual-tests.md` (phone on the same Wi-Fi, firewall prompt, read-only token)
+- [ ] C32 Settings sync: the steps of "Settings sync" in `docs/manual-tests.md` (two computers or two user accounts, one synced folder)
 - [ ] B3 Extension popup: a very long link in an error message wraps inside its own small scrolling box; the popup page gets no horizontal scrollbar
 
 ## What to send back

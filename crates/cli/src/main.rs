@@ -20,6 +20,7 @@ mod remote;
 mod resolve;
 mod rules;
 mod stream;
+mod sync;
 mod tools;
 
 #[derive(Parser)]
@@ -66,6 +67,14 @@ enum Command {
     Resolve {
         /// The share link
         url: String,
+    },
+    /// Keep portable settings (rules, site profiles, extension settings) the same on several computers
+    Sync {
+        #[command(subcommand)]
+        command: sync::SyncCommand,
+        /// The daemon's connection file (default: your application-data folder)
+        #[arg(long)]
+        info: Option<PathBuf>,
     },
     /// The web companion for a phone or another computer on your network (the daemon must be running)
     Remote {
@@ -584,6 +593,7 @@ async fn main() -> ExitCode {
             }
         },
         Some(Command::Resolve { url }) => resolve::run(&url),
+        Some(Command::Sync { command, info }) => sync::run(command, info).await,
         Some(Command::Remote { command, info }) => remote::run(command, info).await,
         Some(Command::Profiles { command, info }) => profiles::run(command, info).await,
         Some(Command::Rules { command, info }) => rules::run(command, info).await,

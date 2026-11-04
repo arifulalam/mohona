@@ -64,6 +64,83 @@ struct LivePart {
     sampled: std::time::Instant,
 }
 
+async fn sync_folder(state: &State) -> Option<String> {
+    state
+        .manager
+        .setting(crate::sync::FOLDER_SETTING)
+        .await
+        .ok()
+        .flatten()
+        .map(|f| f.trim().to_string())
+        .filter(|f| !f.is_empty())
+}
+
+/// Merges the portable settings with the file in `folder`. Returns what changed here and what was written.
+pub(crate) async fn run_sync(
+    state: &State,
+    folder: &std::path::Path,
+) -> Result<(Vec<String>, Vec<String>), String> {
+    use crate::sync as s;
+    if !folder.is_dir() {
+        return Err(format!("{} is not a folder", folder.display()));
+    }
+    let path = folder.join(s::FILE_NAME);
+    let file = match std::fs::metadata(&path) {
+        Ok(m) if m.len() > 1024 * 1024 => return Err("the settings file is too large".into()),
+        Ok(_) => {
+            let text = std::fs::read_to_string(&path).map_err(|e| e.to_string())?;
+            Some(
+                serde_json::from_str::<s::File>(&text)
+                    .map_err(|e| format!("the settings file is damaged: {e}"))?,
+            )
+        }
+        Err(_) => None,
+    };
+    let mut local = std::collections::BTreeMap::new();
+    for key in s::KEYS {
+        if let Ok(Some(v)) = state.manager.setting(key).await {
+            if !v.is_empty() {
+                local.insert((*key).to_string(), v);
+            }
+        }
+    }
+    let marks: s::Marks = state
+        .manager
+        .setting(s::STATE_SETTING)
+        .await
+        .ok()
+        .flatten()
+        .and_then(|t| serde_json::from_str(&t).ok())
+        .unwrap_or_default();
+    let now = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map_or(0, |d| d.as_secs());
+    let device = std::env::var("COMPUTERNAME")
+        .or_else(|_| std::env::var("HOSTNAME"))
+        .unwrap_or_else(|_| "a computer".into());
+    let out = s::merge(&local, &marks, file, now, &device);
+    if let Some(file) = &out.file {
+        let text = serde_json::to_string_pretty(file).map_err(|e| e.to_string())?;
+        let tmp = folder.join(format!("{}.tmp", s::FILE_NAME));
+        std::fs::write(&tmp, text).map_err(|e| e.to_string())?;
+        std::fs::rename(&tmp, &path).map_err(|e| e.to_string())?;
+    }
+    for (key, value) in &out.apply {
+        state
+            .manager
+            .set_setting(key, value)
+            .await
+            .map_err(|e| e.to_string())?;
+    }
+    let text = serde_json::to_string(&out.marks).map_err(|e| e.to_string())?;
+    state
+        .manager
+        .set_setting(s::STATE_SETTING, &text)
+        .await
+        .map_err(|e| e.to_string())?;
+    Ok((out.apply.into_iter().map(|(k, _)| k).collect(), out.wrote))
+}
+
 const REMOTE_KEY: &str = "remote.port";
 
 /// The companion's chosen port: the environment first, then the setting; 0 means off.
@@ -151,6 +228,18 @@ pub async fn serve(manager: Manager, config: ServerConfig) -> std::io::Result<()
             }
             tokio::spawn(crate::api::serve_remote(listener, Arc::clone(&state)));
         }
+    }
+    // Every few minutes, when a synced folder is chosen.
+    {
+        let state = Arc::clone(&state);
+        tokio::spawn(async move {
+            loop {
+                if let Some(folder) = sync_folder(&state).await {
+                    let _ = run_sync(&state, std::path::Path::new(&folder)).await;
+                }
+                tokio::time::sleep(std::time::Duration::from_secs(300)).await;
+            }
+        });
     }
     if let Some(api_listener) = api_listener {
         tokio::spawn(crate::api::serve(api_listener, Arc::clone(&state)));
@@ -709,6 +798,32 @@ pub(crate) async fn handle(state: &State, call: Call) -> Response {
                 },
             }
         }
+        Call::SyncNow { folder } => {
+            let folder = match folder {
+                Some(f) => Some(f),
+                None => sync_folder(state).await,
+            };
+            match folder {
+                None => Response::Error {
+                    message: "no folder: give one, or choose it with `mohona sync set FOLDER`"
+                        .into(),
+                },
+                Some(f) => match run_sync(state, std::path::Path::new(&f)).await {
+                    Ok((applied, wrote)) => Response::Synced { applied, wrote },
+                    Err(message) => Response::Error { message },
+                },
+            }
+        }
+        Call::SetSync { folder } => match folder {
+            Some(f) if !std::path::Path::new(&f).is_dir() => Response::Error {
+                message: format!("{f} is not a folder"),
+            },
+            Some(f) => done(manager.set_setting(crate::sync::FOLDER_SETTING, &f).await),
+            None => done(manager.set_setting(crate::sync::FOLDER_SETTING, "").await),
+        },
+        Call::GetSync => Response::SyncFolder {
+            folder: sync_folder(state).await,
+        },
         Call::GetRemote => Response::Remote {
             port: remote_setting(state).await,
             listening: state.remote_port.load(std::sync::atomic::Ordering::Relaxed),

@@ -322,6 +322,17 @@ Use your own small test files, shared with "anyone with the link".
 - [ ] A token made with `--read-only` can see downloads but Add and the buttons show an error.
 - [ ] `mohona remote disable`, restart: the address no longer answers.
 
+## Settings sync
+
+Needs two computers (or two Windows accounts) that both see one synced folder, for example a OneDrive or Dropbox folder.
+- [ ] On PC 1: add a rule (`mohona rules add ...`), then `mohona sync set "<synced folder>"`. The output says "Wrote to the folder: rules.list" and `mohona-settings.json` appears in the folder.
+- [ ] Wait for the cloud service to copy it. On PC 2: `mohona sync set "<the same folder there>"` says "Took over from the folder: rules.list", and `mohona rules list` shows the rule.
+- [ ] On PC 2 disable the rule, `mohona sync now`; wait for the copy; `mohona sync now` on PC 1: the rule is disabled there too.
+- [ ] Change a browser extension setting (for example the minimum size) on PC 1; after a sync on both, the other PC's popup shows it.
+- [ ] The file contains no tokens, folders or passwords (open it in Notepad).
+- [ ] Damage the file by hand: `mohona sync now` says it is damaged and changes nothing. Delete the file: the next sync writes it again.
+- [ ] `mohona sync off` stops it; the file stays.
+
 ## Add new items here
 
 When a step adds something that can't be tested on this PC (FTP server, SFTP server, WebDAV, a custom CA, a mirror site, a browser, an Android phone), add it to this list in the same step.
