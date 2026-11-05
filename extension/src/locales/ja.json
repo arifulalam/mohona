@@ -68,5 +68,7 @@
   "Nothing to download was found yet. Press play, wait a moment, and try again.": "ダウンロードできるものはまだ見つかりません。再生して少し待ってから、もう一度お試しください。",
   "Sending…": "送信中…",
   "Sent": "送信しました",
-  "Hide on {site}": "{site} で非表示"
+  "Hide on {site}": "{site} で非表示",
+  "Open": "開く",
+  "Show in folder": "フォルダーで表示"
 }

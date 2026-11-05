@@ -68,5 +68,7 @@
   "Nothing to download was found yet. Press play, wait a moment, and try again.": "Henüz indirilecek bir şey bulunamadı. Oynat’a basın, biraz bekleyin ve yeniden deneyin.",
   "Sending…": "Gönderiliyor…",
   "Sent": "Gönderildi",
-  "Hide on {site}": "{site} sitesinde gizle"
+  "Hide on {site}": "{site} sitesinde gizle",
+  "Open": "Aç",
+  "Show in folder": "Klasörde göster"
 }

@@ -55,6 +55,39 @@ pub fn write_message(output: &mut impl Write, message: &Value) -> io::Result<()>
     output.flush()
 }
 
+/// The file of finished download `id`, if it may be opened (or only shown, when `reveal`).
+fn finished_path(
+    downloads: &[mohona_daemon::DownloadInfo],
+    id: i64,
+    reveal: bool,
+) -> Result<std::path::PathBuf, (&'static str, String)> {
+    let row = downloads.iter().find(|d| d.id == id).ok_or((
+        "not_found",
+        "that download is no longer in the list".to_string(),
+    ))?;
+    if row.status != "completed" {
+        return Err(("not_finished", "the download is not finished yet".into()));
+    }
+    let path = row.path.as_deref().map(std::path::PathBuf::from).ok_or((
+        "not_found",
+        "the engine does not know where the file is".to_string(),
+    ))?;
+    if !path.is_file() {
+        return Err((
+            "not_found",
+            format!("the file is no longer there: {}", path.display()),
+        ));
+    }
+    if !reveal && mohona_daemon::openfile::is_risky(&path) {
+        return Err((
+            "risky",
+            "for safety, programs and scripts are not opened from here; use \"Show in folder\""
+                .into(),
+        ));
+    }
+    Ok(path)
+}
+
 fn error(code: &str, message: impl Into<String>) -> Value {
     json!({"type": "error", "code": code, "message": message.into()})
 }
@@ -126,6 +159,7 @@ impl Host {
     /// | `saveStart`, `savePiece`, `saveEnd`, `saveAbort` | save a file the browser holds (`blob:`, `data:`): `name`, `mime`; then pieces `transfer`, `index`, `data` (base64, up to 512 KiB each); then `saveEnd` answers `saved` with `path` |
     /// | `list` | the downloads: `downloads` with `id`, `url`, `status`, `error`, `expired` (the link was refused, 403 or 410) and `page` (where the link was) |
     /// | `refresh` | continue download `id` from the fresh link `url` (optional `cookies`, `referrer`, `userAgent`); refused when the link is not the same file |
+    /// | `open`, `reveal` | open finished download `id` with its program, or show it in its folder; the path is the engine's own, programs and scripts are refused for `open`; answers `opened` |
     /// | `startEngine` | start `mohona daemon` if it is not answering, and wait for it |
     pub fn handle(&self, message: &[u8]) -> Value {
         let mut value: Value = match serde_json::from_slice(message) {
@@ -149,6 +183,8 @@ impl Host {
             Some("savePiece") => self.save_piece(&value),
             Some("saveEnd") => self.save_end(&value),
             Some("saveAbort") => self.save_abort(&value),
+            Some("open") => self.open_file(&value, false),
+            Some("reveal") => self.open_file(&value, true),
             Some("startEngine") => self.start_engine(),
             Some(other) => error("unknown_type", format!("unknown message type \"{other}\"")),
             None => error("bad_request", "the message has no \"type\""),
@@ -265,6 +301,31 @@ impl Host {
             Ok(Response::Error { message }) => error("engine", message),
             Ok(_) => error("engine", "the engine gave an unexpected answer"),
             Err(e) => e,
+        }
+    }
+
+    fn open_file(&self, value: &Value, reveal: bool) -> Value {
+        let Some(id) = value.get("id").and_then(Value::as_i64) else {
+            return error("bad_request", "\"id\" must be a whole number");
+        };
+        let downloads = match self.call(Call::List) {
+            Ok(Response::Downloads { downloads }) => downloads,
+            Ok(Response::Error { message }) => return error("engine", message),
+            Ok(_) => return error("engine", "the engine gave an unexpected answer"),
+            Err(e) => return e,
+        };
+        let path = match finished_path(&downloads, id, reveal) {
+            Ok(p) => p,
+            Err((code, message)) => return error(code, message),
+        };
+        let done = if reveal {
+            mohona_daemon::openfile::reveal(&path)
+        } else {
+            mohona_daemon::openfile::open(&path)
+        };
+        match done {
+            Ok(()) => json!({"type": "opened"}),
+            Err(e) => error("open_failed", format!("could not open it: {e}")),
         }
     }
 
@@ -511,4 +572,52 @@ pub fn serve(host: &Host, input: &mut impl Read, output: &mut impl Write) -> io:
         write_message(output, &answer)?;
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod open_tests {
+    use super::finished_path;
+    use mohona_daemon::DownloadInfo;
+
+    fn row(id: i64, status: &str, path: Option<&std::path::Path>) -> DownloadInfo {
+        DownloadInfo {
+            id,
+            url: "http://x/a".into(),
+            filename: None,
+            status: status.into(),
+            downloaded: 0,
+            size: None,
+            error: None,
+            path: path.map(|p| p.display().to_string()),
+            page: None,
+            expired: false,
+        }
+    }
+
+    #[test]
+    fn only_finished_files_that_are_there_and_safe_can_be_opened() {
+        let dir = tempfile::tempdir().unwrap();
+        let doc = dir.path().join("report.pdf");
+        let exe = dir.path().join("setup.exe");
+        std::fs::write(&doc, "x").unwrap();
+        std::fs::write(&exe, "x").unwrap();
+        let rows = vec![
+            row(1, "completed", Some(&doc)),
+            row(2, "downloading", Some(&doc)),
+            row(3, "completed", Some(&dir.path().join("gone.pdf"))),
+            row(4, "completed", Some(&exe)),
+            row(5, "completed", None),
+        ];
+        assert_eq!(finished_path(&rows, 1, false).unwrap(), doc);
+        assert_eq!(
+            finished_path(&rows, 2, false).unwrap_err().0,
+            "not_finished"
+        );
+        assert_eq!(finished_path(&rows, 3, true).unwrap_err().0, "not_found");
+        assert_eq!(finished_path(&rows, 9, true).unwrap_err().0, "not_found");
+        assert_eq!(finished_path(&rows, 5, true).unwrap_err().0, "not_found");
+        // A program is shown in its folder, never opened.
+        assert_eq!(finished_path(&rows, 4, false).unwrap_err().0, "risky");
+        assert_eq!(finished_path(&rows, 4, true).unwrap(), exe);
+    }
 }

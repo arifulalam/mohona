@@ -1008,29 +1008,7 @@ mod tests {
     }
 }
 
-/// Files that run code when opened (programs, scripts, installers, shortcuts, macros).
-pub fn is_risky(path: &std::path::Path) -> bool {
-    const RISKY: &[&str] = &[
-        "exe", "com", "scr", "msi", "msp", "msix", "appx", "bat", "cmd", "ps1", "psm1", "vbs",
-        "vbe", "js", "jse", "wsf", "wsh", "hta", "lnk", "url", "reg", "dll", "cpl", "msc", "pif",
-        "jar", "sh", "bash", "command", "app", "apk", "dmg", "pkg", "deb", "rpm", "appimage",
-        "docm", "xlsm", "pptm", "gadget", "inf", "scf", "chm",
-    ];
-    // The extension is whatever follows the last dot, and a trailing dot or
-    // space (which Windows ignores) does not hide it.
-    let name = path
-        .file_name()
-        .map(|n| {
-            n.to_string_lossy()
-                .trim_end_matches(['.', ' '])
-                .to_lowercase()
-        })
-        .unwrap_or_default();
-    match name.rsplit_once('.') {
-        Some((_, ext)) => RISKY.contains(&ext),
-        None => false,
-    }
-}
+pub use mohona_daemon::openfile::is_risky;
 
 #[cfg(test)]
 mod risk_tests {

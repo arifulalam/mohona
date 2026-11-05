@@ -68,5 +68,7 @@
   "Nothing to download was found yet. Press play, wait a moment, and try again.": "अभी डाउनलोड के लिए कुछ नहीं मिला। प्ले दबाएँ, थोड़ा रुकें और फिर कोशिश करें।",
   "Sending…": "भेजा जा रहा है…",
   "Sent": "भेज दिया",
-  "Hide on {site}": "{site} पर छिपाएँ"
+  "Hide on {site}": "{site} पर छिपाएँ",
+  "Open": "खोलें",
+  "Show in folder": "फ़ोल्डर में दिखाएँ"
 }

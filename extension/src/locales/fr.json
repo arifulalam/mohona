@@ -68,5 +68,7 @@
   "Nothing to download was found yet. Press play, wait a moment, and try again.": "Rien à télécharger n’a été trouvé pour l’instant. Lancez la lecture, patientez un moment et réessayez.",
   "Sending…": "Envoi…",
   "Sent": "Envoyé",
-  "Hide on {site}": "Masquer sur {site}"
+  "Hide on {site}": "Masquer sur {site}",
+  "Open": "Ouvrir",
+  "Show in folder": "Afficher dans le dossier"
 }

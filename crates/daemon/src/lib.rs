@@ -10,6 +10,7 @@ pub mod api;
 mod client;
 pub mod cloud;
 mod info;
+pub mod openfile;
 pub mod plugins;
 pub mod profiles;
 mod protocol;

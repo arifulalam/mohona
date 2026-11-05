@@ -68,5 +68,7 @@
   "Nothing to download was found yet. Press play, wait a moment, and try again.": "暂时没有找到可下载的内容。请点击播放，稍等片刻后再试。",
   "Sending…": "正在发送…",
   "Sent": "已发送",
-  "Hide on {site}": "在 {site} 上隐藏"
+  "Hide on {site}": "在 {site} 上隐藏",
+  "Open": "打开",
+  "Show in folder": "在文件夹中显示"
 }

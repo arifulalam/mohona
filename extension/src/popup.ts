@@ -267,9 +267,21 @@ function showDownloads(rows: DownloadRow[]): void {
     name.title = row.path ?? row.url;
     const info = document.createElement("small");
     info.textContent = bytes(row.size ?? row.downloaded);
-    li.append(name, info);
+    const open = document.createElement("button");
+    open.textContent = t("Open");
+    open.addEventListener("click", () => void openFile(row.id, false));
+    const show = document.createElement("button");
+    show.textContent = t("Show in folder");
+    show.addEventListener("click", () => void openFile(row.id, true));
+    li.append(name, info, open, show);
     recent.append(li);
   }
+}
+
+/** Opens a finished file, or shows it in its folder; a refusal is shown where results are. */
+async function openFile(id: number, reveal: boolean): Promise<void> {
+  const reply = await ask({ kind: "openFile", id, reveal });
+  if (reply.kind === "opened" && reply.error) setResult(reply.error);
 }
 
 async function pollDownloads(): Promise<void> {

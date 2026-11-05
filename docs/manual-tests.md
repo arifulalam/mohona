@@ -363,6 +363,14 @@ Best on a second Windows user account, or another PC, that has never had Mohona.
 - [ ] Install over the top of the same version while the engine is running: it finishes without a "file in use" error, and your download list is still there.
 - [ ] Uninstall from Settings, Apps: the program folder is gone, `mohona-host status` is no longer registered (check the registry key `HKCU\Software\Google\Chrome\NativeMessagingHosts\org.mohona.host` is gone), and your downloads and the download list in `%APPDATA%` are kept.
 
+## Extension: open finished downloads
+
+- [ ] Finish a download (a PDF or a picture). In the popup, under "Recently finished", "Open" opens it with its usual program and "Show in folder" opens Explorer with the file selected.
+- [ ] Finish a `.exe` or `.zip` named setup: "Open" on the `.exe` shows "for safety, programs and scripts are not opened from here..." and does nothing; "Show in folder" works. A `.zip` opens normally.
+- [ ] Delete the file in Explorer, then press "Open": the popup says the file is no longer there.
+- [ ] The popup is wider than before (440 px): a long file name is cut with "…" and both buttons stay on the same line; no horizontal scrollbar.
+- [ ] In another language (for example Bengali) the two buttons are translated and still fit.
+
 ## Add new items here
 
 When a step adds something that can't be tested on this PC (FTP server, SFTP server, WebDAV, a custom CA, a mirror site, a browser, an Android phone), add it to this list in the same step.

@@ -350,6 +350,14 @@ async function handle(request: Request, sender: chrome.runtime.MessageSender): P
       tries.delete(row.id);
       return { kind: "refreshed", result: await refreshOne(row) };
     }
+    case "openFile": {
+      try {
+        const answer = await client.request({ type: request.reveal ? "reveal" : "open", id: request.id }, 10_000);
+        return { kind: "opened", error: answer.type === "error" ? answer.message : null };
+      } catch (e) {
+        return { kind: "opened", error: (e as Error).message };
+      }
+    }
     case "look": {
       const stored = (await chrome.storage.local.get(["mohona.theme", "mohona.language"]).catch(() => ({}))) as Record<string, unknown>;
       const text = (v: unknown) => (typeof v === "string" ? v : null);

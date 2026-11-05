@@ -151,6 +151,7 @@ Numbers are the steps of the "Desktop app" section.
 - [ ] C33 Plugins: the steps of "Plugins" in `docs/manual-tests.md` (the PowerShell example plugin)
 - [ ] C34 Torrent file selection: the steps of "Torrent file selection" in `docs/manual-tests.md` (also check that a torrent of several files gets its own folder)
 - [ ] C35 Installer: the steps of "Installer" in `docs/manual-tests.md` (install on a clean user account, start, browser host registered, uninstall)
+- [ ] B4 Extension "Open" and "Show in folder" for finished downloads: the steps of "Extension: open finished downloads" in `docs/manual-tests.md`
 - [ ] B3 Extension popup: a very long link in an error message wraps inside its own small scrolling box; the popup page gets no horizontal scrollbar
 
 ## What to send back

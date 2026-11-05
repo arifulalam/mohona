@@ -42,7 +42,9 @@ export type Question =
   | { type: "saveStart"; name: string; mime?: string }
   | { type: "savePiece"; transfer: number; index: number; data: string }
   | { type: "saveEnd"; transfer: number }
-  | { type: "saveAbort"; transfer: number };
+  | { type: "saveAbort"; transfer: number }
+  | { type: "open"; id: number }
+  | { type: "reveal"; id: number };
 
 export type Answer =
   | {
@@ -57,6 +59,7 @@ export type Answer =
   | { type: "streamStarted"; job: number; folder: string }
   | { type: "downloads"; downloads: DownloadRow[] }
   | { type: "refreshed"; id: number }
+  | { type: "opened" }
   | { type: "settings"; value: string | null }
   | { type: "settingsSaved" }
   | { type: "saving"; transfer: number }

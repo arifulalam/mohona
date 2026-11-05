@@ -68,5 +68,7 @@
   "Nothing to download was found yet. Press play, wait a moment, and try again.": "لم يُعثر على ما يمكن تنزيله بعد. اضغط تشغيل وانتظر قليلًا ثم حاول مرة أخرى.",
   "Sending…": "جارٍ الإرسال…",
   "Sent": "تم الإرسال",
-  "Hide on {site}": "إخفاء في {site}"
+  "Hide on {site}": "إخفاء في {site}",
+  "Open": "فتح",
+  "Show in folder": "إظهار في المجلد"
 }

@@ -18,6 +18,8 @@ export type Request =
   | { kind: "expired" }
   | { kind: "downloads" }
   | { kind: "refreshDownload"; id: number }
+  /** Open a finished download with its program, or show it in its folder. */
+  | { kind: "openFile"; id: number; reveal: boolean }
   | { kind: "look" }
   | { kind: "getSettings" }
   | { kind: "setSettings"; settings: Partial<Settings> };
@@ -29,6 +31,7 @@ export type Reply =
   | { kind: "expired"; downloads: DownloadRow[] }
   | { kind: "downloads"; downloads: DownloadRow[] }
   | { kind: "refreshed"; result: RefreshResult }
+  | { kind: "opened"; error: string | null }
   | { kind: "look"; look: Look }
   | { kind: "settings"; settings: Settings }
   | { kind: "outcome"; outcome: Outcome | null };

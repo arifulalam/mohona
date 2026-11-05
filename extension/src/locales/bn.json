@@ -68,5 +68,7 @@
   "Nothing to download was found yet. Press play, wait a moment, and try again.": "এখনও ডাউনলোডের মতো কিছু পাওয়া যায়নি। প্লে চাপুন, একটু অপেক্ষা করুন, তারপর আবার চেষ্টা করুন।",
   "Sending…": "পাঠানো হচ্ছে…",
   "Sent": "পাঠানো হয়েছে",
-  "Hide on {site}": "{site}-এ লুকান"
+  "Hide on {site}": "{site}-এ লুকান",
+  "Open": "খুলুন",
+  "Show in folder": "ফোল্ডারে দেখান"
 }

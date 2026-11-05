@@ -68,5 +68,7 @@
   "Nothing to download was found yet. Press play, wait a moment, and try again.": "Ничего для загрузки пока не найдено. Нажмите воспроизведение, подождите немного и повторите.",
   "Sending…": "Отправка…",
   "Sent": "Отправлено",
-  "Hide on {site}": "Скрыть на {site}"
+  "Hide on {site}": "Скрыть на {site}",
+  "Open": "Открыть",
+  "Show in folder": "Показать в папке"
 }
