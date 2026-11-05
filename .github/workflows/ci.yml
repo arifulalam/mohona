@@ -28,3 +28,28 @@ jobs:
         run: cargo clippy --workspace --all-targets -- -D warnings
       - name: Test
         run: cargo test --workspace
+
+  web:
+    name: App and extension
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: |
+            app/package-lock.json
+            extension/package-lock.json
+      - name: App
+        working-directory: app
+        run: |
+          npm ci
+          npm run check
+          npm run i18n:check
+      - name: Extension
+        working-directory: extension
+        run: |
+          npm ci
+          npm test
+          npm run package

@@ -222,7 +222,7 @@ The window cannot be built where the tests run (it needs the system web view), s
 23. Clipboard: Settings, tick "Offer to download a link when I copy one", Save. Copy a download address in the browser and switch to Mohona: a bar says "You copied a link" with "Download it" and "Ignore". "Download it" adds it; "Ignore" removes the bar and the same link is not offered again. Copy ordinary text, or a link that is already in the list: no bar. Untick the switch: nothing is offered. If `npm run tauri dev` fails to compile after this step, send the first error (the clipboard plugin is new).
 24. Languages: the language box (top right) lists each language in its own writing followed by its English name ("বাংলা · Bengali", "العربية · Arabic", ...), English first. Pick "বাংলা · Bengali": the toolbar, sidebar, list and every window (Add, Settings, Queues, Schedule, Categories, Details) are in Bengali, no text is cut off, the Bengali letters are not broken into boxes. Pick العربية: the window turns right to left. Restart the app: the language is still there. If you speak one of the languages, note any wrong or odd word.
 25. Your own language: follow `docs/translating.md` to add one language (even with 5 texts translated); after `npm run tauri dev` it appears in the box and untranslated texts show in English.
-26. `npm run tauri build` makes an installer in `app\src-tauri\target\release\bundle`. (The installer does not include `mohona.exe` yet: Phase 8.)
+26. `.\scripts\build-windows.ps1` makes an installer in `app\src-tauri\target\release\bundle\nsis` (see "Installer" below).
 
 ## Extension popup
 
@@ -352,6 +352,16 @@ Use a legal torrent with several files, such as a Linux distribution that comes 
 - [ ] `mohona torrent files '<magnet>'` prints the same list; `mohona torrent add '<magnet>' --files 0` downloads just that file.
 - [ ] A torrent of one file lands directly in the download folder; "Select all" then Download adds the whole torrent.
 - [ ] A magnet link with no peers: "Choose files…" gives an error after about 90 seconds; Back and a normal Download still work.
+
+## Installer
+
+Best on a second Windows user account, or another PC, that has never had Mohona.
+- [ ] Run the installer. Windows SmartScreen may warn that the publisher is unknown (the installer is not signed yet): "More info", "Run anyway". It asks for no administrator password and installs for the current user only.
+- [ ] After the install, Mohona starts from the Start menu. Its folder (`%LOCALAPPDATA%\Mohona`) holds `mohona.exe` and `mohona-host.exe` next to the app.
+- [ ] In the app press "Start Mohona": the engine starts without setting `MOHONA_PROGRAM` or the PATH.
+- [ ] `mohona-host status` (in that folder) shows the host registered for Chrome, Edge and Firefox that are installed; Chromium browsers without a pinned extension id are reported as skipped, not as errors.
+- [ ] Install over the top of the same version while the engine is running: it finishes without a "file in use" error, and your download list is still there.
+- [ ] Uninstall from Settings, Apps: the program folder is gone, `mohona-host status` is no longer registered (check the registry key `HKCU\Software\Google\Chrome\NativeMessagingHosts\org.mohona.host` is gone), and your downloads and the download list in `%APPDATA%` are kept.
 
 ## Add new items here
 

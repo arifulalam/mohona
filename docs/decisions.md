@@ -715,3 +715,17 @@ A `401` now becomes its own error (`NetError::Unauthorized`) that names the kind
 **A bug fixed on the way.** The first BitTorrent step (ADR-0063) gave the engine the download folder as the torrent's folder, and the engine puts a torrent's files straight into the folder it is given. A torrent of several files therefore spilled its files into the download folder instead of a folder of its own. Now a torrent of several files is saved in a folder named after it (made safe: no separators, no `..`, no characters Windows refuses), and a one-file torrent still lands in the download folder as before. A torrent downloaded with the first version keeps working: resuming looks in the new place, so files already spilled are not found and are fetched again.
 
 **Limits.** Files that share a 16 or 32 KiB piece with a chosen file have a few bytes of data on disk (a piece cannot be split); unchosen files are otherwise empty or absent. Choosing files after a download has started, and a choice in the browser extension's popup, are not included. A magnet link whose peers do not answer within 90 seconds fails the listing; the person can still add it without choosing.
+
+## ADR-0069: The Windows installer
+
+**What.** `scripts/build-windows.ps1` (PowerShell, on Windows) makes one installer, `Mohona_<version>_x64-setup.exe`, with Tauri's NSIS target. The `installer.yml` workflow runs the same script on a GitHub Windows machine (by hand or on a `v*` tag) and attaches the installer and its SHA-256 to the run.
+
+**Contents.** The app, `mohona.exe` (the engine and command line) and `mohona-host.exe` (what the browser starts), the last two placed next to the app, which is where the app already looks for the engine (ADR-0049). The programs are built in release mode by the script just before the installer and are not kept in the source.
+
+**Per user.** `installMode: currentUser`: no administrator rights, everything under the person's own profile, nothing in Program Files or the machine-wide registry. This also matches how the browser host is registered (current user only).
+
+**Hooks** (`installer-hooks.nsh`). Before installing or uninstalling, a running `mohona.exe` is stopped so its file is not locked (downloads are kept in the database and continue at the next start). After installing, `mohona-host install --browser all` registers the host for Chrome, Edge and Firefox; Chromium-family browsers need the extension's id (ADR-0039) and are skipped with a message until it is pinned. Before uninstalling, `mohona-host uninstall --browser all` removes the registration. The person's downloads and the download list are never deleted by the uninstaller.
+
+**What is not in it.** ffmpeg and yt-dlp: they are separate programs with their own licences (ADR-0003, ADR-0034), so Mohona keeps using the ones on the person's PATH and says so in its messages when they are missing; bundling them is a separate decision. No MSI (the NSIS installer is enough for one person and avoids a second package to test), no signing yet (SmartScreen will warn about an unknown publisher until a certificate is bought; nothing in the code depends on it), no auto-update, no start with Windows, and no macOS or Linux packages.
+
+**Checked here.** A test (`crates/host/tests/packaging.rs`) keeps the files consistent: every program the bundle ships is copied by the script, the hooks call commands the host really has, and the engine, app, shell and extension have one version number. The installer itself can only be built and tried on Windows (C35).

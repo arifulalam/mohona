@@ -68,7 +68,7 @@ npm run tauri dev
 - Use the **full** path. A relative path does not work, because the window program runs from another folder.
 - The first start compiles a lot (5 to 20 minutes, much text). Later starts take seconds.
 - Expected: the Mohona window opens with "Mohona is not running" and a "Start Mohona" button.
-- To make the installer: `npm run tauri build`. The installer appears under `app\src-tauri\target\release\bundle\` (`nsis` and `msi` folders). It does not contain `mohona.exe` yet (that is Phase 8); the installed app finds `mohona.exe` through `MOHONA_PROGRAM` or the `PATH`.
+- To make the installer, run `.\scripts\build-windows.ps1` from the `mohona` folder (PowerShell). It builds the engine and the browser host, copies them next to the app, runs the app's checks and makes the installer in `app\src-tauri\target\release\bundle\nsis\`. The installer contains `mohona.exe` and `mohona-host.exe`; the installed app finds `mohona.exe` next to itself.
 
 If the compile fails, send the **first** `error[...]` block (not the last lines). The Tauri part (`app\src-tauri\src\lib.rs`) has never been compiled before, so errors there are likely and quick to fix.
 
@@ -137,7 +137,7 @@ Numbers are the steps of the "Desktop app" section.
 - [ ] C19 Themes in the app (22)
 - [ ] C20 Copied link offer: bar, Download it, Ignore, not offered twice, off by default (23)
 - [ ] C21 Languages: Bengali, Arabic (right to left), restart keeps the choice, own language from `docs/translating.md` (24, 25)
-- [ ] C22 `npm run tauri build` makes an installer; install it on a second user account or PC; the installed app starts, and finds the engine when `MOHONA_PROGRAM` is set (26)
+- [ ] C22 `.\scripts\build-windows.ps1` makes an installer (see C35 for installing it) (26)
 - [ ] C23 Looks: window at 760 px wide, Windows scaling 125% and 150%, light and dark; text readable, nothing cut off, the Save buttons of Settings and Schedule always visible
 - [ ] C24 Quiet when idle: with the window hidden for 10 minutes, Task Manager shows the app near 0% CPU
 - [ ] C25 Local API: `mohona api`, then the steps of "Local API" in `docs/manual-tests.md` (token works, web page refused, read-only token cannot add)
@@ -150,6 +150,7 @@ Numbers are the steps of the "Desktop app" section.
 - [ ] C32 Settings sync: the steps of "Settings sync" in `docs/manual-tests.md` (two computers or two user accounts, one synced folder)
 - [ ] C33 Plugins: the steps of "Plugins" in `docs/manual-tests.md` (the PowerShell example plugin)
 - [ ] C34 Torrent file selection: the steps of "Torrent file selection" in `docs/manual-tests.md` (also check that a torrent of several files gets its own folder)
+- [ ] C35 Installer: the steps of "Installer" in `docs/manual-tests.md` (install on a clean user account, start, browser host registered, uninstall)
 - [ ] B3 Extension popup: a very long link in an error message wraps inside its own small scrolling box; the popup page gets no horizontal scrollbar
 
 ## What to send back

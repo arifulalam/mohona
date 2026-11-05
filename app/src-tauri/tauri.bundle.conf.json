@@ -1,0 +1,15 @@
+{
+  "bundle": {
+    "targets": ["nsis"],
+    "resources": {
+      "resources/mohona.exe": "mohona.exe",
+      "resources/mohona-host.exe": "mohona-host.exe"
+    },
+    "windows": {
+      "nsis": {
+        "installMode": "currentUser",
+        "installerHooks": "./installer-hooks.nsh"
+      }
+    }
+  }
+}

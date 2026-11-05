@@ -1,12 +1,14 @@
 @echo off
-title Compile and Build Mohona
-
+title Mohona - cargo test
 cargo test --workspace
 
+title Mohona - cargo build
 cargo build --release -p mohona-cli -p mohona-host
 
+title Mohona - installing host
 target\release\mohona-host install
 
+title Mohona - extension build
 cd extension
 
 npm install
@@ -15,6 +17,7 @@ npm run check
 
 cd..
 
+title Mohona - app build
 cd app
 
 npm install

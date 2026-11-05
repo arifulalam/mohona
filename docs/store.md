@@ -61,5 +61,5 @@ Replace the repository address once it is public.
 - [ ] Chrome Web Store: developer account (one-time fee), fill "privacy practices" from the table above, data use: *no user data collected* is **not** accurate for cookies and web history handled locally; declare "Web history" and "Website content" as handled and answer that nothing is sold, shared or used for anything but the single purpose (they stay on the user's computer).
 - [ ] Edge Add-ons: free developer account; same zip and text.
 - [ ] Firefox Add-ons (AMO): upload the Firefox zip and the source (the repository, or `git archive`) with build steps (`npm install && npm run package`, Node 22). Listed or self-distributed.
-- [ ] The extension id of each store is registered in the host (see above), and the installer of the app (Phase 8) calls `mohona-host install`.
+- [ ] The extension id of each store is registered in the host (see above), and the installer of the app calls `mohona-host install --browser all` (ADR-0069).
 - [ ] Version in `manifest.base.json` raised for every upload (stores refuse the same version twice).

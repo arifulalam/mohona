@@ -199,6 +199,10 @@ The running daemon serves a small REST + WebSocket API on `127.0.0.1:6791` for s
 
 Paste a Google Drive, Google Docs, Dropbox, OneDrive or GitHub share link and Mohona downloads the file itself. `mohona resolve URL` shows the direct address.
 
+## Installing on Windows
+
+Run `.\\scripts\\build-windows.ps1` in PowerShell (needs Rust, Node 22 and the WebView2 runtime that Windows 11 has) to make `Mohona_<version>_x64-setup.exe`; or run the "Windows installer" workflow on GitHub. The installer is per user and registers the browser host. See ADR-0069.
+
 ## Torrent file selection
 
 Paste a magnet link, press "Choose files…", and download only the files you tick. Details: ADR-0068.
