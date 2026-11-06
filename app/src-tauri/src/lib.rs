@@ -208,6 +208,16 @@ async fn set_tool(app: State<'_, App>, name: String, path: Option<String>) -> Re
     app.engine.set_tool(name, path).await
 }
 
+#[tauri::command]
+async fn get_video_browser(app: State<'_, App>) -> Result<Option<String>> {
+    app.engine.video_browser().await
+}
+
+#[tauri::command]
+async fn set_video_browser(app: State<'_, App>, browser: Option<String>) -> Result<Option<String>> {
+    app.engine.set_video_browser(browser).await
+}
+
 /// Opens one of the tools' download pages in the browser; no other address is ever opened.
 #[tauri::command]
 async fn open_tool_page(handle: AppHandle, url: String) -> Result<()> {
@@ -413,6 +423,8 @@ pub fn run() {
             get_tools,
             set_tool,
             open_tool_page,
+            get_video_browser,
+            set_video_browser,
             get_profiles,
             set_profiles,
             get_rules,

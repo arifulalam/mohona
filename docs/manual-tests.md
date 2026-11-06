@@ -382,6 +382,9 @@ Needs yt-dlp (`winget install yt-dlp.yt-dlp`); ffmpeg for the best quality (`win
 - [ ] In the extension on a YouTube watch page: the popup lists the page video first, and the on-page button downloads it.
 - [ ] A playlist link or a channel link is refused with a clear message.
 - [ ] Another language (for example Bengali): the Tools group is translated and fits.
+- [ ] Other sites: "+ Add" a public Vimeo, Pinterest, SoundCloud, X (twitter) post or Facebook video link: it downloads as a row. A plain file link (a `.zip`) and a page yt-dlp does not know (any ordinary article) still download as normal files/pages, without an error.
+- [ ] A post that needs sign-in (an Instagram or Facebook post you can see signed in): fails with the hint about the browser; in Settings, Tools choose your browser ("Use the sign-in of"), close it, add again: it downloads.
+- [ ] In the extension on such a page: the popup lists "Video on this page" last; choosing it downloads the video (the browser's own sign-in is used). On an ordinary article it ends as an error that says there is no video, and nothing is saved.
 
 ## Add new items here
 

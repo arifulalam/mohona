@@ -12,6 +12,8 @@ export interface AddDetails {
   headers?: { name: string; value: string }[];
   /** A file name to use (streams only). */
   name?: string;
+  /** The address is a web page whose video is wanted: the engine asks yt-dlp, and no video is an error. */
+  video?: boolean;
 }
 
 /** A download in Mohona's list. */

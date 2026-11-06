@@ -264,5 +264,10 @@
   "Where it is": "Nerede",
   "Where it is (the file, or its folder)": "Nerede (dosya ya da klasörü)",
   "Use this": "Bunu kullan",
-  "Find it by itself": "Kendisi bulsun"
+  "Find it by itself": "Kendisi bulsun",
+  "Videos from web pages": "Web sayfalarından videolar",
+  "Mohona asks yt-dlp about web pages (Facebook, X, Instagram, Pinterest, SoundCloud and many more). Posts you can only see when signed in need your browser's sign-in:": "Mohona web sayfaları için yt-dlp'ye sorar (Facebook, X, Instagram, Pinterest, SoundCloud ve daha fazlası). Yalnızca oturum açıkken görülen gönderiler tarayıcınızın oturumunu gerektirir:",
+  "Use the sign-in of": "Şunun oturumunu kullan",
+  "No browser": "Tarayıcı yok",
+  "Close that browser if a download says it cannot read the cookies.": "Bir indirme çerezleri okuyamadığını söylerse o tarayıcıyı kapatın."
 }

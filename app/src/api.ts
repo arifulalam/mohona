@@ -24,6 +24,8 @@ function tauriApi(): Api {
     tools: () => call<ToolInfo[]>("get_tools"),
     setTool: (name, path) => call<ToolInfo[]>("set_tool", { name, path }),
     openToolPage: (url) => call<void>("open_tool_page", { url }),
+    videoBrowser: () => call<string | null>("get_video_browser"),
+    setVideoBrowser: (browser) => call<string | null>("set_video_browser", { browser }),
     profiles: () => call<SiteProfile[]>("get_profiles"),
     setProfiles: (profiles) => call<SiteProfile[]>("set_profiles", { profiles }),
     rules: () => call<Rule[]>("get_rules"),
@@ -85,6 +87,7 @@ export function demoApi(tick = 1000): Api {
   let nextQueue = 2;
   let ruleList: Rule[] = [];
   let nextRule = 1;
+  let demoBrowser: string | null = null;
   let toolList: ToolInfo[] = [
     { name: "ffmpeg", purpose: "join separate video and audio, add subtitles to a video, convert files, and merge the best video and sound of a YouTube download", chosen: null, found: null, page: "https://ffmpeg.org/download.html", windowsPage: "https://www.gyan.dev/ffmpeg/builds/", winget: "winget install Gyan.FFmpeg" },
     { name: "yt-dlp", purpose: "download videos from YouTube, Vimeo and similar sites (they hide the real file behind a web page that needs a program to read it)", chosen: null, found: null, page: "https://github.com/yt-dlp/yt-dlp#installation", windowsPage: "https://github.com/yt-dlp/yt-dlp/releases/latest", winget: "winget install yt-dlp.yt-dlp" },
@@ -168,6 +171,8 @@ export function demoApi(tick = 1000): Api {
       return toolList.map((t) => ({ ...t }));
     },
     openToolPage: async (url) => void window.open(url, "_blank", "noopener"),
+    videoBrowser: async () => (need(), demoBrowser),
+    setVideoBrowser: async (browser) => ((demoBrowser = browser), demoBrowser),
     profiles: async () => (need(), profileList),
     setProfiles: async (profiles) => {
       need();

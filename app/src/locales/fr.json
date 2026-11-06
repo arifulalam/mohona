@@ -264,5 +264,10 @@
   "Where it is": "Où il se trouve",
   "Where it is (the file, or its folder)": "Où il se trouve (le fichier ou son dossier)",
   "Use this": "Utiliser celui-ci",
-  "Find it by itself": "Le trouver automatiquement"
+  "Find it by itself": "Le trouver automatiquement",
+  "Videos from web pages": "Vidéos de pages web",
+  "Mohona asks yt-dlp about web pages (Facebook, X, Instagram, Pinterest, SoundCloud and many more). Posts you can only see when signed in need your browser's sign-in:": "Mohona interroge yt-dlp pour les pages web (Facebook, X, Instagram, Pinterest, SoundCloud et bien d'autres). Les publications visibles seulement une fois connecté demandent la session de votre navigateur :",
+  "Use the sign-in of": "Utiliser la session de",
+  "No browser": "Aucun navigateur",
+  "Close that browser if a download says it cannot read the cookies.": "Fermez ce navigateur si un téléchargement dit qu'il ne peut pas lire les cookies."
 }

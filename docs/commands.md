@@ -636,7 +636,7 @@ mohona get https://www.youtube.com/watch?v=VIDEO_ID -o downloads
 mohona tool            # shows ffmpeg and yt-dlp: found or not, what for, where to get them
 ```
 
-One video per link (YouTube, Vimeo, Dailymotion); playlists and channels are refused. With ffmpeg you get the best video and audio joined into an mp4; without it, the best single file. If yt-dlp is missing the error names it, the winget command (`winget install yt-dlp.yt-dlp`) and the download link. Set the location in the app: Settings, Tools.
+One video per link. YouTube, Vimeo and Dailymotion go to yt-dlp always (playlists and channels are refused); any other web page (Facebook, X, Instagram, Pinterest, SoundCloud and more) is tried with yt-dlp first and, when yt-dlp does not know it, downloaded as an ordinary file. The browser whose sign-in yt-dlp uses is chosen in the app (Settings, Tools). With ffmpeg you get the best video and audio joined into an mp4; without it, the best single file. If yt-dlp is missing the error names it, the winget command (`winget install yt-dlp.yt-dlp`) and the download link. Set the location in the app: Settings, Tools.
 
 ## BitTorrent
 

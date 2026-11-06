@@ -11,6 +11,8 @@ export interface Media {
   size?: number;
   /** The page's address (or its origin), for the download's Referer. */
   referrer?: string;
+  /** A web page whose video is wanted (the engine asks yt-dlp); there may be none. */
+  video?: boolean;
 }
 
 /** The longest list kept for one tab. */

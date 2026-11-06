@@ -194,6 +194,9 @@ export interface Api {
   setTool(name: string, path: string | null): Promise<ToolInfo[]>;
   /** Opens one of the tools' download pages in the browser. */
   openToolPage(url: string): Promise<void>;
+  /** The browser whose sign-in yt-dlp uses for video pages (null: none). */
+  videoBrowser(): Promise<string | null>;
+  setVideoBrowser(browser: string | null): Promise<string | null>;
   profiles(): Promise<SiteProfile[]>;
   /** Replaces the whole list; resolves with what was saved. */
   setProfiles(profiles: SiteProfile[]): Promise<SiteProfile[]>;

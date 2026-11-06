@@ -264,5 +264,10 @@
   "Where it is": "位置",
   "Where it is (the file, or its folder)": "位置（文件或其所在文件夹）",
   "Use this": "使用此项",
-  "Find it by itself": "自动查找"
+  "Find it by itself": "自动查找",
+  "Videos from web pages": "网页中的视频",
+  "Mohona asks yt-dlp about web pages (Facebook, X, Instagram, Pinterest, SoundCloud and many more). Posts you can only see when signed in need your browser's sign-in:": "Mohona 会就网页（Facebook、X、Instagram、Pinterest、SoundCloud 等众多网站）询问 yt-dlp。登录后才能看到的帖子需要用到浏览器的登录状态：",
+  "Use the sign-in of": "使用其登录状态的浏览器",
+  "No browser": "不使用浏览器",
+  "Close that browser if a download says it cannot read the cookies.": "如果下载提示无法读取 Cookie，请关闭该浏览器。"
 }

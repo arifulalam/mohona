@@ -113,6 +113,10 @@ pub struct RequestContext {
     /// A torrent: only these files (numbers from the torrent's file list); without it, all of them.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub torrent_files: Option<Vec<u32>>,
+    /// The person asked for the video on this page: it goes to yt-dlp, and a page without a video
+    /// is an error (not saved as a web page).
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub video: bool,
 }
 
 /// SSH settings for one download. A key's passphrase is not part of this: it

@@ -264,5 +264,10 @@
   "Where it is": "Lokasinya",
   "Where it is (the file, or its folder)": "Lokasinya (berkas, atau folder tempatnya)",
   "Use this": "Pakai ini",
-  "Find it by itself": "Cari otomatis"
+  "Find it by itself": "Cari otomatis",
+  "Videos from web pages": "Video dari halaman web",
+  "Mohona asks yt-dlp about web pages (Facebook, X, Instagram, Pinterest, SoundCloud and many more). Posts you can only see when signed in need your browser's sign-in:": "Mohona bertanya ke yt-dlp untuk halaman web (Facebook, X, Instagram, Pinterest, SoundCloud, dan banyak lagi). Kiriman yang hanya terlihat saat masuk memerlukan sesi masuk browser Anda:",
+  "Use the sign-in of": "Pakai sesi masuk dari",
+  "No browser": "Tanpa browser",
+  "Close that browser if a download says it cannot read the cookies.": "Tutup browser itu jika unduhan menyatakan tidak bisa membaca cookie."
 }

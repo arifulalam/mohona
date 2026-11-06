@@ -10,7 +10,7 @@ import { reconcile } from "./settingsync";
 import { linksInPage, nextToRefresh, refreshExpired, type RefreshResult } from "./refresh";
 import type { DownloadRow } from "./protocol";
 import { lookFor } from "./look";
-import { pageVideo } from "./videopage";
+import { pageGuess, pageVideo } from "./videopage";
 
 const client = new NativeClient(() => chrome.runtime.connectNative(HOST_NAME));
 
@@ -198,7 +198,7 @@ async function downloadMedia(media: Media) {
     name: media.name,
   };
   return media.kind === "file"
-    ? addDownload(client, { ...details, name: undefined })
+    ? addDownload(client, { ...details, name: undefined, video: media.video })
     : startStream(client, details);
 }
 
@@ -316,7 +316,10 @@ async function handle(request: Request, sender: chrome.runtime.MessageSender): P
       const found = await mediaOf(request.tabId);
       const tab = await chrome.tabs.get(request.tabId).catch(() => undefined);
       const video = pageVideo(tab?.url, tab?.title);
-      return { kind: "media", media: video && !found.some((m) => m.url === video.url) ? [video, ...found] : found };
+      const list = video && !found.some((m) => m.url === video.url) ? [video, ...found] : found;
+      // Any other page: "the video on this page, if there is one", last.
+      const guess = pageGuess(tab?.url);
+      return { kind: "media", media: guess && !list.some((m) => m.url === guess.url) ? [...list, guess] : list };
     }
     case "pageMedia": {
       // From the button on a video: what the tab has shown, plus the video's own address.
@@ -335,6 +338,8 @@ async function handle(request: Request, sender: chrome.runtime.MessageSender): P
       // On a video site's page, the page itself is the thing to download (the engine hands it to yt-dlp).
       const video = pageVideo(request.page, sender.tab?.title);
       if (video && !found.some((m) => m.url === video.url)) found.unshift(video);
+      const guess = pageGuess(request.page);
+      if (guess && !found.some((m) => m.url === guess.url)) found.push(guess);
       return { kind: "media", media: found };
     }
     case "downloadMedia": {

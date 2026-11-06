@@ -38,3 +38,28 @@ export function pageVideo(address: string | undefined | null, title: string | un
   const name = (title ?? "").replace(/\s*[-–|]\s*(YouTube|Vimeo|Dailymotion)\s*$/i, "").replace(/^\(\d+\)\s*/, "").trim();
   return { url: address, kind: "file", name: name || "This video", referrer: address };
 }
+
+/** File endings that say an address is a file, not a web page. */
+const PAGE_ENDINGS = ["html", "htm", "shtml", "php", "asp", "aspx", "jsp"];
+
+/**
+ * Any other web page, offered as "the video on this page, if there is one": the engine asks yt-dlp,
+ * which knows Facebook, X, Instagram, Pinterest, SoundCloud and a thousand more. Mirrors
+ * `mohona_media::ytdlp::could_be_page`.
+ */
+export function pageGuess(address: string | undefined | null): Media | null {
+  if (!address || isVideoPage(address)) return null;
+  let url: URL;
+  try {
+    url = new URL(address);
+  } catch {
+    return null;
+  }
+  if (url.protocol !== "https:" && url.protocol !== "http:") return null;
+  const host = url.hostname.toLowerCase();
+  if (SITES.some((s) => host === s || host.endsWith(`.${s}`))) return null; // a channel, a search...
+  const last = url.pathname.split("/").pop() ?? "";
+  const dot = last.lastIndexOf(".");
+  if (dot >= 0 && !PAGE_ENDINGS.includes(last.slice(dot + 1).toLowerCase())) return null;
+  return { url: address, kind: "file", name: "Video on this page", referrer: address, video: true };
+}

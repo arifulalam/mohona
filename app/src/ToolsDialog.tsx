@@ -3,6 +3,15 @@ import { useT } from "./i18n";
 import { Modal } from "./AddDialog";
 import type { Api, ToolInfo } from "./types";
 
+const BROWSERS: [string, string][] = [
+  ["chrome", "Chrome"],
+  ["edge", "Edge"],
+  ["firefox", "Firefox"],
+  ["brave", "Brave"],
+  ["opera", "Opera"],
+  ["vivaldi", "Vivaldi"],
+];
+
 const field = "rounded-md border border-[var(--line)] bg-[var(--bg)] px-2 py-1";
 
 /** ffmpeg and yt-dlp: what each is for, whether it is found, where to get it, and where it is. */
@@ -12,6 +21,7 @@ export function ToolsDialog({ api, onClose }: { api: Api; onClose(): void }) {
   const [paths, setPaths] = useState<Record<string, string>>({});
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [browser, setBrowser] = useState<string>("");
 
   useEffect(() => {
     let alive = true;
@@ -27,6 +37,29 @@ export function ToolsDialog({ api, onClose }: { api: Api; onClose(): void }) {
       alive = false;
     };
   }, [api]);
+
+  useEffect(() => {
+    let alive = true;
+    api
+      .videoBrowser()
+      .then((b) => alive && setBrowser(b ?? ""))
+      .catch(() => undefined);
+    return () => {
+      alive = false;
+    };
+  }, [api]);
+
+  async function chooseBrowser(value: string) {
+    setBusy(true);
+    try {
+      setBrowser((await api.setVideoBrowser(value || null)) ?? "");
+      setError(null);
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }
 
   async function choose(name: string, path: string | null) {
     setBusy(true);
@@ -108,6 +141,24 @@ export function ToolsDialog({ api, onClose }: { api: Api; onClose(): void }) {
           </section>
         ))}
       </div>
+      <section aria-label={t("Videos from web pages")} className="mt-3 rounded-lg border border-[var(--line)] p-3">
+        <strong>{t("Videos from web pages")}</strong>
+        <p className="my-1 text-sm text-[var(--muted)]">
+          {t("Mohona asks yt-dlp about web pages (Facebook, X, Instagram, Pinterest, SoundCloud and many more). Posts you can only see when signed in need your browser's sign-in:")}
+        </p>
+        <label className="flex flex-wrap items-center gap-2 text-sm">
+          {t("Use the sign-in of")}
+          <select className={field} value={browser} disabled={busy} onChange={(e) => void chooseBrowser(e.target.value)}>
+            <option value="">{t("No browser")}</option>
+            {BROWSERS.map(([id, name]) => (
+              <option key={id} value={id}>
+                {name}
+              </option>
+            ))}
+          </select>
+        </label>
+        <p className="my-1 text-xs text-[var(--muted)]">{t("Close that browser if a download says it cannot read the cookies.")}</p>
+      </section>
     </Modal>
   );
 }

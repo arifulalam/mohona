@@ -57,6 +57,7 @@ async fn add(client: &Client, url: &str) -> Response {
             duplicates: None,
             queue: None,
             files: None,
+            video: false,
         })
         .await
         .unwrap()
@@ -181,5 +182,120 @@ echo "MOHONA_FILE $folder/Fake video [abc].mp4"
             && message.contains("github.com/yt-dlp"),
         "{message}"
     );
+    shutdown.notify_one();
+}
+
+#[cfg(unix)]
+#[tokio::test]
+async fn other_pages_are_tried_with_yt_dlp_then_downloaded_normally_and_the_browser_is_used() {
+    let dir = tempfile::tempdir().unwrap();
+    let tool = dir.path().join("fake-yt-dlp");
+    script(
+        &tool,
+        r#"#!/bin/sh
+folder=""; prev=""
+for a in "$@"; do
+  if [ "$prev" = "-P" ]; then folder="$a"; fi
+  prev="$a"
+  url="$a"
+done
+echo "$@" > "$folder/args.txt"
+case "$url" in
+  *"/file?"*) echo "ERROR: Unsupported URL: $url" >&2; exit 1;;
+esac
+echo "MOHONA_NAME A reel"
+echo "MOHONA_PROGRESS 10 100 NA"
+head -c 700 /dev/zero > "$folder/A reel.mp4"
+echo "MOHONA_FILE $folder/A reel.mp4"
+"#,
+    );
+    // A plain file server for the fallback.
+    let listener = mohona_testserver::bind("127.0.0.1:0".parse().unwrap())
+        .await
+        .unwrap();
+    let server = listener.local_addr().unwrap();
+    tokio::spawn(async move {
+        let _ =
+            mohona_testserver::serve(listener, mohona_testserver::Config { default_size: 3000 })
+                .await;
+    });
+    let (client, shutdown) = start(dir.path()).await;
+    client
+        .call(Call::SetTool {
+            name: "yt-dlp".into(),
+            path: Some(tool.display().to_string()),
+        })
+        .await
+        .unwrap();
+    let args_file = dir.path().join("dl").join("args.txt");
+
+    // yt-dlp does not know the page: it is downloaded as an ordinary file, 3000 bytes.
+    let Response::Added { id } = add(&client, &format!("http://{server}/file?size=3000")).await
+    else {
+        panic!()
+    };
+    let done = until(&client, id, "completed").await;
+    assert_eq!(std::fs::metadata(done.path.unwrap()).unwrap().len(), 3000);
+    let args = std::fs::read_to_string(&args_file).unwrap();
+    assert!(args.contains("--use-extractors default,-generic"), "{args}");
+
+    // A page yt-dlp knows is taken by yt-dlp, with the chosen browser's sign-in.
+    assert!(matches!(
+        client
+            .call(Call::SetVideoBrowser {
+                browser: Some("--exec=calc".into())
+            })
+            .await
+            .unwrap(),
+        Response::Error { .. }
+    ));
+    client
+        .call(Call::SetVideoBrowser {
+            browser: Some("Edge".into()),
+        })
+        .await
+        .unwrap();
+    assert!(matches!(
+        client.call(Call::GetVideoBrowser).await.unwrap(),
+        Response::Setting { value: Some(v) } if v == "edge"
+    ));
+    let Response::Added { id } = add(&client, "https://www.instagram.com/reel/abc123/").await
+    else {
+        panic!()
+    };
+    let done = until(&client, id, "completed").await;
+    assert_eq!(done.filename.as_deref(), Some("A reel"));
+    let args = std::fs::read_to_string(&args_file).unwrap();
+    assert!(args.contains("--cookies-from-browser edge"), "{args}");
+
+    // Asked for the video of a page that has none: an error, not a saved web page.
+    let Response::Added { id } = client
+        .call(Call::Add {
+            url: format!("http://{server}/file?size=3000&again=1"),
+            dest_dir: None,
+            cookies: Some("a=b".into()),
+            referrer: None,
+            user_agent: None,
+            headers: vec![],
+            sort: false,
+            duplicates: None,
+            queue: None,
+            files: None,
+            video: true,
+        })
+        .await
+        .unwrap()
+    else {
+        panic!()
+    };
+    let failed = until(&client, id, "failed").await;
+    assert!(
+        failed.error.unwrap().contains("no video on this page"),
+        "the page has no video"
+    );
+    let args = std::fs::read_to_string(&args_file).unwrap();
+    assert!(args.contains("--cookies "), "{args}");
+    assert!(!args.contains("Cookie:"), "{args}");
+    assert!(!args.contains("--use-extractors"), "{args}");
     shutdown.notify_one();
 }

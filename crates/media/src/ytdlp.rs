@@ -56,6 +56,75 @@ pub fn is_site_page(address: &str) -> bool {
     path.starts_with("/video/")
 }
 
+/// Whether `address` is an ordinary web page that *might* hold a video yt-dlp knows (Facebook,
+/// X, Instagram, Pinterest, SoundCloud and a thousand more): http or https, not one of the sites
+/// above (those are decided by [`is_site_page`]), and without a file name that says it is a file.
+/// Mohona tries yt-dlp on such a page and, when yt-dlp does not know it, downloads it normally.
+pub fn could_be_page(address: &str) -> bool {
+    let Ok(url) = Url::parse(address) else {
+        return false;
+    };
+    if !matches!(url.scheme(), "http" | "https") {
+        return false;
+    }
+    let Some(host) = url.host_str().map(str::to_ascii_lowercase) else {
+        return false;
+    };
+    if SITES
+        .iter()
+        .any(|s| host == *s || host.ends_with(&format!(".{s}")))
+    {
+        return false;
+    }
+    let name = url.path().rsplit('/').next().unwrap_or("");
+    match name.rsplit_once('.') {
+        None => true,
+        Some((_, ext)) => matches!(
+            ext.to_ascii_lowercase().as_str(),
+            "html" | "htm" | "shtml" | "php" | "asp" | "aspx" | "jsp"
+        ),
+    }
+}
+
+/// The text of a cookie file (Netscape format) for the `Cookie` header of the browser page the
+/// link came from. The cookies are tied to the page's own site, so yt-dlp sends them nowhere else
+/// (unlike a `Cookie` header it would send to every address it visits). None when there is nothing
+/// usable.
+pub fn cookie_file_text(address: &str, header: &str) -> Option<String> {
+    let url = Url::parse(address).ok()?;
+    let host = url.host_str()?.to_ascii_lowercase();
+    let domain = format!(".{}", host.strip_prefix("www.").unwrap_or(&host));
+    let secure = if url.scheme() == "https" {
+        "TRUE"
+    } else {
+        "FALSE"
+    };
+    let mut text = String::from("# Netscape HTTP Cookie File\n");
+    let mut any = false;
+    for pair in header.split(';') {
+        let Some((name, value)) = pair.trim().split_once('=') else {
+            continue;
+        };
+        let (name, value) = (name.trim(), value.trim());
+        if name.is_empty()
+            || name.contains(['\t', '\r', '\n'])
+            || value.contains(['\t', '\r', '\n'])
+        {
+            continue;
+        }
+        text.push_str(&format!(
+            "{domain}\tTRUE\t/\t{secure}\t0\t{name}\t{value}\n"
+        ));
+        any = true;
+    }
+    any.then_some(text)
+}
+
+/// The browsers yt-dlp can take cookies from (the names it knows).
+pub const BROWSERS: &[&str] = &[
+    "chrome", "edge", "firefox", "brave", "opera", "vivaldi", "chromium", "safari",
+];
+
 /// What to download and where.
 #[derive(Clone, Debug)]
 pub struct Request {
@@ -64,6 +133,14 @@ pub struct Request {
     /// The ffmpeg program, if there is one: with it the best video and the best sound are joined;
     /// without it only the best single file (a lower quality) can be taken.
     pub ffmpeg: Option<PathBuf>,
+    /// Take the cookies (the sign-in) of this browser, one of [`BROWSERS`].
+    pub browser: Option<String>,
+    /// A cookie file (Netscape format, see [`cookie_file_text`]) with the sign-in of the page the
+    /// link came from.
+    pub cookie_file: Option<PathBuf>,
+    /// Let yt-dlp's "generic" reader look for a video inside any page. Off when Mohona is only
+    /// guessing that a page holds a video, so an unknown page is refused quickly.
+    pub generic: bool,
 }
 
 /// The command line for yt-dlp.
@@ -92,6 +169,15 @@ pub fn arguments(request: &Request) -> Vec<String> {
     .collect();
     args.push("-P".into());
     args.push(request.folder.display().to_string());
+    if !request.generic {
+        args.extend(["--use-extractors".into(), "default,-generic".into()]);
+    }
+    if let Some(browser) = request.browser.as_deref().filter(|b| BROWSERS.contains(b)) {
+        args.extend(["--cookies-from-browser".into(), browser.to_string()]);
+    }
+    if let Some(file) = &request.cookie_file {
+        args.extend(["--cookies".into(), file.display().to_string()]);
+    }
     match &request.ffmpeg {
         Some(ffmpeg) => {
             args.extend(["-f".into(), "bv*+ba/b".into()]);
@@ -141,6 +227,13 @@ pub fn parse_line(line: &str) -> Line {
     Line::Other(line.to_string())
 }
 
+/// Whether yt-dlp said it does not know this page (so there is no video to take from it).
+pub fn is_unsupported(lines: &[String]) -> bool {
+    lines
+        .iter()
+        .any(|l| l.contains("Unsupported URL") || l.contains("is not a valid URL"))
+}
+
 /// What a failed run says, in a form a person can read: the last `ERROR:` line, without the prefix.
 pub fn failure_reason(lines: &[String]) -> String {
     let error = lines
@@ -150,8 +243,12 @@ pub fn failure_reason(lines: &[String]) -> String {
         .map(|e| e.trim().to_string());
     match error {
         Some(e) if !e.is_empty() => {
-            let hint = if e.contains("Sign in") || e.contains("confirm you") {
-                " (the site wants a signed-in browser; yt-dlp could not get past it)"
+            let hint = if e.contains("Unsupported URL") {
+                " (there is no video on this page that yt-dlp knows)"
+            } else if e.contains("Sign in") || e.contains("confirm you") || e.contains("login") {
+                " (the site wants a signed-in browser: choose your browser in Settings, Tools, so yt-dlp can use its sign-in)"
+            } else if e.to_ascii_lowercase().contains("cookie") {
+                " (close the browser and try again, or choose another browser in Settings, Tools)"
             } else if e.contains("Requested format is not available") {
                 " (try installing ffmpeg, so the best video and sound can be joined)"
             } else {
@@ -204,11 +301,100 @@ mod tests {
     }
 
     #[test]
+    fn other_pages_are_tried_but_files_and_known_sites_are_not() {
+        for yes in [
+            "https://www.facebook.com/watch/?v=123",
+            "https://x.com/someone/status/1234567890",
+            "https://www.instagram.com/reel/abc/",
+            "https://pin.it/abc",
+            "https://soundcloud.com/artist/track",
+            "https://example.com/page.html",
+            "https://example.com/",
+        ] {
+            assert!(could_be_page(yes), "{yes}");
+        }
+        for no in [
+            "https://example.com/file.zip",
+            "https://example.com/movie.mp4",
+            "https://www.youtube.com/@someone",
+            "https://vimeo.com/channels/staffpicks",
+            "ftp://example.com/page",
+            "magnet:?xt=urn:btih:abc",
+            "not a url",
+        ] {
+            assert!(!could_be_page(no), "{no}");
+        }
+    }
+
+    #[test]
+    fn browser_cookies_and_the_generic_reader_are_options() {
+        let args = arguments(&Request {
+            url: "https://x.com/a/status/1".into(),
+            folder: PathBuf::from("D:\\V"),
+            ffmpeg: None,
+            browser: Some("edge".into()),
+            cookie_file: Some(PathBuf::from("D:\\tmp\\c.txt")),
+            generic: false,
+        });
+        assert!(args
+            .windows(2)
+            .any(|w| w == ["--cookies-from-browser", "edge"]));
+        assert!(args
+            .windows(2)
+            .any(|w| w == ["--cookies", "D:\\tmp\\c.txt"]));
+        assert!(args
+            .windows(2)
+            .any(|w| w == ["--use-extractors", "default,-generic"]));
+        let none = arguments(&Request {
+            url: "https://x.com/a/status/1".into(),
+            folder: PathBuf::from("D:\\V"),
+            ffmpeg: None,
+            browser: Some("--exec=calc".into()),
+            cookie_file: None,
+            generic: true,
+        });
+        assert!(!none
+            .iter()
+            .any(|a| a.contains("exec") && a != none.last().unwrap()));
+        assert!(!none.contains(&"--cookies".to_string()));
+        assert!(!none.contains(&"--use-extractors".to_string()));
+    }
+
+    #[test]
+    fn a_cookie_header_becomes_a_cookie_file_for_the_pages_own_site() {
+        let text = cookie_file_text(
+            "https://www.instagram.com/reel/abc/",
+            "sessionid=abc; csrftoken=x y",
+        )
+        .unwrap();
+        assert!(text.starts_with("# Netscape HTTP Cookie File\n"));
+        assert!(
+            text.contains(".instagram.com\tTRUE\t/\tTRUE\t0\tsessionid\tabc\n"),
+            "{text}"
+        );
+        assert!(text.contains("csrftoken\tx y\n"));
+        assert_eq!(cookie_file_text("https://x.com/a", ""), None);
+        assert_eq!(cookie_file_text("https://x.com/a", "novalue"), None);
+        assert_eq!(cookie_file_text("not a url", "a=b"), None);
+    }
+
+    #[test]
+    fn an_unknown_page_is_told_apart_from_other_failures() {
+        let unsupported = vec!["ERROR: Unsupported URL: https://example.com/".to_string()];
+        assert!(is_unsupported(&unsupported));
+        assert!(failure_reason(&unsupported).contains("no video on this page"));
+        assert!(!is_unsupported(&["ERROR: Video unavailable".to_string()]));
+    }
+
+    #[test]
     fn the_address_comes_after_the_end_of_options() {
         let with = arguments(&Request {
             url: "https://youtu.be/--exec=calc".into(),
             folder: PathBuf::from("D:\\Videos"),
             ffmpeg: Some(PathBuf::from("C:\\ff\\ffmpeg.exe")),
+            browser: None,
+            cookie_file: None,
+            generic: true,
         });
         assert_eq!(with[with.len() - 2], "--");
         assert_eq!(with.last().unwrap(), "https://youtu.be/--exec=calc");
@@ -222,6 +408,9 @@ mod tests {
             url: "https://youtu.be/x".into(),
             folder: PathBuf::from("."),
             ffmpeg: None,
+            browser: None,
+            cookie_file: None,
+            generic: true,
         });
         assert!(without.windows(2).any(|w| w == ["-f", "b"]));
         assert!(!without.contains(&"--merge-output-format".to_string()));

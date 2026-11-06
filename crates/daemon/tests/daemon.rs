@@ -96,6 +96,7 @@ fn add_with(url: &str, cookies: Option<&str>, duplicates: Option<&str>) -> Call 
         duplicates: duplicates.map(Into::into),
         queue: None,
         files: None,
+        video: false,
     }
 }
 
@@ -369,6 +370,7 @@ async fn a_failed_expired_download_says_so_and_can_continue_from_a_fresh_link() 
             duplicates: None,
             queue: None,
             files: None,
+            video: false,
         })
         .await
         .unwrap()

@@ -35,6 +35,9 @@ pub use mohona_store::{
 /// How often the downloaded byte count is written to the database.
 const SAVE_INTERVAL: Duration = Duration::from_secs(1);
 
+/// The setting that names the browser whose sign-in yt-dlp uses (empty: none).
+pub const VIDEO_BROWSER: &str = "video.browser";
+
 /// Errors a command can return.
 #[derive(Debug, thiserror::Error)]
 pub enum ManagerError {
@@ -364,6 +367,8 @@ enum Command {
     /// Which speed limit to change, and to what (`None` removes it).
     SetSpeed(SpeedTarget, Option<u64>, Reply),
     Shutdown(oneshot::Sender<()>),
+    /// yt-dlp does not know the page: download the address as an ordinary file instead.
+    NotAVideo(i64),
     /// Sent by a download's own task when it ends.
     Ended {
         id: i64,
@@ -534,6 +539,7 @@ impl Manager {
             running: HashMap::new(),
             stopping: false,
             retries: HashMap::new(),
+            no_video: std::collections::HashSet::new(),
             global_limit: RateLimit::new(global),
             queue_limits: HashMap::new(),
             download_limits: HashMap::new(),
@@ -895,6 +901,8 @@ struct Actor {
     stopping: bool,
     /// Automatic retries: `(attempts in a row, bytes at the last failure)`.
     retries: HashMap<i64, (u32, u64)>,
+    /// Downloads yt-dlp did not know: they are downloaded as ordinary files.
+    no_video: std::collections::HashSet<i64>,
     /// The speed limits, created on first use and shared with the downloads.
     global_limit: Arc<RateLimit>,
     queue_limits: HashMap<i64, Arc<RateLimit>>,
@@ -1372,6 +1380,15 @@ impl Actor {
                 let _ = reply.send(self.set_speed(target, limit));
             }
             Command::Shutdown(_) => unreachable!("handled in run"),
+            Command::NotAVideo(id) => {
+                // Only if it is still the same run (not cancelled or removed meanwhile).
+                if !self.stopping && self.running.contains_key(&id) {
+                    if let Ok(row) = self.row(id) {
+                        self.no_video.insert(id);
+                        self.start(row);
+                    }
+                }
+            }
             Command::Started {
                 id,
                 url,
@@ -1810,27 +1827,56 @@ impl Actor {
             ));
             return;
         }
-        if mohona_media::ytdlp::is_site_page(&row.url) {
+        let context = self
+            .store
+            .headers_json(row.id)
+            .ok()
+            .flatten()
+            .and_then(|json| RequestContext::from_json(&json).ok())
+            .unwrap_or_default();
+        let web = row.url.starts_with("http://") || row.url.starts_with("https://");
+        let tool = |tool: mohona_media::tools::Tool| {
+            let chosen = self
+                .store
+                .setting(&format!("tools.{}", tool.program))
+                .ok()
+                .flatten()
+                .map(|p| p.trim().to_string())
+                .filter(|p| !p.is_empty());
+            tool.find(chosen.as_deref().map(std::path::Path::new))
+        };
+        // A link to one video of a known site, or a page the person asked for the video of, must
+        // be yt-dlp's; any other page is tried with yt-dlp (when there is one) and, when it does
+        // not know the page, downloaded as an ordinary file.
+        let sure = mohona_media::ytdlp::is_site_page(&row.url) || (context.video && web);
+        let ytdlp = tool(mohona_media::tools::YTDLP);
+        let guess = !sure
+            && ytdlp.is_some()
+            && !self.no_video.contains(&row.id)
+            && mohona_media::ytdlp::could_be_page(&row.url);
+        if sure || guess {
             let route = row
                 .auto_category
                 .then(|| self.store.categories().ok())
                 .flatten()
                 .map(|categories| (PathBuf::from(&row.dest_dir), categories));
-            let tool = |tool: mohona_media::tools::Tool| {
-                let chosen = self
-                    .store
-                    .setting(&format!("tools.{}", tool.program))
-                    .ok()
-                    .flatten()
-                    .map(|p| p.trim().to_string())
-                    .filter(|p| !p.is_empty());
-                tool.find(chosen.as_deref().map(std::path::Path::new))
-            };
+            let browser = self
+                .store
+                .setting(VIDEO_BROWSER)
+                .ok()
+                .flatten()
+                .map(|b| b.trim().to_string())
+                .filter(|b| !b.is_empty());
             tokio::spawn(run_video(
-                tool(mohona_media::tools::YTDLP),
+                ytdlp,
                 tool(mohona_media::tools::FFMPEG),
-                row.url.clone(),
-                PathBuf::from(&row.dest_dir),
+                VideoJob {
+                    url: row.url.clone(),
+                    dest: PathBuf::from(&row.dest_dir),
+                    browser,
+                    cookie_header: context.cookies.clone(),
+                    guess,
+                },
                 cancel,
                 row.id,
                 self.commands.clone(),
@@ -1839,6 +1885,11 @@ impl Actor {
             ));
             return;
         }
+        self.start_http(row, cancel);
+    }
+
+    /// The ordinary download of an address.
+    fn start_http(&mut self, row: DownloadRow, cancel: CancelToken) {
         let mut request = DownloadRequest::new(row.url.clone(), row.dest_dir.clone());
         request.connections = self.config.connections;
         request.retry = self.config.retry.clone();
@@ -1995,13 +2046,46 @@ async fn run_torrent(
         .await;
 }
 
+/// Removes a file when dropped (the cookie file, on every way out of a video download).
+struct RemoveOnDrop(Option<PathBuf>);
+
+impl Drop for RemoveOnDrop {
+    fn drop(&mut self) {
+        if let Some(path) = &self.0 {
+            let _ = std::fs::remove_file(path);
+        }
+    }
+}
+
+/// Writes a file only its owner can read.
+fn write_private(path: &std::path::Path, text: &str) -> std::io::Result<()> {
+    use std::io::Write;
+    let mut options = std::fs::OpenOptions::new();
+    options.write(true).create(true).truncate(true);
+    #[cfg(unix)]
+    std::os::unix::fs::OpenOptionsExt::mode(&mut options, 0o600);
+    options.open(path)?.write_all(text.as_bytes())
+}
+
+/// What yt-dlp is to fetch.
+struct VideoJob {
+    url: String,
+    dest: PathBuf,
+    /// The browser whose sign-in to use.
+    browser: Option<String>,
+    /// The `Cookie` header of the page the link came from.
+    cookie_header: Option<String>,
+    /// Only a guess that the page holds a video: when yt-dlp fails before it starts, the address
+    /// is downloaded as an ordinary file instead.
+    guess: bool,
+}
+
 /// A video page (YouTube and alike): yt-dlp does the work, and tells the same story through its output.
 #[allow(clippy::too_many_arguments)]
 async fn run_video(
     ytdlp: Option<PathBuf>,
     ffmpeg: Option<PathBuf>,
-    url: String,
-    dest: PathBuf,
+    job: VideoJob,
     cancel: CancelToken,
     id: i64,
     commands: mpsc::Sender<Command>,
@@ -2010,6 +2094,14 @@ async fn run_video(
 ) {
     use mohona_media::ytdlp::{arguments, failure_reason, parse_line, Line, Request};
     use tokio::io::{AsyncBufReadExt, BufReader};
+
+    let VideoJob {
+        url,
+        dest,
+        browser,
+        cookie_header,
+        guess,
+    } = job;
 
     let end = |result: Result<Outcome, CoreError>, category: Option<i64>| {
         let commands = commands.clone();
@@ -2041,12 +2133,25 @@ async fn run_video(
         .await;
         return;
     }
+    // The page's sign-in goes to yt-dlp in a cookie file that lives only as long as the run.
+    let cookie_file = cookie_header
+        .as_deref()
+        .and_then(|header| mohona_media::ytdlp::cookie_file_text(&url, header))
+        .and_then(|text| {
+            let path = std::env::temp_dir()
+                .join(format!("mohona-cookies-{}-{id}.txt", std::process::id()));
+            write_private(&path, &text).ok().map(|()| path)
+        });
+    let _cleanup = RemoveOnDrop(cookie_file.clone());
     let mut command = tokio::process::Command::new(&ytdlp);
     command
         .args(arguments(&Request {
             url: url.clone(),
             folder: dest.clone(),
             ffmpeg,
+            browser,
+            cookie_file,
+            generic: !guess,
         }))
         .env("PYTHONUTF8", "1")
         .env("PYTHONIOENCODING", "utf-8")
@@ -2159,6 +2264,11 @@ async fn run_video(
         return;
     }
     let status = child.wait().await;
+    if guess && !started && file.is_none() {
+        // Not a video page after all (or yt-dlp could not run): an ordinary download.
+        let _ = commands.send(Command::NotAVideo(id)).await;
+        return;
+    }
     let result = match (status, file) {
         (Ok(s), Some(path)) if s.success() => {
             let bytes = std::fs::metadata(&path).map_or(latest, |m| m.len());

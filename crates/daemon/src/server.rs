@@ -779,6 +779,7 @@ pub(crate) async fn handle(state: &State, call: Call) -> Response {
             duplicates,
             queue,
             files,
+            video,
         } => {
             let torrent_files = match files {
                 None => None,
@@ -918,6 +919,7 @@ pub(crate) async fn handle(state: &State, call: Call) -> Response {
                 headers,
                 connections,
                 torrent_files,
+                video,
                 ..RequestContext::default()
             };
             match manager.add_checked(request).await {
@@ -969,6 +971,33 @@ pub(crate) async fn handle(state: &State, call: Call) -> Response {
                     },
                 },
             }
+        }
+        Call::GetVideoBrowser => match manager.setting(mohona_manager::VIDEO_BROWSER).await {
+            Ok(value) => Response::Setting {
+                value: value.filter(|v| !v.is_empty()),
+            },
+            Err(e) => error(e),
+        },
+        Call::SetVideoBrowser { browser } => {
+            let browser = browser.map(|b| b.trim().to_ascii_lowercase());
+            if let Some(b) = browser.as_deref().filter(|b| !b.is_empty()) {
+                if !mohona_media::ytdlp::BROWSERS.contains(&b) {
+                    return Response::Error {
+                        message: format!(
+                            "\"{b}\" is not a browser yt-dlp knows ({})",
+                            mohona_media::ytdlp::BROWSERS.join(", ")
+                        ),
+                    };
+                }
+            }
+            done(
+                manager
+                    .set_setting(
+                        mohona_manager::VIDEO_BROWSER,
+                        browser.as_deref().unwrap_or(""),
+                    )
+                    .await,
+            )
         }
         Call::GetTools => Response::Tools {
             tools: tool_list(state).await,

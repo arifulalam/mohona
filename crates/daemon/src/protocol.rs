@@ -124,6 +124,13 @@ pub enum Call {
         name: String,
         path: Option<String>,
     },
+    /// The browser whose sign-in yt-dlp uses for video pages (answered as `Setting`).
+    GetVideoBrowser,
+    /// Choose that browser (`chrome`, `edge`, `firefox`, `brave`, `opera`, `vivaldi`, `chromium`,
+    /// `safari`); none means no browser's sign-in is used.
+    SetVideoBrowser {
+        browser: Option<String>,
+    },
     /// The plugins found in the plugins folder.
     GetPlugins,
     /// Switch a plugin on or off (by its name).
@@ -186,6 +193,9 @@ pub enum Call {
         /// A torrent: only these files (numbers from `TorrentFiles`); default: all.
         #[serde(default)]
         files: Option<Vec<u32>>,
+        /// The link is a web page whose video is wanted (taken by yt-dlp; no video is an error).
+        #[serde(default)]
+        video: bool,
     },
     /// What is inside a torrent (a magnet link or a `.torrent` address); can take up to 90 seconds.
     TorrentFiles {

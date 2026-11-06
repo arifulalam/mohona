@@ -60,6 +60,7 @@ async fn run_inner(command: TorrentCommand, info: Option<PathBuf>) -> Result<(),
                 duplicates: None,
                 queue: None,
                 files: Some(files),
+                video: false,
             };
             match client.call(call).await.map_err(|e| e.to_string())? {
                 Response::Added { id } => {

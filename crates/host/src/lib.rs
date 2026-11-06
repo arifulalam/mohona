@@ -283,6 +283,10 @@ impl Host {
             Ok(d) => d,
             Err(e) => return e,
         };
+        let video = message
+            .get("video")
+            .and_then(Value::as_bool)
+            .unwrap_or(false);
         let answer = self.call(Call::Add {
             url: d.url,
             dest_dir: None,
@@ -294,6 +298,7 @@ impl Host {
             duplicates: Some("skip".into()),
             queue: None,
             files: None,
+            video,
         });
         match answer {
             Ok(Response::Added { id }) => json!({"type": "added", "id": id}),

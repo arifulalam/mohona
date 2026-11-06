@@ -264,5 +264,10 @@
   "Where it is": "場所",
   "Where it is (the file, or its folder)": "場所(ファイルまたはそのフォルダー)",
   "Use this": "これを使う",
-  "Find it by itself": "自動で探す"
+  "Find it by itself": "自動で探す",
+  "Videos from web pages": "Webページの動画",
+  "Mohona asks yt-dlp about web pages (Facebook, X, Instagram, Pinterest, SoundCloud and many more). Posts you can only see when signed in need your browser's sign-in:": "Mohona は Web ページ(Facebook、X、Instagram、Pinterest、SoundCloud など多数)について yt-dlp に問い合わせます。ログインしないと見られる投稿には、ブラウザーのログイン情報が必要です:",
+  "Use the sign-in of": "ログイン情報を使うブラウザー",
+  "No browser": "ブラウザーなし",
+  "Close that browser if a download says it cannot read the cookies.": "Cookie を読めないと表示されたら、そのブラウザーを閉じてください。"
 }

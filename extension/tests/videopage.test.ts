@@ -33,3 +33,30 @@ describe("video pages", () => {
     expect(pageVideo("https://vimeo.com/123", "")?.name).toBe("This video");
   });
 });
+
+describe("pageGuess", () => {
+  it("offers other web pages, but not files, known video pages, channels or non-web addresses", async () => {
+    const { pageGuess } = await import("../src/videopage");
+    for (const yes of [
+      "https://www.facebook.com/watch/?v=1",
+      "https://x.com/a/status/1",
+      "https://www.instagram.com/reel/abc/",
+      "https://soundcloud.com/a/b",
+      "https://example.com/page.html",
+    ]) {
+      const m = pageGuess(yes);
+      expect(m?.url, yes).toBe(yes);
+      expect(m?.video).toBe(true);
+    }
+    for (const no of [
+      "https://www.youtube.com/watch?v=abc",
+      "https://www.youtube.com/@someone",
+      "https://example.com/file.zip",
+      "chrome://extensions",
+      "about:blank",
+      undefined,
+    ]) {
+      expect(pageGuess(no as string), String(no)).toBeNull();
+    }
+  });
+});

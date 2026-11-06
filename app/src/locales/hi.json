@@ -264,5 +264,10 @@
   "Where it is": "यह कहाँ है",
   "Where it is (the file, or its folder)": "यह कहाँ है (फ़ाइल या उसका फ़ोल्डर)",
   "Use this": "इसे उपयोग करें",
-  "Find it by itself": "खुद ढूँढने दें"
+  "Find it by itself": "खुद ढूँढने दें",
+  "Videos from web pages": "वेब पेजों से वीडियो",
+  "Mohona asks yt-dlp about web pages (Facebook, X, Instagram, Pinterest, SoundCloud and many more). Posts you can only see when signed in need your browser's sign-in:": "मोहोना वेब पेजों (Facebook, X, Instagram, Pinterest, SoundCloud और कई अन्य) के लिए yt-dlp से पूछता है। जो पोस्ट केवल साइन इन करने पर दिखती हैं, उनके लिए आपके ब्राउज़र का साइन-इन चाहिए:",
+  "Use the sign-in of": "इसका साइन-इन उपयोग करें",
+  "No browser": "कोई ब्राउज़र नहीं",
+  "Close that browser if a download says it cannot read the cookies.": "अगर डाउनलोड कहे कि वह कुकीज़ नहीं पढ़ सकता, तो उस ब्राउज़र को बंद करें।"
 }

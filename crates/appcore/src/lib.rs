@@ -520,6 +520,7 @@ impl Engine {
                 duplicates: Some("skip".into()),
                 queue,
                 files,
+                video: false,
             })
             .await?
         {
@@ -746,6 +747,23 @@ impl Engine {
     ) -> Result<Vec<ToolInfo>, AppError> {
         self.call(Call::SetTool { name, path }).await?;
         self.tools().await
+    }
+
+    /// The browser whose sign-in yt-dlp uses for video pages, if one is chosen.
+    pub async fn video_browser(&self) -> Result<Option<String>, AppError> {
+        match self.call(Call::GetVideoBrowser).await? {
+            Response::Setting { value } => Ok(value),
+            _ => Err(AppError::Engine("unexpected answer from the engine".into())),
+        }
+    }
+
+    /// Chooses that browser (none: no sign-in is used) and returns what is now chosen.
+    pub async fn set_video_browser(
+        &self,
+        browser: Option<String>,
+    ) -> Result<Option<String>, AppError> {
+        self.call(Call::SetVideoBrowser { browser }).await?;
+        self.video_browser().await
     }
 
     pub async fn profiles(&self) -> Result<Vec<SiteProfile>, AppError> {

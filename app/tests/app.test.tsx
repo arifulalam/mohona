@@ -28,6 +28,7 @@ function fake(initial: Row[], running = true) {
   let queues: Queue[] = [{ id: 1, name: "Main", maxActive: 4, speedLimit: null, windows: [], openNow: true }];
   let rules: Rule[] = [];
   let profiles: SiteProfile[] = [];
+  let browser: string | null = null;
   let tools: ToolInfo[] = [
     { name: "ffmpeg", purpose: "join separate video and audio", chosen: null, found: null, page: "https://ffmpeg.org/download.html", windowsPage: "https://www.gyan.dev/ffmpeg/builds/", winget: "winget install Gyan.FFmpeg" },
     { name: "yt-dlp", purpose: "download videos from YouTube", chosen: null, found: "C:\\tools\\yt-dlp.exe", page: "https://github.com/yt-dlp/yt-dlp#installation", windowsPage: "https://github.com/yt-dlp/yt-dlp/releases/latest", winget: "winget install yt-dlp.yt-dlp" },
@@ -43,6 +44,8 @@ function fake(initial: Row[], running = true) {
       return tools.map((x) => ({ ...x }));
     }),
     openToolPage: vi.fn(async (_url: string) => undefined),
+    videoBrowser: vi.fn(async () => browser),
+    setVideoBrowser: vi.fn(async (b: string | null) => (browser = b)),
     torrentFiles: vi.fn(async (_url: string) => ({
       name: "Distro",
       files: [
@@ -141,6 +144,8 @@ describe("App", () => {
     expect(within(after).getByText(/your choice/)).toBeTruthy();
     await userEvent.click(within(after).getByRole("button", { name: "Find it by itself" }));
     await waitFor(() => expect(api.setTool).toHaveBeenLastCalledWith("ffmpeg", null));
+    await userEvent.selectOptions(within(dialog).getByLabelText("Use the sign-in of"), "edge");
+    await waitFor(() => expect(api.setVideoBrowser).toHaveBeenCalledWith("edge"));
   });
 
   it("lets the person choose which files of a torrent to download", async () => {

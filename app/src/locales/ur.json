@@ -264,5 +264,10 @@
   "Where it is": "یہ کہاں ہے",
   "Where it is (the file, or its folder)": "یہ کہاں ہے (فائل یا اس کا فولڈر)",
   "Use this": "یہ استعمال کریں",
-  "Find it by itself": "خود ڈھونڈنے دیں"
+  "Find it by itself": "خود ڈھونڈنے دیں",
+  "Videos from web pages": "ویب صفحات سے ویڈیوز",
+  "Mohona asks yt-dlp about web pages (Facebook, X, Instagram, Pinterest, SoundCloud and many more). Posts you can only see when signed in need your browser's sign-in:": "موہنا ویب صفحات (فیس بک، X، انسٹاگرام، پنٹرسٹ، ساؤنڈ کلاؤڈ اور بہت سے دوسرے) کے بارے میں yt-dlp سے پوچھتا ہے۔ جو پوسٹیں صرف لاگ اِن ہونے پر نظر آتی ہیں ان کے لیے آپ کے براؤزر کا لاگ اِن درکار ہے:",
+  "Use the sign-in of": "اس کا لاگ اِن استعمال کریں",
+  "No browser": "کوئی براؤزر نہیں",
+  "Close that browser if a download says it cannot read the cookies.": "اگر ڈاؤن لوڈ کہے کہ وہ کوکیز نہیں پڑھ سکتا تو اس براؤزر کو بند کر دیں۔"
 }

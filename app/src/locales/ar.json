@@ -264,5 +264,10 @@
   "Where it is": "مكانه",
   "Where it is (the file, or its folder)": "مكانه (الملف أو مجلده)",
   "Use this": "استخدم هذا",
-  "Find it by itself": "ابحث عنه تلقائيًا"
+  "Find it by itself": "ابحث عنه تلقائيًا",
+  "Videos from web pages": "فيديوهات من صفحات الويب",
+  "Mohona asks yt-dlp about web pages (Facebook, X, Instagram, Pinterest, SoundCloud and many more). Posts you can only see when signed in need your browser's sign-in:": "يسأل موهونا yt-dlp عن صفحات الويب (فيسبوك وX وإنستغرام وبينتريست وساوندكلاود وغيرها الكثير). المنشورات التي لا تظهر إلا بعد تسجيل الدخول تحتاج إلى تسجيل الدخول في متصفحك:",
+  "Use the sign-in of": "استخدم تسجيل الدخول في",
+  "No browser": "بدون متصفح",
+  "Close that browser if a download says it cannot read the cookies.": "أغلق ذلك المتصفح إذا ذكر التنزيل أنه لا يستطيع قراءة ملفات تعريف الارتباط."
 }
