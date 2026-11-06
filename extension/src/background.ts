@@ -10,6 +10,7 @@ import { reconcile } from "./settingsync";
 import { linksInPage, nextToRefresh, refreshExpired, type RefreshResult } from "./refresh";
 import type { DownloadRow } from "./protocol";
 import { lookFor } from "./look";
+import { pageVideo } from "./videopage";
 
 const client = new NativeClient(() => chrome.runtime.connectNative(HOST_NAME));
 
@@ -311,8 +312,12 @@ async function handle(request: Request, sender: chrome.runtime.MessageSender): P
       return { kind: "outcome", outcome: await startEngine(client) };
     case "add":
       return { kind: "outcome", outcome: await addDownload(client, { url: request.url }) };
-    case "media":
-      return { kind: "media", media: await mediaOf(request.tabId) };
+    case "media": {
+      const found = await mediaOf(request.tabId);
+      const tab = await chrome.tabs.get(request.tabId).catch(() => undefined);
+      const video = pageVideo(tab?.url, tab?.title);
+      return { kind: "media", media: video && !found.some((m) => m.url === video.url) ? [video, ...found] : found };
+    }
     case "pageMedia": {
       // From the button on a video: what the tab has shown, plus the video's own address.
       const tabId = sender.tab?.id;
@@ -327,6 +332,9 @@ async function handle(request: Request, sender: chrome.runtime.MessageSender): P
       }
       // Streams (which carry video and sound together) before plain files.
       found.sort((a, b) => Number(a.kind === "file") - Number(b.kind === "file"));
+      // On a video site's page, the page itself is the thing to download (the engine hands it to yt-dlp).
+      const video = pageVideo(request.page, sender.tab?.title);
+      if (video && !found.some((m) => m.url === video.url)) found.unshift(video);
       return { kind: "media", media: found };
     }
     case "downloadMedia": {

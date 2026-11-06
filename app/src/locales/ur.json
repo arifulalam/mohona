@@ -248,5 +248,21 @@
   "Finding the files…": "فائلیں تلاش کی جا رہی ہیں…",
   "Select all": "سب منتخب کریں",
   "Select none": "کوئی نہیں",
-  "Selected": "منتخب"
+  "Selected": "منتخب",
+  "Tools": "اوزار",
+  "Mohona uses these two programs for some jobs. They are not part of Mohona: install them once, and Mohona finds them by itself, or tell it where they are.": "موہنا کچھ کاموں کے لیے ان دو پروگراموں کو استعمال کرتا ہے۔ یہ موہنا کا حصہ نہیں ہیں: انہیں ایک بار انسٹال کریں تو موہنا خود ڈھونڈ لے گا، یا اسے بتائیں کہ یہ کہاں ہیں۔",
+  "Found": "مل گیا",
+  "Not found": "نہیں ملا",
+  "Needed to:": "اس کام کے لیے ضروری:",
+  "Using:": "استعمال ہو رہا ہے:",
+  "(your choice)": "(آپ کی پسند)",
+  "(found by itself)": "(خود ڈھونڈا گیا)",
+  "Not at the place you chose:": "آپ کی چنی ہوئی جگہ پر نہیں:",
+  "Install on Windows:": "ونڈوز پر انسٹال کریں:",
+  "Download for Windows": "ونڈوز کے لیے ڈاؤن لوڈ کریں",
+  "Other systems and help": "دوسرے سسٹم اور مدد",
+  "Where it is": "یہ کہاں ہے",
+  "Where it is (the file, or its folder)": "یہ کہاں ہے (فائل یا اس کا فولڈر)",
+  "Use this": "یہ استعمال کریں",
+  "Find it by itself": "خود ڈھونڈنے دیں"
 }

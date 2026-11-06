@@ -65,6 +65,47 @@ struct LivePart {
     sampled: std::time::Instant,
 }
 
+fn tool_named(name: &str) -> Option<mohona_media::tools::Tool> {
+    [mohona_media::tools::FFMPEG, mohona_media::tools::YTDLP]
+        .into_iter()
+        .find(|t| t.name == name)
+}
+
+fn tool_key(tool: &mohona_media::tools::Tool) -> String {
+    format!("tools.{}", tool.program)
+}
+
+async fn chosen_tool(state: &State, tool: &mohona_media::tools::Tool) -> Option<String> {
+    state
+        .manager
+        .setting(&tool_key(tool))
+        .await
+        .ok()
+        .flatten()
+        .map(|p| p.trim().to_string())
+        .filter(|p| !p.is_empty())
+}
+
+async fn tool_list(state: &State) -> Vec<crate::protocol::ToolStatus> {
+    let mut out = Vec::new();
+    for tool in [mohona_media::tools::FFMPEG, mohona_media::tools::YTDLP] {
+        let chosen = chosen_tool(state, &tool).await;
+        let found = tool
+            .find(chosen.as_deref().map(std::path::Path::new))
+            .map(|p| p.display().to_string());
+        out.push(crate::protocol::ToolStatus {
+            name: tool.name.into(),
+            purpose: tool.purpose.into(),
+            chosen,
+            found,
+            page: tool.page.into(),
+            windows_page: tool.windows.into(),
+            winget: tool.winget.into(),
+        });
+    }
+    out
+}
+
 async fn enabled_plugins(state: &State) -> Vec<String> {
     state
         .manager
@@ -929,6 +970,34 @@ pub(crate) async fn handle(state: &State, call: Call) -> Response {
                 },
             }
         }
+        Call::GetTools => Response::Tools {
+            tools: tool_list(state).await,
+        },
+        Call::SetTool { name, path } => {
+            let Some(tool) = tool_named(&name) else {
+                return Response::Error {
+                    message: format!("\"{name}\" is not a tool Mohona knows (ffmpeg or yt-dlp)"),
+                };
+            };
+            let path = path.map(|p| p.trim().to_string()).filter(|p| !p.is_empty());
+            if let Some(p) = &path {
+                if p.chars().any(char::is_control)
+                    || tool.find(Some(std::path::Path::new(p))).is_none()
+                {
+                    return Response::Error {
+                        message: format!(
+                            "{p} is not {} (give the file, or the folder that holds it)",
+                            tool.name
+                        ),
+                    };
+                }
+            }
+            done(
+                manager
+                    .set_setting(&tool_key(&tool), path.as_deref().unwrap_or(""))
+                    .await,
+            )
+        }
         Call::GetPlugins => Response::Plugins {
             folder: state.plugins_dir.display().to_string(),
             plugins: plugin_list(state).await,
@@ -1039,15 +1108,24 @@ pub(crate) async fn handle(state: &State, call: Call) -> Response {
         } => {
             let folder = folder_or_default(state, dest_dir).await;
             let shown = folder.display().to_string();
-            match state.streams.start(StreamJob {
-                url,
-                folder,
-                cookies,
-                referrer,
-                user_agent,
-                headers,
-                name,
-            }) {
+            let env: Vec<(String, String)> = tool_list(state)
+                .await
+                .into_iter()
+                .filter(|t| t.name == "ffmpeg")
+                .filter_map(|t| t.found.map(|f| ("MOHONA_FFMPEG".to_string(), f)))
+                .collect();
+            match state.streams.start(
+                env,
+                StreamJob {
+                    url,
+                    folder,
+                    cookies,
+                    referrer,
+                    user_agent,
+                    headers,
+                    name,
+                },
+            ) {
                 Ok(job) => Response::Started { job, folder: shown },
                 Err(message) => Response::Error { message },
             }

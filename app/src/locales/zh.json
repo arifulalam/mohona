@@ -248,5 +248,21 @@
   "Finding the files…": "正在查找文件…",
   "Select all": "全选",
   "Select none": "全不选",
-  "Selected": "已选"
+  "Selected": "已选",
+  "Tools": "工具",
+  "Mohona uses these two programs for some jobs. They are not part of Mohona: install them once, and Mohona finds them by itself, or tell it where they are.": "Mohona 在某些任务中会用到这两个程序。它们不属于 Mohona：安装一次后，Mohona 会自动找到，或者你告诉它它们在哪里。",
+  "Found": "已找到",
+  "Not found": "未找到",
+  "Needed to:": "用途：",
+  "Using:": "正在使用：",
+  "(your choice)": "（你的选择）",
+  "(found by itself)": "（自动找到）",
+  "Not at the place you chose:": "所选位置没有找到：",
+  "Install on Windows:": "在 Windows 上安装：",
+  "Download for Windows": "下载 Windows 版",
+  "Other systems and help": "其他系统和帮助",
+  "Where it is": "位置",
+  "Where it is (the file, or its folder)": "位置（文件或其所在文件夹）",
+  "Use this": "使用此项",
+  "Find it by itself": "自动查找"
 }

@@ -22,6 +22,7 @@ mod resolve;
 mod rules;
 mod stream;
 mod sync;
+mod toolcmd;
 mod tools;
 mod torrent;
 
@@ -69,6 +70,14 @@ enum Command {
     Resolve {
         /// The share link
         url: String,
+    },
+    /// The outside programs Mohona can use (ffmpeg, yt-dlp): where they are and where to get them
+    Tool {
+        #[command(subcommand)]
+        command: toolcmd::ToolCommand,
+        /// The daemon's connection file (default: your application-data folder)
+        #[arg(long)]
+        info: Option<PathBuf>,
     },
     /// Torrents: look inside one and download only some of its files (the daemon must be running)
     Torrent {
@@ -611,6 +620,7 @@ async fn main() -> ExitCode {
             }
         },
         Some(Command::Resolve { url }) => resolve::run(&url),
+        Some(Command::Tool { command, info }) => toolcmd::run(command, info).await,
         Some(Command::Torrent { command, info }) => torrent::run(command, info).await,
         Some(Command::Plugins { command, info }) => plugins::run(command, info).await,
         Some(Command::Sync { command, info }) => sync::run(command, info).await,

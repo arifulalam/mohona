@@ -117,6 +117,13 @@ pub enum Call {
         folder: Option<String>,
     },
     GetSync,
+    /// The outside programs Mohona can use (ffmpeg, yt-dlp): found or not, and where to get them.
+    GetTools,
+    /// Choose where a tool is (`name`: `ffmpeg` or `yt-dlp`); no path goes back to searching by itself.
+    SetTool {
+        name: String,
+        path: Option<String>,
+    },
     /// The plugins found in the plugins folder.
     GetPlugins,
     /// Switch a plugin on or off (by its name).
@@ -286,6 +293,22 @@ pub struct TorrentFileInfo {
     pub size: u64,
 }
 
+/// One outside program, as the person sees it.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ToolStatus {
+    /// `ffmpeg` or `yt-dlp`.
+    pub name: String,
+    /// What it is used for ("... needed to ...").
+    pub purpose: String,
+    /// The path the person chose, if any.
+    pub chosen: Option<String>,
+    /// The file that will be used, if one is found.
+    pub found: Option<String>,
+    pub page: String,
+    pub windows_page: String,
+    pub winget: String,
+}
+
 /// One connection of a running download.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ConnectionInfo {
@@ -403,6 +426,9 @@ pub enum Response {
     TorrentFiles {
         name: String,
         files: Vec<TorrentFileInfo>,
+    },
+    Tools {
+        tools: Vec<ToolStatus>,
     },
     Plugins {
         /// Where plugins are kept.

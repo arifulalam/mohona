@@ -248,5 +248,21 @@
   "Finding the files…": "Mencari berkas…",
   "Select all": "Pilih semua",
   "Select none": "Batalkan pilihan",
-  "Selected": "Dipilih"
+  "Selected": "Dipilih",
+  "Tools": "Alat",
+  "Mohona uses these two programs for some jobs. They are not part of Mohona: install them once, and Mohona finds them by itself, or tell it where they are.": "Mohona memakai dua program ini untuk beberapa tugas. Keduanya bukan bagian dari Mohona: pasang sekali, lalu Mohona menemukannya sendiri, atau beri tahu lokasinya.",
+  "Found": "Ditemukan",
+  "Not found": "Tidak ditemukan",
+  "Needed to:": "Dibutuhkan untuk:",
+  "Using:": "Memakai:",
+  "(your choice)": "(pilihan Anda)",
+  "(found by itself)": "(ditemukan otomatis)",
+  "Not at the place you chose:": "Tidak ada di lokasi yang Anda pilih:",
+  "Install on Windows:": "Pasang di Windows:",
+  "Download for Windows": "Unduh untuk Windows",
+  "Other systems and help": "Sistem lain dan bantuan",
+  "Where it is": "Lokasinya",
+  "Where it is (the file, or its folder)": "Lokasinya (berkas, atau folder tempatnya)",
+  "Use this": "Pakai ini",
+  "Find it by itself": "Cari otomatis"
 }

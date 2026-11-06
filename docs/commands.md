@@ -629,6 +629,15 @@ mohona profiles disable 1     # also: enable, remove
 
 `mohona remote status` shows whether the companion is on and its address; `enable [--port N]` / `disable` change the setting (they take effect when the daemon starts again); `token [--name NAME] [--read-only]` makes a login token and shows it once. Open the address in a phone's browser and type the token. Plain HTTP, so only on a network you trust. A phone can add, pause, resume, cancel and remove downloads (the file stays on disk), but not change settings or choose folders.
 
+## YouTube and other video pages (needs yt-dlp)
+
+```
+mohona get https://www.youtube.com/watch?v=VIDEO_ID -o downloads
+mohona tool            # shows ffmpeg and yt-dlp: found or not, what for, where to get them
+```
+
+One video per link (YouTube, Vimeo, Dailymotion); playlists and channels are refused. With ffmpeg you get the best video and audio joined into an mp4; without it, the best single file. If yt-dlp is missing the error names it, the winget command (`winget install yt-dlp.yt-dlp`) and the download link. Set the location in the app: Settings, Tools.
+
 ## BitTorrent
 
 Add a magnet link or a `.torrent` web address to the daemon the same way as any address (the app's "+ Add", the extension, `POST /v1/downloads`, or `mohona queue add`). Quote magnet links in the shell, because they contain `&`:

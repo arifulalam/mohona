@@ -1,4 +1,4 @@
-import type { Api, Category, Config, ConfigChange, EngineStatus, ExtensionSettings, Details, Plan, PlanWindow, Queue, Row, Rule, SiteProfile, TorrentList } from "./types";
+import type { Api, Category, Config, ConfigChange, EngineStatus, ExtensionSettings, Details, Plan, PlanWindow, Queue, Row, Rule, SiteProfile, TorrentList, ToolInfo } from "./types";
 
 /** True inside the Tauri window; false in a plain browser (development, tests). */
 export function insideTauri(): boolean {
@@ -21,6 +21,9 @@ function tauriApi(): Api {
     add: (url, folder, queue, files) => call<number>("add_download", { url, folder, queue, files }),
     torrentFiles: (url) => call<TorrentList>("torrent_files", { url }),
     details: (id) => call<Details>("get_details", { id }),
+    tools: () => call<ToolInfo[]>("get_tools"),
+    setTool: (name, path) => call<ToolInfo[]>("set_tool", { name, path }),
+    openToolPage: (url) => call<void>("open_tool_page", { url }),
     profiles: () => call<SiteProfile[]>("get_profiles"),
     setProfiles: (profiles) => call<SiteProfile[]>("set_profiles", { profiles }),
     rules: () => call<Rule[]>("get_rules"),
@@ -82,6 +85,10 @@ export function demoApi(tick = 1000): Api {
   let nextQueue = 2;
   let ruleList: Rule[] = [];
   let nextRule = 1;
+  let toolList: ToolInfo[] = [
+    { name: "ffmpeg", purpose: "join separate video and audio, add subtitles to a video, convert files, and merge the best video and sound of a YouTube download", chosen: null, found: null, page: "https://ffmpeg.org/download.html", windowsPage: "https://www.gyan.dev/ffmpeg/builds/", winget: "winget install Gyan.FFmpeg" },
+    { name: "yt-dlp", purpose: "download videos from YouTube, Vimeo and similar sites (they hide the real file behind a web page that needs a program to read it)", chosen: null, found: null, page: "https://github.com/yt-dlp/yt-dlp#installation", windowsPage: "https://github.com/yt-dlp/yt-dlp/releases/latest", winget: "winget install yt-dlp.yt-dlp" },
+  ];
   let profileList: SiteProfile[] = [];
   let nextProfile = 1;
   const checkName = (name: string) => {
@@ -153,6 +160,14 @@ export function demoApi(tick = 1000): Api {
           : [],
       };
     },
+    tools: async () => (need(), toolList.map((t) => ({ ...t }))),
+    setTool: async (name, path) => {
+      need();
+      if (path && !/ffmpeg|yt-dlp/i.test(path)) throw new Error(`${path} is not ${name} (give the file, or the folder that holds it)`);
+      toolList = toolList.map((t) => (t.name === name ? { ...t, chosen: path, found: path } : t));
+      return toolList.map((t) => ({ ...t }));
+    },
+    openToolPage: async (url) => void window.open(url, "_blank", "noopener"),
     profiles: async () => (need(), profileList),
     setProfiles: async (profiles) => {
       need();

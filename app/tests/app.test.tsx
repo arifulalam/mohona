@@ -2,7 +2,7 @@ import { cleanup, render, screen, waitFor, within } from "@testing-library/react
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { App } from "../src/App";
-import type { Api, Category, Config, ConfigChange, EngineStatus, ExtensionSettings, Details, Plan, PlanWindow, Queue, Row, Rule, SiteProfile } from "../src/types";
+import type { Api, Category, Config, ConfigChange, EngineStatus, ExtensionSettings, Details, Plan, PlanWindow, Queue, Row, Rule, SiteProfile, ToolInfo } from "../src/types";
 
 const row = (id: number, name: string, status: string, extra: Partial<Row> = {}): Row => ({
   id, name, url: `https://x.test/${name}`, status, downloaded: 50, size: 100, percent: 50, speed: 0, eta: null,
@@ -28,11 +28,21 @@ function fake(initial: Row[], running = true) {
   let queues: Queue[] = [{ id: 1, name: "Main", maxActive: 4, speedLimit: null, windows: [], openNow: true }];
   let rules: Rule[] = [];
   let profiles: SiteProfile[] = [];
+  let tools: ToolInfo[] = [
+    { name: "ffmpeg", purpose: "join separate video and audio", chosen: null, found: null, page: "https://ffmpeg.org/download.html", windowsPage: "https://www.gyan.dev/ffmpeg/builds/", winget: "winget install Gyan.FFmpeg" },
+    { name: "yt-dlp", purpose: "download videos from YouTube", chosen: null, found: "C:\\tools\\yt-dlp.exe", page: "https://github.com/yt-dlp/yt-dlp#installation", windowsPage: "https://github.com/yt-dlp/yt-dlp/releases/latest", winget: "winget install yt-dlp.yt-dlp" },
+  ];
   const status = (): EngineStatus => ({ running: engine, version: engine ? "9.9" : null, message: null });
   const api = {
     status: vi.fn(async () => status()),
     start: vi.fn(async () => ((engine = true), status())),
     list: vi.fn(async () => rows),
+    tools: vi.fn(async () => tools.map((x) => ({ ...x }))),
+    setTool: vi.fn(async (name: string, path: string | null) => {
+      tools = tools.map((x) => (x.name === name ? { ...x, chosen: path, found: path } : x));
+      return tools.map((x) => ({ ...x }));
+    }),
+    openToolPage: vi.fn(async (_url: string) => undefined),
     torrentFiles: vi.fn(async (_url: string) => ({
       name: "Distro",
       files: [
@@ -113,6 +123,26 @@ function fake(initial: Row[], running = true) {
 afterEach(cleanup);
 
 describe("App", () => {
+  it("shows the outside tools, how to get a missing one, and lets the person say where it is", async () => {
+    const api = fake([]);
+    render(<App api={api} every={50} />);
+    const dialog = await openGroup("Tools");
+    const ffmpeg = await within(dialog).findByRole("region", { name: "ffmpeg" });
+    expect(within(ffmpeg).getByText("Not found")).toBeTruthy();
+    expect(within(ffmpeg).getByText("winget install Gyan.FFmpeg")).toBeTruthy();
+    expect(within(await within(dialog).findByRole("region", { name: "yt-dlp" })).getByText("Found")).toBeTruthy();
+    await userEvent.click(within(ffmpeg).getByRole("button", { name: "Download for Windows" }));
+    expect(api.openToolPage).toHaveBeenCalledWith("https://www.gyan.dev/ffmpeg/builds/");
+    await userEvent.type(within(ffmpeg).getByLabelText(/ffmpeg: Where it is/), "C:\\ff\\bin");
+    await userEvent.click(within(ffmpeg).getByRole("button", { name: "Use this" }));
+    await waitFor(() => expect(api.setTool).toHaveBeenCalledWith("ffmpeg", "C:\\ff\\bin"));
+    const after = await within(dialog).findByRole("region", { name: "ffmpeg" });
+    expect(within(after).getByText("Found")).toBeTruthy();
+    expect(within(after).getByText(/your choice/)).toBeTruthy();
+    await userEvent.click(within(after).getByRole("button", { name: "Find it by itself" }));
+    await waitFor(() => expect(api.setTool).toHaveBeenLastCalledWith("ffmpeg", null));
+  });
+
   it("lets the person choose which files of a torrent to download", async () => {
     const api = fake([]);
     render(<App api={api} every={50} />);
@@ -476,7 +506,7 @@ describe("App", () => {
     await userEvent.click(await screen.findByRole("button", { name: "Settings" }));
     const dialog = await screen.findByRole("dialog", { name: "Settings" });
     const nav = within(dialog).getByRole("navigation", { name: "Settings groups" });
-    expect(within(nav).getAllByRole("button").map((b) => b.textContent)).toEqual(["General", "Downloads", "Categories", "Queues", "Schedule", "Rules", "Site profiles"]);
+    expect(within(nav).getAllByRole("button").map((b) => b.textContent)).toEqual(["General", "Downloads", "Categories", "Queues", "Schedule", "Rules", "Site profiles", "Tools"]);
     // General is first and holds language and theme.
     expect(within(dialog).getByLabelText("Language")).toBeTruthy();
     expect(within(dialog).getByLabelText("Colour theme")).toBeTruthy();

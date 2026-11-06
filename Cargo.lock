@@ -2672,6 +2672,7 @@ dependencies = [
  "librqbit",
  "mohona-core",
  "mohona-manager",
+ "mohona-media",
  "mohona-net",
  "mohona-store",
  "mohona-testserver",
@@ -2704,6 +2705,7 @@ version = "0.0.1"
 dependencies = [
  "chrono",
  "mohona-core",
+ "mohona-media",
  "mohona-net",
  "mohona-store",
  "mohona-testserver",

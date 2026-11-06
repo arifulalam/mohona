@@ -9,6 +9,7 @@ rust-version.workspace = true
 [dependencies]
 chrono = { version = "0.4", default-features = false, features = ["clock", "std"] }
 mohona-core = { path = "../core" }
+mohona-media = { path = "../media" }
 mohona-net = { version = "0.0.1", path = "../net" }
 mohona-store = { path = "../store" }
 mohona-torrent = { path = "../torrent" }

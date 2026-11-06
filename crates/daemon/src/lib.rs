@@ -22,7 +22,9 @@ pub mod sync;
 
 pub use client::{Client, ClientError};
 pub use info::{default_db_path, default_download_dir, default_info_path, DaemonInfo};
+pub use mohona_media::tools::TOOL_PAGES;
 pub use protocol::{
     Call, CategoryInfo, ConnectionInfo, DownloadInfo, JobInfo, QueueInfo, Request, Response,
+    ToolStatus,
 };
 pub use server::{serve, ServerConfig};

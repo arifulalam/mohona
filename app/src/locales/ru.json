@@ -248,5 +248,21 @@
   "Finding the files…": "Поиск файлов…",
   "Select all": "Выбрать все",
   "Select none": "Снять выбор",
-  "Selected": "Выбрано"
+  "Selected": "Выбрано",
+  "Tools": "Инструменты",
+  "Mohona uses these two programs for some jobs. They are not part of Mohona: install them once, and Mohona finds them by itself, or tell it where they are.": "Mohona использует эти две программы для некоторых задач. Они не входят в Mohona: установите их один раз, и Mohona найдёт их сама, либо укажите, где они находятся.",
+  "Found": "Найдено",
+  "Not found": "Не найдено",
+  "Needed to:": "Нужно, чтобы:",
+  "Using:": "Используется:",
+  "(your choice)": "(ваш выбор)",
+  "(found by itself)": "(найдено автоматически)",
+  "Not at the place you chose:": "Нет в выбранном месте:",
+  "Install on Windows:": "Установка в Windows:",
+  "Download for Windows": "Скачать для Windows",
+  "Other systems and help": "Другие системы и справка",
+  "Where it is": "Где находится",
+  "Where it is (the file, or its folder)": "Где находится (файл или его папка)",
+  "Use this": "Использовать",
+  "Find it by itself": "Найти автоматически"
 }

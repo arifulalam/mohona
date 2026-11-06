@@ -34,7 +34,6 @@ export const BUTTON_TEXTS = [
   "Download with Mohona",
   "Looking for downloads…",
   "Mohona is not available. Is it installed and running?",
-  "YouTube sends video and sound in many small signed pieces, so there is no single file to take yet. Support for it is planned.",
   "Nothing to download was found yet. Press play, wait a moment, and try again.",
   "Download",
   "Sending…",

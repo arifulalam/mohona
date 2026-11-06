@@ -248,5 +248,21 @@
   "Finding the files…": "ファイルを探しています…",
   "Select all": "すべて選択",
   "Select none": "選択を解除",
-  "Selected": "選択中"
+  "Selected": "選択中",
+  "Tools": "ツール",
+  "Mohona uses these two programs for some jobs. They are not part of Mohona: install them once, and Mohona finds them by itself, or tell it where they are.": "Mohona は一部の作業でこの2つのプログラムを使います。Mohona には含まれていません。一度インストールすれば Mohona が自動で見つけます。場所を指定することもできます。",
+  "Found": "見つかりました",
+  "Not found": "見つかりません",
+  "Needed to:": "必要な理由:",
+  "Using:": "使用中:",
+  "(your choice)": "(指定した場所)",
+  "(found by itself)": "(自動で検出)",
+  "Not at the place you chose:": "指定した場所にありません:",
+  "Install on Windows:": "Windows へのインストール:",
+  "Download for Windows": "Windows 用をダウンロード",
+  "Other systems and help": "他のシステムとヘルプ",
+  "Where it is": "場所",
+  "Where it is (the file, or its folder)": "場所(ファイルまたはそのフォルダー)",
+  "Use this": "これを使う",
+  "Find it by itself": "自動で探す"
 }

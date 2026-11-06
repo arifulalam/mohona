@@ -248,5 +248,21 @@
   "Finding the files…": "Dosyalar aranıyor…",
   "Select all": "Tümünü seç",
   "Select none": "Hiçbirini seçme",
-  "Selected": "Seçili"
+  "Selected": "Seçili",
+  "Tools": "Araçlar",
+  "Mohona uses these two programs for some jobs. They are not part of Mohona: install them once, and Mohona finds them by itself, or tell it where they are.": "Mohona bazı işler için bu iki programı kullanır. Mohona'nın parçası değillerdir: bir kez kurun, Mohona onları kendi bulur ya da nerede olduklarını ona söyleyin.",
+  "Found": "Bulundu",
+  "Not found": "Bulunamadı",
+  "Needed to:": "Şunun için gerekli:",
+  "Using:": "Kullanılan:",
+  "(your choice)": "(sizin seçiminiz)",
+  "(found by itself)": "(kendiliğinden bulundu)",
+  "Not at the place you chose:": "Seçtiğiniz yerde değil:",
+  "Install on Windows:": "Windows'a kurmak için:",
+  "Download for Windows": "Windows için indir",
+  "Other systems and help": "Diğer sistemler ve yardım",
+  "Where it is": "Nerede",
+  "Where it is (the file, or its folder)": "Nerede (dosya ya da klasörü)",
+  "Use this": "Bunu kullan",
+  "Find it by itself": "Kendisi bulsun"
 }

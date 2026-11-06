@@ -227,9 +227,7 @@ class Button {
     const body = this.frame();
     if (media.length === 0) {
       const p = document.createElement("p");
-      p.textContent = /(^|\.)(youtube\.com|youtu\.be)$/.test(location.hostname)
-        ? t("YouTube sends video and sound in many small signed pieces, so there is no single file to take yet. Support for it is planned.")
-        : t("Nothing to download was found yet. Press play, wait a moment, and try again.");
+      p.textContent = t("Nothing to download was found yet. Press play, wait a moment, and try again.");
       body.append(p);
     }
     for (const item of media) {

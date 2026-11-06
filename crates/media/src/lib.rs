@@ -13,6 +13,8 @@ mod model;
 pub mod mux;
 pub mod quality;
 pub mod subtitles;
+pub mod tools;
+pub mod ytdlp;
 
 pub use error::MediaError;
 pub use model::{

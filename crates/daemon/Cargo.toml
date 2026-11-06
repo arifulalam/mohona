@@ -10,6 +10,7 @@ rust-version.workspace = true
 base64 = "0.22"
 getrandom = "0.4"
 mohona-manager = { path = "../manager" }
+mohona-media = { path = "../media" }
 mohona-net = { version = "0.0.1", path = "../net" }
 mohona-store = { path = "../store" }
 serde = { version = "1", features = ["derive"] }

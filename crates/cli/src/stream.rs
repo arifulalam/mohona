@@ -438,7 +438,10 @@ async fn embed(
     files: &[(PathBuf, Option<String>)],
 ) {
     let Some(ffmpeg) = mux::find_ffmpeg(args.ffmpeg.as_deref()) else {
-        println!("The subtitles stay as .srt files because ffmpeg was not found (see --ffmpeg).");
+        println!(
+            "The subtitles stay as .srt files.\n{}",
+            mohona_media::tools::FFMPEG.missing_message()
+        );
         return;
     };
     let output = args
@@ -477,9 +480,9 @@ async fn join_files(
     }
     let Some(ffmpeg) = mux::find_ffmpeg(args.ffmpeg.as_deref()) else {
         println!(
-            "Video and audio are saved as two files because ffmpeg was not found.\n\
-             Install ffmpeg and run the same command again (it will not download anything twice),\n\
-             or say where it is with --ffmpeg PATH (or the MOHONA_FFMPEG variable)."
+            "Video and audio are saved as two files.\n{}\n\
+             Run the same command again after that: nothing is downloaded twice.",
+            mohona_media::tools::FFMPEG.missing_message()
         );
         return None;
     };

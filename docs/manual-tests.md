@@ -371,6 +371,18 @@ Best on a second Windows user account, or another PC, that has never had Mohona.
 - [ ] The popup is wider than before (440 px): a long file name is cut with "…" and both buttons stay on the same line; no horizontal scrollbar.
 - [ ] In another language (for example Bengali) the two buttons are translated and still fit.
 
+## YouTube and Tools
+
+Needs yt-dlp (`winget install yt-dlp.yt-dlp`); ffmpeg for the best quality (`winget install Gyan.FFmpeg`).
+- [ ] Settings, Tools: each program shows Found or Not found, what it is needed for, the winget command, and "Download for Windows" opens the right page in the browser.
+- [ ] Without yt-dlp: "+ Add" a YouTube link; the row fails with a message that names yt-dlp, the winget command and the link. Type its folder in Tools, "Use this": it shows Found.
+- [ ] With yt-dlp, no ffmpeg: a YouTube link downloads a single mp4 with progress; the file is in the Video category.
+- [ ] With ffmpeg too: the same link gives a merged mp4 (check the resolution above 360p).
+- [ ] Pause and resume, and Cancel, work on the row; Cancel leaves no yt-dlp.exe in Task Manager.
+- [ ] In the extension on a YouTube watch page: the popup lists the page video first, and the on-page button downloads it.
+- [ ] A playlist link or a channel link is refused with a clear message.
+- [ ] Another language (for example Bengali): the Tools group is translated and fits.
+
 ## Add new items here
 
 When a step adds something that can't be tested on this PC (FTP server, SFTP server, WebDAV, a custom CA, a mirror site, a browser, an Android phone), add it to this list in the same step.

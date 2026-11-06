@@ -248,5 +248,21 @@
   "Finding the files…": "ফাইল খোঁজা হচ্ছে…",
   "Select all": "সব বাছুন",
   "Select none": "কিছুই না",
-  "Selected": "বাছাই করা"
+  "Selected": "বাছাই করা",
+  "Tools": "টুলস",
+  "Mohona uses these two programs for some jobs. They are not part of Mohona: install them once, and Mohona finds them by itself, or tell it where they are.": "মোহোনা কিছু কাজের জন্য এই দুটি প্রোগ্রাম ব্যবহার করে। এগুলো মোহোনার অংশ নয়: একবার ইনস্টল করুন, মোহোনা নিজে খুঁজে নেবে, অথবা কোথায় আছে তাকে জানিয়ে দিন।",
+  "Found": "পাওয়া গেছে",
+  "Not found": "পাওয়া যায়নি",
+  "Needed to:": "যে কাজে লাগে:",
+  "Using:": "ব্যবহার হচ্ছে:",
+  "(your choice)": "(আপনার পছন্দ)",
+  "(found by itself)": "(নিজে খুঁজে পাওয়া)",
+  "Not at the place you chose:": "আপনার বেছে নেওয়া জায়গায় নেই:",
+  "Install on Windows:": "Windows-এ ইনস্টল করুন:",
+  "Download for Windows": "Windows-এর জন্য ডাউনলোড করুন",
+  "Other systems and help": "অন্যান্য সিস্টেম ও সাহায্য",
+  "Where it is": "এটি কোথায় আছে",
+  "Where it is (the file, or its folder)": "এটি কোথায় আছে (ফাইল, বা তার ফোল্ডার)",
+  "Use this": "এটি ব্যবহার করুন",
+  "Find it by itself": "নিজে খুঁজে নিক"
 }

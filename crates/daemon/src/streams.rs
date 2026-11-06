@@ -74,7 +74,8 @@ impl Streams {
         args
     }
 
-    pub fn start(&self, job: StreamJob) -> Result<u64, String> {
+    /// `env`: extra variables for the program (where ffmpeg is, as the person chose).
+    pub fn start(&self, env: Vec<(String, String)>, job: StreamJob) -> Result<u64, String> {
         let Some(program) = &self.program else {
             return Err("stream downloads are not available in this daemon".into());
         };
@@ -106,6 +107,7 @@ impl Streams {
         }
         let mut command = tokio::process::Command::new(program);
         command.args(Self::arguments(&job));
+        command.envs(env);
         if let Some(cookies) = &job.cookies {
             command.env("MOHONA_COOKIE", cookies);
         }
@@ -189,7 +191,7 @@ mod tests {
 
     #[tokio::test]
     async fn without_a_program_nothing_starts() {
-        assert!(Streams::new(None).start(job()).is_err());
+        assert!(Streams::new(None).start(Vec::new(), job()).is_err());
     }
 
     #[tokio::test]
@@ -199,7 +201,7 @@ mod tests {
             let mut j = job();
             j.name = Some(name.into());
             j.url = "https://a/x.m3u8".into();
-            assert!(streams.start(j).is_err(), "{name}");
+            assert!(streams.start(Vec::new(), j).is_err(), "{name}");
         }
     }
 }

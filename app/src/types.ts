@@ -102,6 +102,20 @@ export interface TorrentList {
   files: TorrentFile[];
 }
 
+/** An outside program Mohona can use (ffmpeg, yt-dlp). */
+export interface ToolInfo {
+  name: string;
+  /** What Mohona needs it for. */
+  purpose: string;
+  /** The path the person chose, if any. */
+  chosen: string | null;
+  /** The file that will be used, if one is found. */
+  found: string | null;
+  page: string;
+  windowsPage: string;
+  winget: string;
+}
+
 /** One rule: what to look for in a new download, and what to do with it. */
 export interface Rule {
   /** 0 for a rule that is not saved yet. */
@@ -175,6 +189,11 @@ export interface Api {
   /** What is inside a torrent; a magnet link can take up to 90 seconds. */
   torrentFiles(url: string): Promise<TorrentList>;
   details(id: number): Promise<Details>;
+  tools(): Promise<ToolInfo[]>;
+  /** Chooses where a tool is (null: find it by itself); resolves with the new state. */
+  setTool(name: string, path: string | null): Promise<ToolInfo[]>;
+  /** Opens one of the tools' download pages in the browser. */
+  openToolPage(url: string): Promise<void>;
   profiles(): Promise<SiteProfile[]>;
   /** Replaces the whole list; resolves with what was saved. */
   setProfiles(profiles: SiteProfile[]): Promise<SiteProfile[]>;

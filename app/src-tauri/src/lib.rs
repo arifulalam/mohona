@@ -7,7 +7,7 @@ use std::time::Duration;
 
 use mohona_appcore::{
     AppError, Category, Config, ConfigChange, Engine, EngineStatus, ExtensionSettings, Plan,
-    Details, PlanWindow, Queue, QueueChange, Row, Rule, SiteProfile, SpeedTracker, TorrentList, Watcher,
+    Details, PlanWindow, Queue, QueueChange, Row, Rule, SiteProfile, SpeedTracker, ToolInfo, TorrentList, Watcher,
 };
 use tauri::menu::{Menu, MenuItem};
 use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
@@ -196,6 +196,28 @@ async fn add_category(
 #[tauri::command]
 async fn remove_category(app: State<'_, App>, id: i64) -> Result<Vec<Category>> {
     app.engine.remove_category(id).await
+}
+
+#[tauri::command]
+async fn get_tools(app: State<'_, App>) -> Result<Vec<ToolInfo>> {
+    app.engine.tools().await
+}
+
+#[tauri::command]
+async fn set_tool(app: State<'_, App>, name: String, path: Option<String>) -> Result<Vec<ToolInfo>> {
+    app.engine.set_tool(name, path).await
+}
+
+/// Opens one of the tools' download pages in the browser; no other address is ever opened.
+#[tauri::command]
+async fn open_tool_page(handle: AppHandle, url: String) -> Result<()> {
+    if !mohona_appcore::is_tool_page(&url) {
+        return Err(AppError::Input("that address is not one of the tools' download pages".into()));
+    }
+    handle
+        .opener()
+        .open_url(url, None::<&str>)
+        .map_err(|e| AppError::Engine(e.to_string()))
 }
 
 #[tauri::command]
@@ -388,6 +410,9 @@ pub fn run() {
             set_extension_settings,
             get_details,
             read_clipboard,
+            get_tools,
+            set_tool,
+            open_tool_page,
             get_profiles,
             set_profiles,
             get_rules,

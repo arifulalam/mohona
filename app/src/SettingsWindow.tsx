@@ -5,12 +5,13 @@ import { label, LANGUAGES, useT } from "./i18n";
 import { ProfilesDialog } from "./ProfilesDialog";
 import { QueuesDialog } from "./QueuesDialog";
 import { RulesDialog } from "./RulesDialog";
+import { ToolsDialog } from "./ToolsDialog";
 import { ScheduleDialog } from "./ScheduleDialog";
 import { SettingsDialog } from "./SettingsDialog";
 import { THEMES, type Theme } from "./theme";
 import type { Api } from "./types";
 
-type Group = "general" | "downloads" | "categories" | "queues" | "schedule" | "rules" | "profiles";
+type Group = "general" | "downloads" | "categories" | "queues" | "schedule" | "rules" | "profiles" | "tools";
 
 interface Props {
   api: Api;
@@ -49,6 +50,7 @@ export function SettingsWindow(props: Props) {
     { id: "schedule", name: t("Schedule"), needsEngine: true },
     { id: "rules", name: t("Rules"), needsEngine: true },
     { id: "profiles", name: t("Site profiles"), needsEngine: true },
+    { id: "tools", name: t("Tools"), needsEngine: true },
   ];
 
   return (
@@ -80,6 +82,7 @@ export function SettingsWindow(props: Props) {
             {group === "schedule" && <ScheduleDialog api={api} onClose={onClose} />}
             {group === "rules" && <RulesDialog api={api} queues={queues} onClose={onClose} />}
             {group === "profiles" && <ProfilesDialog api={api} onClose={onClose} />}
+            {group === "tools" && <ToolsDialog api={api} onClose={onClose} />}
           </Embedded.Provider>
         </section>
       </div>

@@ -183,6 +183,27 @@ impl From<mohona_daemon::rules::Rule> for Rule {
     }
 }
 
+/// One outside program (ffmpeg, yt-dlp), as the page shows it.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ToolInfo {
+    pub name: String,
+    /// What Mohona needs it for.
+    pub purpose: String,
+    /// The path the person chose, if any.
+    pub chosen: Option<String>,
+    /// The file that will be used, if one is found.
+    pub found: Option<String>,
+    pub page: String,
+    pub windows_page: String,
+    pub winget: String,
+}
+
+/// Whether the app may open this address for the person: only the download pages of the tools.
+pub fn is_tool_page(url: &str) -> bool {
+    mohona_daemon::TOOL_PAGES.contains(&url)
+}
+
 /// One site profile, as the page shows it.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, serde::Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -698,6 +719,35 @@ impl Engine {
     }
 
     /// The site profiles in the order they are tried.
+    /// The outside programs and whether each is found.
+    pub async fn tools(&self) -> Result<Vec<ToolInfo>, AppError> {
+        match self.call(Call::GetTools).await? {
+            Response::Tools { tools } => Ok(tools
+                .into_iter()
+                .map(|t| ToolInfo {
+                    name: t.name,
+                    purpose: t.purpose,
+                    chosen: t.chosen,
+                    found: t.found,
+                    page: t.page,
+                    windows_page: t.windows_page,
+                    winget: t.winget,
+                })
+                .collect()),
+            _ => Err(AppError::Engine("unexpected answer from the engine".into())),
+        }
+    }
+
+    /// Chooses where a tool is (none: find it by itself) and returns the new state.
+    pub async fn set_tool(
+        &self,
+        name: String,
+        path: Option<String>,
+    ) -> Result<Vec<ToolInfo>, AppError> {
+        self.call(Call::SetTool { name, path }).await?;
+        self.tools().await
+    }
+
     pub async fn profiles(&self) -> Result<Vec<SiteProfile>, AppError> {
         match self.call(Call::GetProfiles).await? {
             Response::Profiles { profiles } => Ok(profiles.into_iter().map(Into::into).collect()),

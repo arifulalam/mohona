@@ -248,5 +248,21 @@
   "Finding the files…": "Dateien werden gesucht …",
   "Select all": "Alle auswählen",
   "Select none": "Keine auswählen",
-  "Selected": "Ausgewählt"
+  "Selected": "Ausgewählt",
+  "Tools": "Werkzeuge",
+  "Mohona uses these two programs for some jobs. They are not part of Mohona: install them once, and Mohona finds them by itself, or tell it where they are.": "Mohona nutzt diese beiden Programme für einige Aufgaben. Sie gehören nicht zu Mohona: Installieren Sie sie einmal, dann findet Mohona sie selbst, oder sagen Sie ihm, wo sie liegen.",
+  "Found": "Gefunden",
+  "Not found": "Nicht gefunden",
+  "Needed to:": "Wird gebraucht, um:",
+  "Using:": "Verwendet:",
+  "(your choice)": "(Ihre Wahl)",
+  "(found by itself)": "(selbst gefunden)",
+  "Not at the place you chose:": "Nicht am gewählten Ort:",
+  "Install on Windows:": "Unter Windows installieren:",
+  "Download for Windows": "Für Windows herunterladen",
+  "Other systems and help": "Andere Systeme und Hilfe",
+  "Where it is": "Wo es liegt",
+  "Where it is (the file, or its folder)": "Wo es liegt (die Datei oder ihr Ordner)",
+  "Use this": "Verwenden",
+  "Find it by itself": "Selbst suchen lassen"
 }

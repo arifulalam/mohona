@@ -108,10 +108,7 @@ pub(crate) fn convert(
         return Err(format!("{} is not a file", file.display()));
     }
     let Some(ffmpeg) = mux::find_ffmpeg(ffmpeg) else {
-        return Err(
-            "ffmpeg was not found. Install it (Windows: winget install ffmpeg) or say where it is with --ffmpeg PATH (or the MOHONA_FFMPEG variable)."
-                .into(),
-        );
+        return Err(mohona_media::tools::FFMPEG.missing_message());
     };
     let folder: PathBuf = match output {
         Some(folder) => folder.to_path_buf(),

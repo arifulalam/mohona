@@ -248,5 +248,21 @@
   "Finding the files…": "جارٍ البحث عن الملفات…",
   "Select all": "تحديد الكل",
   "Select none": "إلغاء التحديد",
-  "Selected": "المحدد"
+  "Selected": "المحدد",
+  "Tools": "الأدوات",
+  "Mohona uses these two programs for some jobs. They are not part of Mohona: install them once, and Mohona finds them by itself, or tell it where they are.": "يستخدم موهونا هذين البرنامجين لبعض المهام. وهما ليسا جزءًا من موهونا: ثبّتهما مرة واحدة فيجدهما موهونا بنفسه، أو أخبره بمكانهما.",
+  "Found": "موجود",
+  "Not found": "غير موجود",
+  "Needed to:": "مطلوب من أجل:",
+  "Using:": "المستخدم:",
+  "(your choice)": "(اختيارك)",
+  "(found by itself)": "(عُثر عليه تلقائيًا)",
+  "Not at the place you chose:": "ليس في المكان الذي اخترته:",
+  "Install on Windows:": "التثبيت على ويندوز:",
+  "Download for Windows": "تنزيل لويندوز",
+  "Other systems and help": "أنظمة أخرى ومساعدة",
+  "Where it is": "مكانه",
+  "Where it is (the file, or its folder)": "مكانه (الملف أو مجلده)",
+  "Use this": "استخدم هذا",
+  "Find it by itself": "ابحث عنه تلقائيًا"
 }

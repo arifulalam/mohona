@@ -1810,6 +1810,35 @@ impl Actor {
             ));
             return;
         }
+        if mohona_media::ytdlp::is_site_page(&row.url) {
+            let route = row
+                .auto_category
+                .then(|| self.store.categories().ok())
+                .flatten()
+                .map(|categories| (PathBuf::from(&row.dest_dir), categories));
+            let tool = |tool: mohona_media::tools::Tool| {
+                let chosen = self
+                    .store
+                    .setting(&format!("tools.{}", tool.program))
+                    .ok()
+                    .flatten()
+                    .map(|p| p.trim().to_string())
+                    .filter(|p| !p.is_empty());
+                tool.find(chosen.as_deref().map(std::path::Path::new))
+            };
+            tokio::spawn(run_video(
+                tool(mohona_media::tools::YTDLP),
+                tool(mohona_media::tools::FFMPEG),
+                row.url.clone(),
+                PathBuf::from(&row.dest_dir),
+                cancel,
+                row.id,
+                self.commands.clone(),
+                self.events.clone(),
+                route,
+            ));
+            return;
+        }
         let mut request = DownloadRequest::new(row.url.clone(), row.dest_dir.clone());
         request.connections = self.config.connections;
         request.retry = self.config.retry.clone();
@@ -1964,6 +1993,204 @@ async fn run_torrent(
             category,
         })
         .await;
+}
+
+/// A video page (YouTube and alike): yt-dlp does the work, and tells the same story through its output.
+#[allow(clippy::too_many_arguments)]
+async fn run_video(
+    ytdlp: Option<PathBuf>,
+    ffmpeg: Option<PathBuf>,
+    url: String,
+    dest: PathBuf,
+    cancel: CancelToken,
+    id: i64,
+    commands: mpsc::Sender<Command>,
+    events: broadcast::Sender<ManagerEvent>,
+    route: Option<(PathBuf, Vec<CategoryRow>)>,
+) {
+    use mohona_media::ytdlp::{arguments, failure_reason, parse_line, Line, Request};
+    use tokio::io::{AsyncBufReadExt, BufReader};
+
+    let end = |result: Result<Outcome, CoreError>, category: Option<i64>| {
+        let commands = commands.clone();
+        async move {
+            let _ = commands
+                .send(Command::Ended {
+                    id,
+                    result,
+                    category,
+                })
+                .await;
+        }
+    };
+    let Some(ytdlp) = ytdlp else {
+        end(
+            Err(CoreError::Stream(
+                mohona_media::tools::YTDLP.missing_message(),
+            )),
+            None,
+        )
+        .await;
+        return;
+    };
+    if let Err(e) = std::fs::create_dir_all(&dest) {
+        end(
+            Err(CoreError::Stream(format!("cannot use the folder: {e}"))),
+            None,
+        )
+        .await;
+        return;
+    }
+    let mut command = tokio::process::Command::new(&ytdlp);
+    command
+        .args(arguments(&Request {
+            url: url.clone(),
+            folder: dest.clone(),
+            ffmpeg,
+        }))
+        .env("PYTHONUTF8", "1")
+        .env("PYTHONIOENCODING", "utf-8")
+        .stdin(std::process::Stdio::null())
+        .stdout(std::process::Stdio::piped())
+        .stderr(std::process::Stdio::piped())
+        .kill_on_drop(true);
+    #[cfg(windows)]
+    command.creation_flags(0x0800_0000); // no console window
+    let mut child = match command.spawn() {
+        Ok(c) => c,
+        Err(e) => {
+            end(
+                Err(CoreError::Stream(format!(
+                    "could not start {}: {e}",
+                    ytdlp.display()
+                ))),
+                None,
+            )
+            .await;
+            return;
+        }
+    };
+    let (tx, mut lines) = mpsc::unbounded_channel::<String>();
+    for stream in [
+        child
+            .stdout
+            .take()
+            .map(|s| Box::new(s) as Box<dyn tokio::io::AsyncRead + Unpin + Send>),
+        child
+            .stderr
+            .take()
+            .map(|s| Box::new(s) as Box<dyn tokio::io::AsyncRead + Unpin + Send>),
+    ]
+    .into_iter()
+    .flatten()
+    {
+        let tx = tx.clone();
+        tokio::spawn(async move {
+            let mut reader = BufReader::new(stream).lines();
+            while let Ok(Some(line)) = reader.next_line().await {
+                if tx.send(line).is_err() {
+                    break;
+                }
+            }
+        });
+    }
+    drop(tx);
+
+    let mut tail: Vec<String> = Vec::new();
+    let mut started = false;
+    let mut file: Option<PathBuf> = None;
+    // A video and its sound are two downloads in a row: the bytes of finished parts are kept.
+    let (mut base, mut part, mut part_total) = (0u64, 0u64, 0u64);
+    let mut last_save = Instant::now();
+    let mut latest = 0u64;
+    let stopped = loop {
+        tokio::select! {
+            () = cancel.cancelled() => break true,
+            line = lines.recv() => {
+                let Some(line) = line else { break false };
+                match parse_line(&line) {
+                    Line::Name(name) => {
+                        if !started {
+                            started = true;
+                            let _ = commands
+                                .send(Command::Started { id, url: url.clone(), filename: name, total: None, resumed: 0 })
+                                .await;
+                        }
+                    }
+                    Line::Progress { downloaded, total } => {
+                        if downloaded + 1024 < part {
+                            base += part_total.max(part);
+                        }
+                        part = downloaded;
+                        part_total = total.unwrap_or(0);
+                        latest = base + downloaded;
+                        if started {
+                            let _ = events.send(ManagerEvent::Progress { id, downloaded: latest, total: None });
+                            if last_save.elapsed() >= SAVE_INTERVAL {
+                                last_save = Instant::now();
+                                let _ = commands.send(Command::Saved { id, downloaded: latest }).await;
+                            }
+                        }
+                    }
+                    Line::File(path) => file = Some(path),
+                    Line::Other(text) => {
+                        if !text.is_empty() {
+                            tail.push(text);
+                            if tail.len() > 40 {
+                                tail.remove(0);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    };
+    if stopped {
+        let _ = child.kill().await;
+        if latest > 0 {
+            let _ = commands
+                .send(Command::Saved {
+                    id,
+                    downloaded: latest,
+                })
+                .await;
+        }
+        end(Err(CoreError::Cancelled), None).await;
+        return;
+    }
+    let status = child.wait().await;
+    let result = match (status, file) {
+        (Ok(s), Some(path)) if s.success() => {
+            let bytes = std::fs::metadata(&path).map_or(latest, |m| m.len());
+            Ok(Outcome {
+                path,
+                bytes,
+                final_url: url,
+                connections: 1,
+                verified: None,
+            })
+        }
+        (Ok(s), None) if s.success() => Err(CoreError::Stream(
+            "yt-dlp finished but did not say which file it saved".into(),
+        )),
+        _ => Err(CoreError::Stream(failure_reason(&tail))),
+    };
+    let mut category = None;
+    let result = match (result, route) {
+        (Ok(mut outcome), Some((base, categories))) if outcome.path.is_file() => {
+            let path = outcome.path.clone();
+            let sorted =
+                tokio::task::spawn_blocking(move || routing::sort_file(&path, &base, &categories))
+                    .await;
+            if let Ok(Ok((new_path, found))) = sorted {
+                outcome.path = new_path;
+                category = found;
+            }
+            Ok(outcome)
+        }
+        (other, _) => other,
+    };
+    end(result, category).await;
 }
 
 async fn run_download(
