@@ -31,6 +31,7 @@ function fake(initial: Row[], running = true) {
   let polls = 0;
   let grab: GrabState = { state: "idle", pages: 0, found: 0, current: "", files: [], skippedByRobots: 0, failedPages: 0, note: null, error: null };
   let browser: string | null = null;
+  let scanned: { mode: "off" | "defender" | "custom"; command: string; defender: string | null } = { mode: "off", command: "", defender: null };
   let seeding: { ratio: number | null; minutes: number | null } = { ratio: null, minutes: null };
   let tools: ToolInfo[] = [
     { name: "ffmpeg", purpose: "join separate video and audio", chosen: null, found: null, page: "https://ffmpeg.org/download.html", windowsPage: "https://www.gyan.dev/ffmpeg/builds/", winget: "winget install Gyan.FFmpeg" },
@@ -68,6 +69,8 @@ function fake(initial: Row[], running = true) {
     grabDownload: vi.fn(async (files: GrabFile[], _f: string | null, _q: number | null) => ({ added: files.length, skipped: [] })),
     seeding: vi.fn(async () => seeding),
     setSeeding: vi.fn(async (s: { ratio: number | null; minutes: number | null }) => (seeding = { ratio: s.ratio, minutes: s.minutes })),
+    scan: vi.fn(async () => scanned),
+    setScan: vi.fn(async (mode: string, command: string) => (scanned = { mode: mode as "off", command, defender: null })),
     videoBrowser: vi.fn(async () => browser),
     setVideoBrowser: vi.fn(async (b: string | null) => (browser = b)),
     torrentFiles: vi.fn(async (_url: string) => ({
@@ -249,6 +252,11 @@ describe("App", () => {
     await waitFor(() => expect(api.setTool).toHaveBeenLastCalledWith("ffmpeg", null));
     await userEvent.selectOptions(within(dialog).getByLabelText("Use the sign-in of"), "edge");
     await waitFor(() => expect(api.setVideoBrowser).toHaveBeenCalledWith("edge"));
+    await userEvent.selectOptions(within(dialog).getByLabelText("Scan finished downloads with"), "custom");
+    await waitFor(() => expect(api.setScan).toHaveBeenCalledWith("custom", ""));
+    await userEvent.type(await within(dialog).findByLabelText("Scanner command"), "scan.exe {{file}");
+    await userEvent.click(within(dialog).getByRole("button", { name: "Save" }));
+    await waitFor(() => expect(api.setScan).toHaveBeenLastCalledWith("custom", "scan.exe {file}"));
   });
 
   it("lets the person choose which files of a torrent to download", async () => {

@@ -308,5 +308,15 @@
   "This page only": "Halaman ini saja",
   "Type or paste a web address.": "Ketik atau tempel alamat web.",
   "Videos": "Video",
-  "Web page": "Halaman web"
+  "Web page": "Halaman web",
+  "{file} is replaced by the downloaded file. The program should end with 0 when the file is clean.": "{file} diganti dengan berkas yang diunduh. Program sebaiknya berakhir dengan 0 jika berkas bersih.",
+  "Mohona can hand every finished download to a virus scanner. The download stays; a problem is shown on its row and in its log.": "Mohona dapat menyerahkan setiap unduhan yang selesai ke pemindai virus. Unduhan tetap ada; masalah ditampilkan di barisnya dan di lognya.",
+  "My own program": "Program saya sendiri",
+  "Nothing (off)": "Tidak ada (mati)",
+  "Scan finished downloads with": "Pindai unduhan selesai dengan",
+  "Scanner command": "Perintah pemindai",
+  "Virus scan": "Pemindaian virus",
+  "Windows Defender": "Windows Defender",
+  "Windows Defender was not found on this computer.": "Windows Defender tidak ditemukan di komputer ini.",
+  "For example: scan.exe --quick {file}": "Contoh: scan.exe --quick {file}"
 }

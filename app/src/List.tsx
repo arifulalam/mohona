@@ -24,6 +24,7 @@ function detail(row: Row, t: Translate): string {
   if (row.status === "failed") {
     return row.expired ? t("The link has expired. Add the file again from its page.") : (row.error ?? t("Failed"));
   }
+  if (row.status === "completed" && row.error) return `⚠ ${row.error}`;
   const done = fmt.bytes(row.downloaded);
   return row.size ? t("{done} of {total}", { done, total: fmt.bytes(row.size) }) : done;
 }

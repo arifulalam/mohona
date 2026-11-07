@@ -308,5 +308,15 @@
   "This page only": "Nur diese Seite",
   "Type or paste a web address.": "Geben Sie eine Webadresse ein oder fügen Sie sie ein.",
   "Videos": "Videos",
-  "Web page": "Webseite"
+  "Web page": "Webseite",
+  "{file} is replaced by the downloaded file. The program should end with 0 when the file is clean.": "{file} wird durch die heruntergeladene Datei ersetzt. Das Programm sollte mit 0 enden, wenn die Datei sauber ist.",
+  "Mohona can hand every finished download to a virus scanner. The download stays; a problem is shown on its row and in its log.": "Mohona kann jeden fertigen Download an einen Virenscanner übergeben. Der Download bleibt erhalten; ein Problem wird in seiner Zeile und im Protokoll angezeigt.",
+  "My own program": "Mein eigenes Programm",
+  "Nothing (off)": "Nichts (aus)",
+  "Scan finished downloads with": "Fertige Downloads prüfen mit",
+  "Scanner command": "Scanner-Befehl",
+  "Virus scan": "Virenscan",
+  "Windows Defender": "Windows Defender",
+  "Windows Defender was not found on this computer.": "Windows Defender wurde auf diesem Computer nicht gefunden.",
+  "For example: scan.exe --quick {file}": "Zum Beispiel: scan.exe --quick {file}"
 }

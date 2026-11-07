@@ -250,6 +250,8 @@ export interface Api {
   seeding(): Promise<Seeding>;
   setSeeding(seeding: Seeding): Promise<Seeding>;
   /** The browser whose sign-in yt-dlp uses for video pages (null: none). */
+  scan(): Promise<ScanSetting>;
+  setScan(mode: string, command: string): Promise<ScanSetting>;
   videoBrowser(): Promise<string | null>;
   setVideoBrowser(browser: string | null): Promise<string | null>;
   profiles(): Promise<SiteProfile[]>;
@@ -283,4 +285,12 @@ export interface Api {
   setConfig(change: ConfigChange): Promise<Config>;
   extensionSettings(): Promise<ExtensionSettings>;
   setExtensionSettings(settings: ExtensionSettings): Promise<ExtensionSettings>;
+}
+
+/** How finished downloads are scanned for viruses. */
+export interface ScanSetting {
+  mode: "off" | "defender" | "custom";
+  command: string;
+  /** Where Windows Defender's scanner is, if this computer has it. */
+  defender: string | null;
 }

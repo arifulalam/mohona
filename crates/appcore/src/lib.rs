@@ -952,6 +952,16 @@ impl Engine {
         self.video_browser().await
     }
 
+    /// How finished downloads are scanned for viruses.
+    pub async fn scan(&self) -> Result<ScanSetting, AppError> {
+        scan_answer(self.call(Call::GetScan).await?)
+    }
+
+    /// Changes the scan (`off`, `defender` or `custom` with a command) and returns what is now set.
+    pub async fn set_scan(&self, mode: String, command: String) -> Result<ScanSetting, AppError> {
+        scan_answer(self.call(Call::SetScan { mode, command }).await?)
+    }
+
     pub async fn profiles(&self) -> Result<Vec<SiteProfile>, AppError> {
         match self.call(Call::GetProfiles).await? {
             Response::Profiles { profiles } => Ok(profiles.into_iter().map(Into::into).collect()),
@@ -1298,5 +1308,30 @@ mod risk_tests {
         ] {
             assert!(!is_risky(Path::new(fine)), "{fine}");
         }
+    }
+}
+
+/// The virus scan setting, as the app shows it.
+#[derive(Debug, Clone, Serialize)]
+pub struct ScanSetting {
+    /// `off`, `defender` or `custom`.
+    pub mode: String,
+    pub command: String,
+    /// Where Windows Defender's command-line scanner is, when this computer has it.
+    pub defender: Option<String>,
+}
+
+fn scan_answer(answer: Response) -> Result<ScanSetting, AppError> {
+    match answer {
+        Response::Scan {
+            mode,
+            command,
+            defender,
+        } => Ok(ScanSetting {
+            mode,
+            command,
+            defender,
+        }),
+        _ => Err(AppError::Engine("unexpected answer from the engine".into())),
     }
 }

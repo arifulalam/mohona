@@ -308,5 +308,15 @@
   "This page only": "Yalnızca bu sayfa",
   "Type or paste a web address.": "Bir web adresi yazın veya yapıştırın.",
   "Videos": "Videolar",
-  "Web page": "Web sayfası"
+  "Web page": "Web sayfası",
+  "{file} is replaced by the downloaded file. The program should end with 0 when the file is clean.": "{file}, indirilen dosyayla değiştirilir. Dosya temizse program 0 ile bitmelidir.",
+  "Mohona can hand every finished download to a virus scanner. The download stays; a problem is shown on its row and in its log.": "Mohona biten her indirmeyi bir virüs tarayıcısına verebilir. İndirme kalır; sorun satırında ve günlüğünde gösterilir.",
+  "My own program": "Kendi programım",
+  "Nothing (off)": "Hiçbiri (kapalı)",
+  "Scan finished downloads with": "Biten indirmeleri şununla tara",
+  "Scanner command": "Tarayıcı komutu",
+  "Virus scan": "Virüs taraması",
+  "Windows Defender": "Windows Defender",
+  "Windows Defender was not found on this computer.": "Windows Defender bu bilgisayarda bulunamadı.",
+  "For example: scan.exe --quick {file}": "Örnek: scan.exe --quick {file}"
 }

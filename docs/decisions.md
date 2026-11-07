@@ -783,3 +783,14 @@ A `401` now becomes its own error (`NetError::Unauthorized`) that names the kind
 **Why not more.** The grabber only reads: it does not decide what to download (the person does), does not mirror a site's pages, and does not log in. Its limits are the reason it is safe to leave on: a run cannot go on for ever or hit a site hard.
 
 **Not included.** Pages built by scripts in the browser (their links do not exist in the HTML; use the extension's "Files on this page" there), file sizes in the list (that would be a request for every file), sign-in (the grabber has no cookies; the browser list does), and mirroring a whole site with its pages for offline reading.
+
+## ADR-0076: A virus scan after each download
+
+**What.** In Settings → Tools, "Virus scan": Nothing (the default), Windows Defender, or My own program. When a download finishes and a scanner is chosen, Mohona runs it on the finished file. Clean: a line "virus scan: nothing found" in the download's log. A problem: the log says what the scanner said, and the row stays Completed but shows "⚠ Virus scan: …". `mohona scan` shows and sets the same thing.
+
+**How.** Windows Defender is run through its own command-line tool `MpCmdRun.exe` (`-Scan -ScanType 3 -DisableRemediation -File <file>`): `-DisableRemediation` so that Mohona only asks, and Defender's own settings decide whether it also quarantines. My own program is a command line where `{file}` stands for the file (added at the end if missing); it must end with 0 for a clean file, and any other ending is taken as a problem, with the last line it printed. The scan runs beside the manager (never blocks other downloads), has a 10-minute limit, and a scanner that cannot be started is a note in the log, not a failure of the download.
+
+**Why not delete or move a file.** A scanner that is wrong would then lose the person's download. Mohona warns; what to do with a file is the person's (or the antivirus's own) decision.
+
+**Not included.** Scanning before the file gets its final name, quarantine by Mohona, ClamAV presets (use "My own program" with `clamscan {file}`), and scanning torrents file by file. Tested here with a stand-in scanner script (clean, problem, missing program); Defender itself is not tried here (C39).
+

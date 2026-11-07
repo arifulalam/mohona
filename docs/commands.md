@@ -641,6 +641,17 @@ Starts at one web page, lists the files it links to (pictures, videos, audio, do
 
 API: `POST /v1/grab` (write) with `{"url", "depth", "sameSite", "types", "maxPages", "robots"}` starts a run (one at a time), `GET /v1/grab` (read) tells how it is doing and, once over, lists the files, `DELETE /v1/grab` (write) stops it.
 
+## `scan` — a virus scan after each download
+
+```
+mohona scan                       # show
+mohona scan --defender            # Windows Defender (Windows)
+mohona scan --command "clamscan {file}"
+mohona scan --off
+```
+
+`{file}` is the finished file (added at the end if you leave it out). The program must end with 0 for a clean file; anything else is shown on the download as a warning (the file is kept). The daemon must be running.
+
 ## YouTube and other video pages (needs yt-dlp)
 
 ```

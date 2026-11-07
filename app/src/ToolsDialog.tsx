@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { useT } from "./i18n";
 import { Modal } from "./AddDialog";
-import type { Api, ToolInfo } from "./types";
+import type { Api, ScanSetting, ToolInfo } from "./types";
 
 const BROWSERS: [string, string][] = [
   ["chrome", "Chrome"],
@@ -22,6 +22,8 @@ export function ToolsDialog({ api, onClose }: { api: Api; onClose(): void }) {
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [browser, setBrowser] = useState<string>("");
+  const [scan, setScan] = useState<ScanSetting | null>(null);
+  const [command, setCommand] = useState("");
 
   useEffect(() => {
     let alive = true;
@@ -48,6 +50,35 @@ export function ToolsDialog({ api, onClose }: { api: Api; onClose(): void }) {
       alive = false;
     };
   }, [api]);
+
+  useEffect(() => {
+    let alive = true;
+    api
+      .scan()
+      .then((x) => {
+        if (!alive) return;
+        setScan(x);
+        setCommand(x.command);
+      })
+      .catch(() => undefined);
+    return () => {
+      alive = false;
+    };
+  }, [api]);
+
+  async function chooseScan(mode: string, text: string) {
+    setBusy(true);
+    try {
+      const x = await api.setScan(mode, text);
+      setScan(x);
+      setCommand(x.command);
+      setError(null);
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }
 
   async function chooseBrowser(value: string) {
     setBusy(true);
@@ -159,6 +190,44 @@ export function ToolsDialog({ api, onClose }: { api: Api; onClose(): void }) {
         </label>
         <p className="my-1 text-xs text-[var(--muted)]">{t("Close that browser if a download says it cannot read the cookies.")}</p>
       </section>
+      {scan && (
+        <section aria-label={t("Virus scan")} className="mt-3 rounded-lg border border-[var(--line)] p-3">
+          <strong>{t("Virus scan")}</strong>
+          <p className="my-1 text-sm text-[var(--muted)]">
+            {t("Mohona can hand every finished download to a virus scanner. The download stays; a problem is shown on its row and in its log.")}
+          </p>
+          <label className="flex flex-wrap items-center gap-2 text-sm">
+            {t("Scan finished downloads with")}
+            <select className={field} value={scan.mode} disabled={busy} onChange={(e) => void chooseScan(e.target.value, command)}>
+              <option value="off">{t("Nothing (off)")}</option>
+              <option value="defender">{t("Windows Defender")}</option>
+              <option value="custom">{t("My own program")}</option>
+            </select>
+          </label>
+          {scan.mode === "defender" && !scan.defender && (
+            <p role="alert" className="my-1 text-sm text-[var(--bad)]">
+              {t("Windows Defender was not found on this computer.")}
+            </p>
+          )}
+          {scan.mode === "custom" && (
+            <div className="mt-2 flex flex-wrap items-center gap-2">
+              <input
+                className={`${field} min-w-0 flex-1`}
+                aria-label={t("Scanner command")}
+                placeholder={t("For example: scan.exe --quick {file}")}
+                value={command}
+                onChange={(e) => setCommand(e.target.value)}
+              />
+              <button type="button" disabled={busy || !command.trim()} onClick={() => void chooseScan("custom", command.trim())}>
+                {t("Save")}
+              </button>
+            </div>
+          )}
+          {scan.mode === "custom" && (
+            <p className="my-1 text-xs text-[var(--muted)]">{t("{file} is replaced by the downloaded file. The program should end with 0 when the file is clean.")}</p>
+          )}
+        </section>
+      )}
     </Modal>
   );
 }

@@ -308,5 +308,15 @@
   "This page only": "सिर्फ़ यही पेज",
   "Type or paste a web address.": "वेब पता लिखें या पेस्ट करें।",
   "Videos": "वीडियो",
-  "Web page": "वेब पेज"
+  "Web page": "वेब पेज",
+  "{file} is replaced by the downloaded file. The program should end with 0 when the file is clean.": "{file} की जगह डाउनलोड की गई फ़ाइल आ जाती है। फ़ाइल साफ़ होने पर प्रोग्राम को 0 पर समाप्त होना चाहिए।",
+  "Mohona can hand every finished download to a virus scanner. The download stays; a problem is shown on its row and in its log.": "Mohona हर पूरा हुआ डाउनलोड वायरस स्कैनर को दे सकता है। डाउनलोड बना रहता है; समस्या उसकी पंक्ति और लॉग में दिखती है।",
+  "My own program": "मेरा अपना प्रोग्राम",
+  "Nothing (off)": "कुछ नहीं (बंद)",
+  "Scan finished downloads with": "पूरे हुए डाउनलोड इससे स्कैन करें",
+  "Scanner command": "स्कैनर कमांड",
+  "Virus scan": "वायरस स्कैन",
+  "Windows Defender": "Windows Defender",
+  "Windows Defender was not found on this computer.": "इस कंप्यूटर पर Windows Defender नहीं मिला।",
+  "For example: scan.exe --quick {file}": "उदाहरण: scan.exe --quick {file}"
 }

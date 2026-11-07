@@ -1,4 +1,4 @@
-import type { Api, Category, Config, ConfigChange, EngineStatus, ExtensionSettings, Details, Plan, PlanWindow, Queue, Row, Rule, SiteProfile, TorrentList, ToolInfo, Seeding, GrabState, GrabFile, GrabAdded } from "./types";
+import type { Api, Category, Config, ConfigChange, EngineStatus, ExtensionSettings, Details, Plan, PlanWindow, Queue, Row, Rule, SiteProfile, TorrentList, ToolInfo, Seeding, GrabState, GrabFile, GrabAdded, ScanSetting } from "./types";
 
 /** True inside the Tauri window; false in a plain browser (development, tests). */
 export function insideTauri(): boolean {
@@ -30,6 +30,8 @@ function tauriApi(): Api {
     openToolPage: (url) => call<void>("open_tool_page", { url }),
     seeding: () => call<Seeding>("get_seeding"),
     setSeeding: (s) => call<Seeding>("set_seeding", { ratio: s.ratio, minutes: s.minutes }),
+    scan: () => call<ScanSetting>("get_scan"),
+    setScan: (mode, command) => call<ScanSetting>("set_scan", { mode, command }),
     videoBrowser: () => call<string | null>("get_video_browser"),
     setVideoBrowser: (browser) => call<string | null>("set_video_browser", { browser }),
     profiles: () => call<SiteProfile[]>("get_profiles"),
@@ -100,6 +102,7 @@ const demoGrabFiles = (url: string): GrabFile[] => [
   { url: new URL("files/all.zip", url).href, name: "all.zip", group: "archives", page: url },
 ];
 let demoBrowser: string | null = null;
+let demoScan: ScanSetting = { mode: "off", command: "", defender: null };
   let demoSeeding: Seeding = { ratio: null, minutes: null };
   let toolList: ToolInfo[] = [
     { name: "ffmpeg", purpose: "join separate video and audio, add subtitles to a video, convert files, and merge the best video and sound of a YouTube download", chosen: null, found: null, page: "https://ffmpeg.org/download.html", windowsPage: "https://www.gyan.dev/ffmpeg/builds/", winget: "winget install Gyan.FFmpeg" },
@@ -193,6 +196,8 @@ let demoBrowser: string | null = null;
     openToolPage: async (url) => void window.open(url, "_blank", "noopener"),
     seeding: async () => (need(), { ...demoSeeding }),
     setSeeding: async (s) => ((demoSeeding = { ratio: s.ratio || null, minutes: s.minutes || null }), { ...demoSeeding }),
+    scan: async () => (need(), demoScan),
+    setScan: async (mode, command) => ((demoScan = { mode: mode as ScanSetting["mode"], command, defender: null }), demoScan),
     videoBrowser: async () => (need(), demoBrowser),
     setVideoBrowser: async (browser) => ((demoBrowser = browser), demoBrowser),
     profiles: async () => (need(), profileList),

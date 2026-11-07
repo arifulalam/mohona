@@ -404,6 +404,14 @@ Needs yt-dlp (`winget install yt-dlp.yt-dlp`); ffmpeg for the best quality (`win
 - [ ] Extension: on a page with several files (pictures, pdf links), open the popup, "Files on this page": the list shows them; the kind menu filters; "Download selected" sends them to Mohona. On a page without files it says so.
 - [ ] A page that needs sign-in: the app's grabber cannot read it (expected); the extension's list works because it reads the page you see.
 
+## Virus scan
+
+- [ ] Settings → Tools → Virus scan: choose "Windows Defender". Download any small file: its log (right-click → Log) says "virus scan: nothing found".
+- [ ] Put the standard EICAR test text (from eicar.org; a harmless test file every antivirus reports) on a page or file host you control and download it: the row shows "⚠ Virus scan: …" and stays Completed; Defender may also remove the file itself (that is Defender's choice).
+- [ ] "My own program": a program that ends with 0 logs "nothing found"; one that ends with 1 (for example `cmd /c exit 1`) shows the warning.
+- [ ] A program that does not exist: the download is fine and its log says "virus scan not run".
+- [ ] Command line: `mohona scan`, `mohona scan --defender`, `mohona scan --off`.
+
 ## Add new items here
 
 When a step adds something that can't be tested on this PC (FTP server, SFTP server, WebDAV, a custom CA, a mirror site, a browser, an Android phone), add it to this list in the same step.

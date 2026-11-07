@@ -308,5 +308,15 @@
   "This page only": "このページのみ",
   "Type or paste a web address.": "Web アドレスを入力または貼り付けてください。",
   "Videos": "動画",
-  "Web page": "Web ページ"
+  "Web page": "Web ページ",
+  "{file} is replaced by the downloaded file. The program should end with 0 when the file is clean.": "{file} はダウンロードしたファイルに置き換わります。ファイルが安全な場合、プログラムは 0 で終了する必要があります。",
+  "Mohona can hand every finished download to a virus scanner. The download stays; a problem is shown on its row and in its log.": "Mohona は完了したダウンロードをウイルススキャナーに渡せます。ダウンロードは残り、問題は行とログに表示されます。",
+  "My own program": "自分のプログラム",
+  "Nothing (off)": "なし（オフ）",
+  "Scan finished downloads with": "完了したダウンロードのスキャンに使うもの",
+  "Scanner command": "スキャナーのコマンド",
+  "Virus scan": "ウイルススキャン",
+  "Windows Defender": "Windows Defender",
+  "Windows Defender was not found on this computer.": "このコンピューターで Windows Defender が見つかりませんでした。",
+  "For example: scan.exe --quick {file}": "例: scan.exe --quick {file}"
 }

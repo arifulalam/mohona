@@ -124,6 +124,15 @@ pub enum Call {
         name: String,
         path: Option<String>,
     },
+    /// How finished downloads are scanned for viruses (answered as `Scan`).
+    GetScan,
+    /// Choose it: `mode` is `off`, `defender` (Windows Defender) or `custom` (the program and
+    /// arguments in `command`, with `{file}` for the file).
+    SetScan {
+        mode: String,
+        #[serde(default)]
+        command: String,
+    },
     /// The browser whose sign-in yt-dlp uses for video pages (answered as `Setting`).
     GetVideoBrowser,
     /// Choose that browser (`chrome`, `edge`, `firefox`, `brave`, `opera`, `vivaldi`, `chromium`,
@@ -483,6 +492,13 @@ pub enum Response {
     TorrentFiles {
         name: String,
         files: Vec<TorrentFileInfo>,
+    },
+    /// The virus scan setting.
+    Scan {
+        mode: String,
+        command: String,
+        /// Where Windows Defender's command line tool is, if this computer has it.
+        defender: Option<String>,
     },
     /// The site grabber: `idle` (never run), `running`, `done`, `stopped` or `failed`.
     Grab {

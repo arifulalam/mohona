@@ -13,6 +13,7 @@ use std::time::{Duration, Instant};
 mod actions;
 mod network;
 mod routing;
+pub mod scan;
 mod schedule;
 
 pub use actions::{ActionRunner, AfterAction, SystemRunner};
@@ -372,6 +373,8 @@ enum Command {
     /// Which speed limit to change, and to what (`None` removes it).
     SetSpeed(SpeedTarget, Option<u64>, Reply),
     Shutdown(oneshot::Sender<()>),
+    /// The virus scan of a finished download is over.
+    Scanned(i64, scan::Verdict),
     /// yt-dlp does not know the page: download the address as an ordinary file instead.
     NotAVideo(i64),
     /// Sent by a download's own task when it ends.
@@ -1388,6 +1391,7 @@ impl Actor {
                 let _ = reply.send(self.set_speed(target, limit));
             }
             Command::Shutdown(_) => unreachable!("handled in run"),
+            Command::Scanned(id, verdict) => self.scanned(id, verdict),
             Command::NotAVideo(id) => {
                 // Only if it is still the same run (not cancelled or removed meanwhile).
                 if !self.stopping && self.running.contains_key(&id) {
@@ -1664,6 +1668,60 @@ impl Actor {
         mohona_core::discard_partial(dir, &row.url);
     }
 
+    /// Hands a finished download to the virus scanner, if the settings ask for one.
+    fn start_scan(&mut self, id: i64, path: PathBuf) {
+        let setting = |key: &str| self.store.setting(key).ok().flatten();
+        let scanner = match scan::Scanner::from_settings(
+            setting(scan::MODE).as_deref(),
+            setting(scan::COMMAND).as_deref(),
+        ) {
+            Ok(None) => return,
+            Ok(Some(s)) => s,
+            Err(reason) => {
+                let _ = self
+                    .store
+                    .add_log(id, "warning", &format!("virus scan not run: {reason}"));
+                return;
+            }
+        };
+        let commands = self.commands.clone();
+        tokio::spawn(async move {
+            let verdict = scanner.scan(&path).await;
+            let _ = commands.send(Command::Scanned(id, verdict)).await;
+        });
+    }
+
+    /// Writes down what the scanner said. A problem is shown on the download itself.
+    fn scanned(&mut self, id: i64, verdict: scan::Verdict) {
+        match verdict {
+            scan::Verdict::Clean => {
+                let _ = self.store.add_log(id, "info", "virus scan: nothing found");
+            }
+            scan::Verdict::NotRun(reason) => {
+                let _ = self
+                    .store
+                    .add_log(id, "warning", &format!("virus scan not run: {reason}"));
+            }
+            scan::Verdict::Threat(said) => {
+                let _ = self
+                    .store
+                    .add_log(id, "error", &format!("virus scan: {said}"));
+                if matches!(self.store.download(id), Ok(Some(row)) if row.status == Status::Completed)
+                {
+                    let _ = self.store.set_status(
+                        id,
+                        Status::Completed,
+                        Some(&format!("Virus scan: {said}")),
+                    );
+                    self.emit(ManagerEvent::State {
+                        id,
+                        status: Status::Completed,
+                    });
+                }
+            }
+        }
+    }
+
     fn ended(&mut self, id: i64, result: Result<Outcome, CoreError>, category: Option<i64>) {
         let running = self.running.remove(&id);
         let intent = running.as_ref().and_then(|r| r.intent);
@@ -1706,6 +1764,7 @@ impl Actor {
                     id,
                     status: Status::Completed,
                 });
+                self.start_scan(id, outcome.path.clone());
             }
             (Err(_), Some(Intent::Pause)) => self.set_status(id, Status::Paused, None),
             (Err(_), Some(Intent::Schedule | Intent::Network)) => {

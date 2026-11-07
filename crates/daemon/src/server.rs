@@ -56,6 +56,23 @@ struct GrabJob {
     error: Option<String>,
 }
 
+async fn scan_setting(manager: &Manager) -> Response {
+    let get = |key: &'static str| async move {
+        manager
+            .setting(key)
+            .await
+            .ok()
+            .flatten()
+            .unwrap_or_default()
+    };
+    let mode = get(mohona_manager::scan::MODE).await;
+    Response::Scan {
+        mode: if mode.is_empty() { "off".into() } else { mode },
+        command: get(mohona_manager::scan::COMMAND).await,
+        defender: mohona_manager::scan::defender().map(|p| p.display().to_string()),
+    }
+}
+
 /// The newest numbers about a running download, from the manager's events.
 struct Live {
     downloaded: u64,
@@ -1155,6 +1172,26 @@ pub(crate) async fn handle(state: &State, call: Call) -> Response {
                 }
             }
             seeding(state).await
+        }
+        Call::GetScan => scan_setting(manager).await,
+        Call::SetScan { mode, command } => {
+            let mode = mode.trim().to_ascii_lowercase();
+            if !matches!(mode.as_str(), "off" | "defender" | "custom") {
+                return error("the scan mode is off, defender or custom");
+            }
+            if mode == "custom" && mohona_manager::scan::split_command(&command).is_empty() {
+                return error("type the scanner program for a custom scan");
+            }
+            if let Err(e) = manager.set_setting(mohona_manager::scan::MODE, &mode).await {
+                return error(e);
+            }
+            if let Err(e) = manager
+                .set_setting(mohona_manager::scan::COMMAND, command.trim())
+                .await
+            {
+                return error(e);
+            }
+            scan_setting(manager).await
         }
         Call::GetVideoBrowser => match manager.setting(mohona_manager::VIDEO_BROWSER).await {
             Ok(value) => Response::Setting {

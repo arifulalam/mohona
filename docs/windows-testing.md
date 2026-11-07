@@ -150,6 +150,7 @@ Numbers are the steps of the "Desktop app" section.
 - [ ] C32 Settings sync: the steps of "Settings sync" in `docs/manual-tests.md` (two computers or two user accounts, one synced folder)
 - [ ] C33 Plugins: the steps of "Plugins" in `docs/manual-tests.md` (the PowerShell example plugin)
 - [ ] C34 Torrent file selection: the steps of "Torrent file selection" in `docs/manual-tests.md` (also check that a torrent of several files gets its own folder)
+- [ ] C39 Virus scan: "Virus scan" in `docs/manual-tests.md` (Windows Defender and the EICAR test file)
 - [ ] C38 Site Grabber: "Site Grabber" in `docs/manual-tests.md`
 - [ ] C37 Torrent sharing and the finish message: "BitTorrent" step 6 and "Finish message" in `docs/manual-tests.md`
 - [ ] C36 YouTube and Tools: the steps of "YouTube and Tools" in `docs/manual-tests.md`

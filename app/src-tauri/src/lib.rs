@@ -247,6 +247,16 @@ async fn set_seeding(app: State<'_, App>, ratio: Option<u32>, minutes: Option<u6
 }
 
 #[tauri::command]
+async fn get_scan(app: State<'_, App>) -> Result<mohona_appcore::ScanSetting> {
+    app.engine.scan().await
+}
+
+#[tauri::command]
+async fn set_scan(app: State<'_, App>, mode: String, command: String) -> Result<mohona_appcore::ScanSetting> {
+    app.engine.set_scan(mode, command).await
+}
+
+#[tauri::command]
 async fn get_video_browser(app: State<'_, App>) -> Result<Option<String>> {
     app.engine.video_browser().await
 }
@@ -467,6 +477,8 @@ pub fn run() {
             open_tool_page,
             get_seeding,
             set_seeding,
+            get_scan,
+            set_scan,
             get_video_browser,
             set_video_browser,
             get_profiles,
