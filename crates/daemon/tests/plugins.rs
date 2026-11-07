@@ -1,4 +1,7 @@
 //! A plugin turns a link of its site into the real address.
+// The stand-in programs are shell scripts: the tests that use them run on Unix only, so on
+// Windows their helpers are unused.
+#![cfg_attr(not(unix), allow(dead_code, unused_imports))]
 
 use std::net::SocketAddr;
 use std::path::Path;
