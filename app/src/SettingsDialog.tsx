@@ -19,12 +19,16 @@ export function SettingsDialog({ api, onClose, clipboard, onClipboard }: { api: 
   const [sort, setSort] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [startup, setStartup] = useState<{ available: boolean; enabled: boolean } | null>(null);
+  const [startupWas, setStartupWas] = useState(false);
 
   useEffect(() => {
     let alive = true;
-    Promise.all([api.config(), api.extensionSettings()])
-      .then(([c, e]) => {
+    Promise.all([api.config(), api.extensionSettings(), api.startup().catch(() => null)])
+      .then(([c, e, st]) => {
         if (!alive) return;
+        setStartup(st);
+        setStartupWas(st?.enabled ?? false);
         setConfig(c);
         setExt(e);
         setFolder(c.downloadFolder);
@@ -63,6 +67,7 @@ export function SettingsDialog({ api, onClose, clipboard, onClipboard }: { api: 
         keepInTray: tray,
         sortByType: sort,
       });
+      if (startup?.available && startup.enabled !== startupWas) await api.setStartup(startup.enabled);
       await api.setExtensionSettings({ ...ext, minSizeBytes: min, excludedHosts: parseHosts(excluded) });
       onClose();
     } catch (e) {
@@ -113,6 +118,9 @@ export function SettingsDialog({ api, onClose, clipboard, onClipboard }: { api: 
             <Check label={t("Sort finished downloads into folders by file type (see Categories)")} value={sort} onChange={setSort} />
             <Check label={t("Show a message when a download finishes or fails")} value={notify} onChange={setNotify} />
             <Check label={t("Keep Mohona in the tray when the window is closed")} value={tray} onChange={setTray} />
+            {startup?.available && (
+              <Check label={t("Start Mohona when I sign in to Windows (in the tray)")} value={startup.enabled} onChange={(v) => setStartup({ ...startup, enabled: v })} />
+            )}
             <Check label={t("Offer to download a link when I copy one")} value={clipboard} onChange={onClipboard} />
           </fieldset>
 

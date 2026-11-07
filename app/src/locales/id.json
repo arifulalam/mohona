@@ -318,5 +318,6 @@
   "Virus scan": "Pemindaian virus",
   "Windows Defender": "Windows Defender",
   "Windows Defender was not found on this computer.": "Windows Defender tidak ditemukan di komputer ini.",
-  "For example: scan.exe --quick {file}": "Contoh: scan.exe --quick {file}"
+  "For example: scan.exe --quick {file}": "Contoh: scan.exe --quick {file}",
+  "Start Mohona when I sign in to Windows (in the tray)": "Jalankan Mohona saat saya masuk ke Windows (di baki sistem)"
 }

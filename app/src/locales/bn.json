@@ -318,5 +318,6 @@
   "Virus scan": "ভাইরাস স্ক্যান",
   "Windows Defender": "Windows Defender",
   "Windows Defender was not found on this computer.": "এই কম্পিউটারে Windows Defender পাওয়া যায়নি।",
-  "For example: scan.exe --quick {file}": "উদাহরণ: scan.exe --quick {file}"
+  "For example: scan.exe --quick {file}": "উদাহরণ: scan.exe --quick {file}",
+  "Start Mohona when I sign in to Windows (in the tray)": "Windows-এ সাইন ইন করলে Mohona চালু করুন (ট্রেতে)"
 }

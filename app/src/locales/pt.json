@@ -318,5 +318,6 @@
   "Virus scan": "Verificação de vírus",
   "Windows Defender": "Windows Defender",
   "Windows Defender was not found on this computer.": "O Windows Defender não foi encontrado neste computador.",
-  "For example: scan.exe --quick {file}": "Por exemplo: scan.exe --quick {file}"
+  "For example: scan.exe --quick {file}": "Por exemplo: scan.exe --quick {file}",
+  "Start Mohona when I sign in to Windows (in the tray)": "Iniciar o Mohona ao entrar no Windows (na bandeja)"
 }

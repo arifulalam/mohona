@@ -794,3 +794,11 @@ A `401` now becomes its own error (`NetError::Unauthorized`) that names the kind
 
 **Not included.** Scanning before the file gets its final name, quarantine by Mohona, ClamAV presets (use "My own program" with `clamscan {file}`), and scanning torrents file by file. Tested here with a stand-in scanner script (clean, problem, missing program); Defender itself is not tried here (C39).
 
+## ADR-0077: Start with Windows
+
+**What.** Settings → Downloads has "Start Mohona when I sign in to Windows (in the tray)", off by default and applied when Save is pressed. When on, Mohona starts at sign-in with `--minimized`: it goes to the tray and no window opens. A normal start shows the window as before. The option is not shown on other systems.
+
+**How.** The per-user Run key of the registry (`HKCU\Software\Microsoft\Windows\CurrentVersion\Run`, entry "Mohona"), written with Windows' own `reg` program, so there is no new dependency and no administrator right is needed; the person can also see and switch it off in Windows' Settings → Apps → Startup. The stored command is the quoted path of the running program plus `--minimized`; if the program was moved (an update, a new folder) the stored path no longer matches and the option shows as off until it is saved again. The window is created hidden (`"visible": false`) and shown by the program unless it was started with `--minimized`; this avoids a window flashing at sign-in.
+
+**Not included.** A delay after sign-in, "start the engine only" (the app starts the engine itself when it opens), and macOS or Linux (they have their own ways and are not the target now). The registry part and the hidden window can only be seen on Windows (C40); the command line text and the reading of `reg` output are unit tested here.
+

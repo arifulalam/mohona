@@ -250,6 +250,8 @@ export interface Api {
   seeding(): Promise<Seeding>;
   setSeeding(seeding: Seeding): Promise<Seeding>;
   /** The browser whose sign-in yt-dlp uses for video pages (null: none). */
+  startup(): Promise<Startup>;
+  setStartup(on: boolean): Promise<Startup>;
   scan(): Promise<ScanSetting>;
   setScan(mode: string, command: string): Promise<ScanSetting>;
   videoBrowser(): Promise<string | null>;
@@ -293,4 +295,11 @@ export interface ScanSetting {
   command: string;
   /** Where Windows Defender's scanner is, if this computer has it. */
   defender: string | null;
+}
+
+/** Starting Mohona when the person signs in to Windows. */
+export interface Startup {
+  /** This system can do it (Windows only). */
+  available: boolean;
+  enabled: boolean;
 }

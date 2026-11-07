@@ -318,5 +318,6 @@
   "Virus scan": "Virüs taraması",
   "Windows Defender": "Windows Defender",
   "Windows Defender was not found on this computer.": "Windows Defender bu bilgisayarda bulunamadı.",
-  "For example: scan.exe --quick {file}": "Örnek: scan.exe --quick {file}"
+  "For example: scan.exe --quick {file}": "Örnek: scan.exe --quick {file}",
+  "Start Mohona when I sign in to Windows (in the tray)": "Windows'ta oturum açtığımda Mohona'yı başlat (tepsisinde)"
 }

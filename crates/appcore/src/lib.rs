@@ -9,6 +9,7 @@
 mod rows;
 mod settings;
 mod speed;
+pub mod startup;
 mod watch;
 
 use std::path::PathBuf;
@@ -952,6 +953,21 @@ impl Engine {
         self.video_browser().await
     }
 
+    /// Whether Mohona starts when the person signs in to Windows, and whether this system can do that.
+    pub fn startup(&self) -> Result<Startup, AppError> {
+        let exe = std::env::current_exe().map_err(|e| AppError::Engine(e.to_string()))?;
+        Ok(Startup {
+            available: cfg!(windows),
+            enabled: startup::enabled(&exe),
+        })
+    }
+
+    pub fn set_startup(&self, on: bool) -> Result<Startup, AppError> {
+        let exe = std::env::current_exe().map_err(|e| AppError::Engine(e.to_string()))?;
+        startup::set_enabled(&exe, on)?;
+        self.startup()
+    }
+
     /// How finished downloads are scanned for viruses.
     pub async fn scan(&self) -> Result<ScanSetting, AppError> {
         scan_answer(self.call(Call::GetScan).await?)
@@ -1309,6 +1325,14 @@ mod risk_tests {
             assert!(!is_risky(Path::new(fine)), "{fine}");
         }
     }
+}
+
+/// Starting with Windows, as the app shows it.
+#[derive(Debug, Clone, Serialize)]
+pub struct Startup {
+    /// This system can do it (Windows only).
+    pub available: bool,
+    pub enabled: bool,
 }
 
 /// The virus scan setting, as the app shows it.

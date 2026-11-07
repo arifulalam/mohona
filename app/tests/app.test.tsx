@@ -2,7 +2,7 @@ import { cleanup, render, screen, waitFor, within } from "@testing-library/react
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { App } from "../src/App";
-import type { Api, Category, Config, ConfigChange, EngineStatus, ExtensionSettings, Details, Plan, PlanWindow, Queue, Row, Rule, SiteProfile, ToolInfo, GrabOptions, GrabFile, GrabState } from "../src/types";
+import type { Api, Category, Config, ConfigChange, EngineStatus, ExtensionSettings, Details, Plan, PlanWindow, Queue, Row, Rule, SiteProfile, ToolInfo, GrabOptions, GrabFile, GrabState, Startup } from "../src/types";
 
 const row = (id: number, name: string, status: string, extra: Partial<Row> = {}): Row => ({
   id, name, url: `https://x.test/${name}`, status, downloaded: 50, size: 100, percent: 50, speed: 0, eta: null,
@@ -31,6 +31,7 @@ function fake(initial: Row[], running = true) {
   let polls = 0;
   let grab: GrabState = { state: "idle", pages: 0, found: 0, current: "", files: [], skippedByRobots: 0, failedPages: 0, note: null, error: null };
   let browser: string | null = null;
+  let started: Startup = { available: true, enabled: false };
   let scanned: { mode: "off" | "defender" | "custom"; command: string; defender: string | null } = { mode: "off", command: "", defender: null };
   let seeding: { ratio: number | null; minutes: number | null } = { ratio: null, minutes: null };
   let tools: ToolInfo[] = [
@@ -69,6 +70,8 @@ function fake(initial: Row[], running = true) {
     grabDownload: vi.fn(async (files: GrabFile[], _f: string | null, _q: number | null) => ({ added: files.length, skipped: [] })),
     seeding: vi.fn(async () => seeding),
     setSeeding: vi.fn(async (s: { ratio: number | null; minutes: number | null }) => (seeding = { ratio: s.ratio, minutes: s.minutes })),
+    startup: vi.fn(async () => started),
+    setStartup: vi.fn(async (on: boolean) => (started = { available: true, enabled: on })),
     scan: vi.fn(async () => scanned),
     setScan: vi.fn(async (mode: string, command: string) => (scanned = { mode: mode as "off", command, defender: null })),
     videoBrowser: vi.fn(async () => browser),
@@ -259,6 +262,18 @@ describe("App", () => {
     await waitFor(() => expect(api.setScan).toHaveBeenLastCalledWith("custom", "scan.exe {file}"));
   });
 
+  it("starts with Windows only when asked, and only once Save is pressed", async () => {
+    const api = fake([]);
+    render(<App api={api} every={50} />);
+    const dialog = await openGroup("Downloads");
+    const box = await within(dialog).findByLabelText("Start Mohona when I sign in to Windows (in the tray)");
+    expect((box as HTMLInputElement).checked).toBe(false);
+    await userEvent.click(box);
+    expect(api.setStartup).not.toHaveBeenCalled();
+    await userEvent.click(within(dialog).getByRole("button", { name: "Save" }));
+    await waitFor(() => expect(api.setStartup).toHaveBeenCalledWith(true));
+  });
+
   it("lets the person choose which files of a torrent to download", async () => {
     const api = fake([]);
     render(<App api={api} every={50} />);
@@ -374,7 +389,7 @@ describe("App", () => {
     await userEvent.type(within(dialog).getByLabelText("Smallest size in MB"), "5");
     await userEvent.type(within(dialog).getByPlaceholderText("example.com"), "bank.example");
     await userEvent.click(within(dialog).getByRole("checkbox", { name: /video/ }));
-    await userEvent.click(within(dialog).getByRole("checkbox", { name: /tray/ }));
+    await userEvent.click(within(dialog).getByRole("checkbox", { name: /Keep Mohona in the tray/ }));
     await userEvent.click(within(dialog).getByRole("button", { name: "Save" }));
     await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
     expect(api.setConfig).toHaveBeenCalledWith({ downloadFolder: "", speedLimit: 2 * 1024 * 1024, maxActive: 6, notifications: true, keepInTray: false, sortByType: false });

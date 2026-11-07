@@ -1,4 +1,4 @@
-import type { Api, Category, Config, ConfigChange, EngineStatus, ExtensionSettings, Details, Plan, PlanWindow, Queue, Row, Rule, SiteProfile, TorrentList, ToolInfo, Seeding, GrabState, GrabFile, GrabAdded, ScanSetting } from "./types";
+import type { Api, Category, Config, ConfigChange, EngineStatus, ExtensionSettings, Details, Plan, PlanWindow, Queue, Row, Rule, SiteProfile, TorrentList, ToolInfo, Seeding, GrabState, GrabFile, GrabAdded, ScanSetting, Startup } from "./types";
 
 /** True inside the Tauri window; false in a plain browser (development, tests). */
 export function insideTauri(): boolean {
@@ -30,6 +30,8 @@ function tauriApi(): Api {
     openToolPage: (url) => call<void>("open_tool_page", { url }),
     seeding: () => call<Seeding>("get_seeding"),
     setSeeding: (s) => call<Seeding>("set_seeding", { ratio: s.ratio, minutes: s.minutes }),
+    startup: () => call<Startup>("get_startup"),
+    setStartup: (on) => call<Startup>("set_startup", { on }),
     scan: () => call<ScanSetting>("get_scan"),
     setScan: (mode, command) => call<ScanSetting>("set_scan", { mode, command }),
     videoBrowser: () => call<string | null>("get_video_browser"),
@@ -102,6 +104,7 @@ const demoGrabFiles = (url: string): GrabFile[] => [
   { url: new URL("files/all.zip", url).href, name: "all.zip", group: "archives", page: url },
 ];
 let demoBrowser: string | null = null;
+let demoStartup: Startup = { available: false, enabled: false };
 let demoScan: ScanSetting = { mode: "off", command: "", defender: null };
   let demoSeeding: Seeding = { ratio: null, minutes: null };
   let toolList: ToolInfo[] = [
@@ -196,6 +199,8 @@ let demoScan: ScanSetting = { mode: "off", command: "", defender: null };
     openToolPage: async (url) => void window.open(url, "_blank", "noopener"),
     seeding: async () => (need(), { ...demoSeeding }),
     setSeeding: async (s) => ((demoSeeding = { ratio: s.ratio || null, minutes: s.minutes || null }), { ...demoSeeding }),
+    startup: async () => (need(), demoStartup),
+    setStartup: async (on) => ((demoStartup = { ...demoStartup, enabled: on }), demoStartup),
     scan: async () => (need(), demoScan),
     setScan: async (mode, command) => ((demoScan = { mode: mode as ScanSetting["mode"], command, defender: null }), demoScan),
     videoBrowser: async () => (need(), demoBrowser),

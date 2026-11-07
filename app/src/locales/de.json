@@ -318,5 +318,6 @@
   "Virus scan": "Virenscan",
   "Windows Defender": "Windows Defender",
   "Windows Defender was not found on this computer.": "Windows Defender wurde auf diesem Computer nicht gefunden.",
-  "For example: scan.exe --quick {file}": "Zum Beispiel: scan.exe --quick {file}"
+  "For example: scan.exe --quick {file}": "Zum Beispiel: scan.exe --quick {file}",
+  "Start Mohona when I sign in to Windows (in the tray)": "Mohona beim Anmelden bei Windows starten (im Infobereich)"
 }

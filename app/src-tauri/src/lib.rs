@@ -247,6 +247,16 @@ async fn set_seeding(app: State<'_, App>, ratio: Option<u32>, minutes: Option<u6
 }
 
 #[tauri::command]
+fn get_startup(app: State<'_, App>) -> Result<mohona_appcore::Startup> {
+    app.engine.startup()
+}
+
+#[tauri::command]
+fn set_startup(app: State<'_, App>, on: bool) -> Result<mohona_appcore::Startup> {
+    app.engine.set_startup(on)
+}
+
+#[tauri::command]
 async fn get_scan(app: State<'_, App>) -> Result<mohona_appcore::ScanSetting> {
     app.engine.scan().await
 }
@@ -430,6 +440,12 @@ pub fn run() {
         .setup(|app| {
             build_tray(app.handle())?;
             watch_downloads(app.handle().clone());
+            // Started by Windows at sign-in: stay in the tray (the window is
+            // created hidden, see tauri.conf.json); otherwise show it now.
+            let at_sign_in = std::env::args().any(|a| a == mohona_appcore::startup::MINIMIZED);
+            if !at_sign_in {
+                show_window(app.handle());
+            }
             Ok(())
         })
         .on_window_event(|window, event| {
@@ -477,6 +493,8 @@ pub fn run() {
             open_tool_page,
             get_seeding,
             set_seeding,
+            get_startup,
+            set_startup,
             get_scan,
             set_scan,
             get_video_browser,

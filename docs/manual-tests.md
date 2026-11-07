@@ -412,6 +412,14 @@ Needs yt-dlp (`winget install yt-dlp.yt-dlp`); ffmpeg for the best quality (`win
 - [ ] A program that does not exist: the download is fine and its log says "virus scan not run".
 - [ ] Command line: `mohona scan`, `mohona scan --defender`, `mohona scan --off`.
 
+## Start with Windows
+
+- [ ] Settings → Downloads: tick "Start Mohona when I sign in to Windows (in the tray)", Save. In Windows Settings → Apps → Startup, "Mohona" is listed and on.
+- [ ] Sign out and in (or restart): Mohona is in the tray, no window opens. Click the tray icon: the window opens.
+- [ ] Start Mohona from the Start menu: the window opens as usual.
+- [ ] Untick, Save: the entry is gone from Startup apps; after the next sign-in nothing starts.
+- [ ] Move or reinstall to another folder: the box shows unticked until saved again.
+
 ## Add new items here
 
 When a step adds something that can't be tested on this PC (FTP server, SFTP server, WebDAV, a custom CA, a mirror site, a browser, an Android phone), add it to this list in the same step.
