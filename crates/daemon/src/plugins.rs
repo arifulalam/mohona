@@ -91,6 +91,7 @@ fn load(dir: &Path) -> Result<Plugin, String> {
     let has_separator = program.contains('/') || program.contains('\\');
     if has_separator
         && (Path::new(program).is_absolute()
+            || program.starts_with(['/', '\\'])
             || program.contains(':')
             || program.split(['/', '\\']).any(|p| p == ".."))
     {
