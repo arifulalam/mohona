@@ -75,6 +75,7 @@ describe("the window in another language", () => {
     categories: async () => [],
     queues: async () => [],
     clipboard: async () => null,
+    update: async () => ({ repo: "", current: "0.0.1", latest: null, newer: false, url: null, notes: null }),
   } as unknown as Api;
 
   it("switches the words, remembers the choice and sets the direction", async () => {

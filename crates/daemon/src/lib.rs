@@ -19,6 +19,7 @@ pub mod rules;
 mod server;
 mod streams;
 pub mod sync;
+pub mod update;
 
 pub use client::{Client, ClientError};
 pub use info::{default_db_path, default_download_dir, default_info_path, DaemonInfo};

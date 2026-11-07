@@ -56,6 +56,26 @@ struct GrabJob {
     error: Option<String>,
 }
 
+async fn update_setting(manager: &Manager, found: Option<crate::update::Release>) -> Response {
+    let repo = manager
+        .setting(crate::update::REPO_SETTING)
+        .await
+        .ok()
+        .flatten()
+        .unwrap_or_default();
+    let current = env!("CARGO_PKG_VERSION").to_string();
+    Response::Update {
+        newer: found
+            .as_ref()
+            .is_some_and(|r| crate::update::is_newer(&current, &r.version)),
+        latest: found.as_ref().map(|r| r.version.clone()),
+        url: found.as_ref().map(|r| r.url.clone()),
+        notes: found.map(|r| r.notes),
+        repo,
+        current,
+    }
+}
+
 async fn scan_setting(manager: &Manager) -> Response {
     let get = |key: &'static str| async move {
         manager
@@ -1172,6 +1192,45 @@ pub(crate) async fn handle(state: &State, call: Call) -> Response {
                 }
             }
             seeding(state).await
+        }
+        Call::GetUpdate => update_setting(manager, None).await,
+        Call::SetUpdateRepo { repo } => {
+            let repo = repo.trim().to_string();
+            if !repo.is_empty() && !crate::update::valid_repo(&repo) {
+                return Response::Error {
+                    message: "the repository must look like owner/name".into(),
+                };
+            }
+            match manager
+                .set_setting(crate::update::REPO_SETTING, &repo)
+                .await
+            {
+                Ok(()) => update_setting(manager, None).await,
+                Err(e) => error(e),
+            }
+        }
+        Call::CheckUpdate => {
+            let repo = manager
+                .setting(crate::update::REPO_SETTING)
+                .await
+                .ok()
+                .flatten()
+                .unwrap_or_default();
+            if repo.is_empty() {
+                return Response::Error {
+                    message: "no repository is set; give it as owner/name first".into(),
+                };
+            }
+            let client = match mohona_net::HttpClient::new(&mohona_net::ClientConfig::default()) {
+                Ok(c) => c,
+                Err(e) => return error(e),
+            };
+            let api =
+                std::env::var("MOHONA_UPDATE_API").unwrap_or_else(|_| crate::update::API.into());
+            match crate::update::latest(&client, &api, &repo).await {
+                Ok(release) => update_setting(manager, Some(release)).await,
+                Err(message) => Response::Error { message },
+            }
         }
         Call::GetScan => scan_setting(manager).await,
         Call::SetScan { mode, command } => {

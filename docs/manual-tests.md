@@ -429,6 +429,14 @@ Needs yt-dlp (`winget install yt-dlp.yt-dlp`); ffmpeg for the best quality (`win
 - [ ] Click it: the Mohona window comes to the front. Press Alt+F4 on it: it hides and Mohona keeps running.
 - [ ] Close and start Mohona again: it is back (if it was on). Untick the setting: it goes away at once.
 
+## Update check
+
+- [ ] Settings → General → Updates: "This is version …" is shown; "Check for updates" is off until a repository is saved.
+- [ ] Type a public repository that has releases (for example `tauri-apps/tauri`), Save, Check: it says a newer version is out (its version is much higher than 0.0.1), and "Open the release page" opens that repository's page in the browser.
+- [ ] A repository with no releases, or a name that does not exist: a clear message ("has no published release").
+- [ ] Offline: a message that GitHub could not be asked; nothing else breaks.
+- [ ] Command line: `mohona update --repo owner/name`.
+
 ## Add new items here
 
 When a step adds something that can't be tested on this PC (FTP server, SFTP server, WebDAV, a custom CA, a mirror site, a browser, an Android phone), add it to this list in the same step.

@@ -325,5 +325,14 @@
   "Drop a link here. Click to open Mohona.": "把链接拖到这里。点击打开 Mohona。",
   "Drop it": "松开",
   "Not a link": "不是链接",
-  "Show a small drop target on the screen (drop a link on it to download)": "在屏幕上显示小型投放框（把链接拖到上面即可下载）"
+  "Show a small drop target on the screen (drop a link on it to download)": "在屏幕上显示小型投放框（把链接拖到上面即可下载）",
+  "A newer version is out: {v}": "有新版本：{v}",
+  "Check for updates": "检查更新",
+  "GitHub repository": "GitHub 仓库",
+  "Mohona can look on GitHub for a newer version. It only looks: you install it yourself from the release page.": "Mohona 可以在 GitHub 上查找新版本。它只负责查找：由你自己在发布页面安装。",
+  "Open the release page": "打开发布页面",
+  "owner/name": "所有者/名称",
+  "This is version {v}.": "当前版本为 {v}。",
+  "Updates": "更新",
+  "You have the newest version.": "你使用的已是最新版本。"
 }

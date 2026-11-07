@@ -968,6 +968,21 @@ impl Engine {
         self.startup()
     }
 
+    /// Where new versions are looked for, without asking GitHub.
+    pub async fn update(&self) -> Result<UpdateInfo, AppError> {
+        update_answer(self.call(Call::GetUpdate).await?)
+    }
+
+    /// Chooses the GitHub repository (`owner/name`, empty for none).
+    pub async fn set_update_repo(&self, repo: String) -> Result<UpdateInfo, AppError> {
+        update_answer(self.call(Call::SetUpdateRepo { repo }).await?)
+    }
+
+    /// Asks GitHub whether a newer version exists.
+    pub async fn check_update(&self) -> Result<UpdateInfo, AppError> {
+        update_answer(self.call(Call::CheckUpdate).await?)
+    }
+
     /// How finished downloads are scanned for viruses.
     pub async fn scan(&self) -> Result<ScanSetting, AppError> {
         scan_answer(self.call(Call::GetScan).await?)
@@ -1358,4 +1373,47 @@ fn scan_answer(answer: Response) -> Result<ScanSetting, AppError> {
         }),
         _ => Err(AppError::Engine("unexpected answer from the engine".into())),
     }
+}
+
+/// What the update check knows.
+#[derive(Debug, Clone, Serialize)]
+pub struct UpdateInfo {
+    pub repo: String,
+    pub current: String,
+    /// The newest version found; `None` until a check has been made.
+    pub latest: Option<String>,
+    pub newer: bool,
+    pub url: Option<String>,
+    pub notes: Option<String>,
+}
+
+fn update_answer(answer: Response) -> Result<UpdateInfo, AppError> {
+    match answer {
+        Response::Update {
+            repo,
+            current,
+            latest,
+            newer,
+            url,
+            notes,
+        } => Ok(UpdateInfo {
+            repo,
+            current,
+            latest,
+            newer,
+            url,
+            notes,
+        }),
+        Response::Error { message } => Err(AppError::Engine(message)),
+        _ => Err(AppError::Engine("unexpected answer from the engine".into())),
+    }
+}
+
+/// Whether the app may open this address for the person: a page of a GitHub repository, over https.
+pub fn is_release_page(url: &str, repo: &str) -> bool {
+    mohona_daemon::update::valid_repo(repo)
+        && url.to_ascii_lowercase().starts_with(&format!(
+            "https://github.com/{}/",
+            repo.to_ascii_lowercase()
+        ))
 }

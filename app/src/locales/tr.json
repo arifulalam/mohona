@@ -325,5 +325,14 @@
   "Drop a link here. Click to open Mohona.": "Bağlantıyı buraya bırakın. Mohona'yı açmak için tıklayın.",
   "Drop it": "Bırakın",
   "Not a link": "Bağlantı değil",
-  "Show a small drop target on the screen (drop a link on it to download)": "Ekranda küçük bir bırakma alanı göster (indirmek için bağlantıyı üzerine bırakın)"
+  "Show a small drop target on the screen (drop a link on it to download)": "Ekranda küçük bir bırakma alanı göster (indirmek için bağlantıyı üzerine bırakın)",
+  "A newer version is out: {v}": "Daha yeni bir sürüm var: {v}",
+  "Check for updates": "Güncellemeleri denetle",
+  "GitHub repository": "GitHub deposu",
+  "Mohona can look on GitHub for a newer version. It only looks: you install it yourself from the release page.": "Mohona, GitHub'da daha yeni bir sürüm arayabilir. Yalnızca bakar: kurulumu sürüm sayfasından kendiniz yaparsınız.",
+  "Open the release page": "Sürüm sayfasını aç",
+  "owner/name": "sahip/ad",
+  "This is version {v}.": "Bu sürüm {v}.",
+  "Updates": "Güncellemeler",
+  "You have the newest version.": "En yeni sürümü kullanıyorsunuz."
 }

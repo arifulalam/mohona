@@ -325,5 +325,14 @@
   "Drop a link here. Click to open Mohona.": "أفلت رابطًا هنا. انقر لفتح Mohona.",
   "Drop it": "أفلته",
   "Not a link": "ليس رابطًا",
-  "Show a small drop target on the screen (drop a link on it to download)": "إظهار هدف صغير على الشاشة (أفلت رابطًا عليه للتنزيل)"
+  "Show a small drop target on the screen (drop a link on it to download)": "إظهار هدف صغير على الشاشة (أفلت رابطًا عليه للتنزيل)",
+  "A newer version is out: {v}": "يتوفر إصدار أحدث: {v}",
+  "Check for updates": "التحقق من التحديثات",
+  "GitHub repository": "مستودع GitHub",
+  "Mohona can look on GitHub for a newer version. It only looks: you install it yourself from the release page.": "يمكن لـ Mohona البحث في GitHub عن إصدار أحدث. هو يبحث فقط: وأنت تثبّته بنفسك من صفحة الإصدار.",
+  "Open the release page": "فتح صفحة الإصدار",
+  "owner/name": "المالك/الاسم",
+  "This is version {v}.": "هذا هو الإصدار {v}.",
+  "Updates": "التحديثات",
+  "You have the newest version.": "لديك أحدث إصدار."
 }

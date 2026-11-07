@@ -27,6 +27,7 @@ mod sync;
 mod toolcmd;
 mod tools;
 mod torrent;
+mod update;
 
 #[derive(Parser)]
 #[command(
@@ -84,6 +85,8 @@ enum Command {
     /// Site grabber: list (and download) the files a web page and the pages it links to offer
     /// (the daemon must be running)
     Grab(grab::GrabArgs),
+    /// Look for a newer version on GitHub Releases (the daemon must be running)
+    Update(update::UpdateArgs),
     /// Virus scan: show or set how finished downloads are scanned (the daemon must be running)
     Scan(scan::ScanArgs),
     /// Torrents: look inside one and download only some of its files (the daemon must be running)
@@ -631,6 +634,7 @@ async fn main() -> ExitCode {
         Some(Command::Torrent { command, info }) => torrent::run(command, info).await,
         Some(Command::Grab(args)) => grab::run(args).await,
         Some(Command::Scan(args)) => scan::run(args).await,
+        Some(Command::Update(args)) => update::run(args).await,
         Some(Command::Plugins { command, info }) => plugins::run(command, info).await,
         Some(Command::Sync { command, info }) => sync::run(command, info).await,
         Some(Command::Remote { command, info }) => remote::run(command, info).await,

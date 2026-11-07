@@ -250,6 +250,10 @@ export interface Api {
   seeding(): Promise<Seeding>;
   setSeeding(seeding: Seeding): Promise<Seeding>;
   /** The browser whose sign-in yt-dlp uses for video pages (null: none). */
+  update(): Promise<UpdateInfo>;
+  setUpdateRepo(repo: string): Promise<UpdateInfo>;
+  checkUpdate(): Promise<UpdateInfo>;
+  openReleasePage(url: string): Promise<void>;
   /** Shows or hides the small drop target window. */
   setDropTarget(on: boolean): Promise<void>;
   /** Brings the main window to the front. */
@@ -306,4 +310,15 @@ export interface Startup {
   /** This system can do it (Windows only). */
   available: boolean;
   enabled: boolean;
+}
+
+/** What the update check knows. */
+export interface UpdateInfo {
+  repo: string;
+  current: string;
+  /** The newest version found; null until a check was made. */
+  latest: string | null;
+  newer: boolean;
+  url: string | null;
+  notes: string | null;
 }

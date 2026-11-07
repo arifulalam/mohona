@@ -248,6 +248,34 @@ async fn set_seeding(app: State<'_, App>, ratio: Option<u32>, minutes: Option<u6
 
 /// Shows the small drop target in the lower right corner of the main screen, or hides it.
 #[tauri::command]
+async fn get_update(app: State<'_, App>) -> Result<mohona_appcore::UpdateInfo> {
+    app.engine.update().await
+}
+
+#[tauri::command]
+async fn set_update_repo(app: State<'_, App>, repo: String) -> Result<mohona_appcore::UpdateInfo> {
+    app.engine.set_update_repo(repo).await
+}
+
+#[tauri::command]
+async fn check_update(app: State<'_, App>) -> Result<mohona_appcore::UpdateInfo> {
+    app.engine.check_update().await
+}
+
+/// Opens a page of the chosen repository in the browser; no other address is ever opened.
+#[tauri::command]
+async fn open_release_page(app: State<'_, App>, handle: AppHandle, url: String) -> Result<()> {
+    let info = app.engine.update().await?;
+    if !mohona_appcore::is_release_page(&url, &info.repo) {
+        return Err(AppError::Input("that address is not a page of the update repository".into()));
+    }
+    handle
+        .opener()
+        .open_url(url, None::<&str>)
+        .map_err(|e| AppError::Engine(e.to_string()))
+}
+
+#[tauri::command]
 fn set_drop_target(handle: AppHandle, on: bool) -> Result<()> {
     let Some(window) = handle.get_webview_window("drop") else {
         return Ok(());
@@ -531,6 +559,10 @@ pub fn run() {
             open_tool_page,
             get_seeding,
             set_seeding,
+            get_update,
+            set_update_repo,
+            check_update,
+            open_release_page,
             set_drop_target,
             show_main,
             get_startup,

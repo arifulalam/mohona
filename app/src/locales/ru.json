@@ -325,5 +325,14 @@
   "Drop a link here. Click to open Mohona.": "Бросьте ссылку сюда. Щелчок открывает Mohona.",
   "Drop it": "Отпустите",
   "Not a link": "Это не ссылка",
-  "Show a small drop target on the screen (drop a link on it to download)": "Показывать на экране маленькую мишень (бросьте на неё ссылку, чтобы скачать)"
+  "Show a small drop target on the screen (drop a link on it to download)": "Показывать на экране маленькую мишень (бросьте на неё ссылку, чтобы скачать)",
+  "A newer version is out: {v}": "Доступна новая версия: {v}",
+  "Check for updates": "Проверить обновления",
+  "GitHub repository": "Репозиторий GitHub",
+  "Mohona can look on GitHub for a newer version. It only looks: you install it yourself from the release page.": "Mohona может поискать на GitHub более новую версию. Он только ищет: устанавливаете её вы сами со страницы релиза.",
+  "Open the release page": "Открыть страницу релиза",
+  "owner/name": "владелец/имя",
+  "This is version {v}.": "Это версия {v}.",
+  "Updates": "Обновления",
+  "You have the newest version.": "У вас последняя версия."
 }

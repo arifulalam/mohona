@@ -124,6 +124,14 @@ pub enum Call {
         name: String,
         path: Option<String>,
     },
+    /// Which GitHub repository is asked for new versions (answered as `Update`, nothing checked).
+    GetUpdate,
+    /// Choose that repository (`owner/name`; empty turns the check off).
+    SetUpdateRepo {
+        repo: String,
+    },
+    /// Ask GitHub whether a newer version exists (answered as `Update`).
+    CheckUpdate,
     /// How finished downloads are scanned for viruses (answered as `Scan`).
     GetScan,
     /// Choose it: `mode` is `off`, `defender` (Windows Defender) or `custom` (the program and
@@ -492,6 +500,15 @@ pub enum Response {
     TorrentFiles {
         name: String,
         files: Vec<TorrentFileInfo>,
+    },
+    /// Where new versions are looked for, and what was found (`latest` is empty until checked).
+    Update {
+        repo: String,
+        current: String,
+        latest: Option<String>,
+        newer: bool,
+        url: Option<String>,
+        notes: Option<String>,
     },
     /// The virus scan setting.
     Scan {

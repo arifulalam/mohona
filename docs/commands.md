@@ -641,6 +641,17 @@ Starts at one web page, lists the files it links to (pictures, videos, audio, do
 
 API: `POST /v1/grab` (write) with `{"url", "depth", "sameSite", "types", "maxPages", "robots"}` starts a run (one at a time), `GET /v1/grab` (read) tells how it is doing and, once over, lists the files, `DELETE /v1/grab` (write) stops it.
 
+## `update` — is there a newer Mohona?
+
+```
+mohona update --repo owner/name   # remember where releases are published, then check
+mohona update                     # check
+mohona update --show              # only show the repository, ask nobody
+mohona update --repo ""           # turn it off
+```
+
+It asks GitHub Releases for the latest release and says whether it is newer than this version; it never downloads or installs anything (ADR-0079). The daemon must be running.
+
 ## `scan` — a virus scan after each download
 
 ```

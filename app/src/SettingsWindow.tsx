@@ -6,6 +6,7 @@ import { ProfilesDialog } from "./ProfilesDialog";
 import { QueuesDialog } from "./QueuesDialog";
 import { RulesDialog } from "./RulesDialog";
 import { TorrentsDialog } from "./TorrentsDialog";
+import { UpdateSection } from "./UpdateSection";
 import { ToolsDialog } from "./ToolsDialog";
 import { ScheduleDialog } from "./ScheduleDialog";
 import { SettingsDialog } from "./SettingsDialog";
@@ -95,7 +96,7 @@ export function SettingsWindow(props: Props) {
 
 const field = "rounded-md border border-[var(--line)] bg-[var(--bg)] px-2 py-1";
 
-function General({ language, onLanguage, theme, onTheme, onClose }: Props) {
+function General({ api, running, language, onLanguage, theme, onTheme, onClose }: Props) {
   const t = useT();
   return (
     <div className="flex flex-col gap-4">
@@ -119,6 +120,7 @@ function General({ language, onLanguage, theme, onTheme, onClose }: Props) {
           ))}
         </select>
       </label>
+      {running && <UpdateSection api={api} />}
       <div className="flex justify-end">
         <button type="button" className="btn" onClick={onClose}>
           {t("Close")}

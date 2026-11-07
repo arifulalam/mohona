@@ -810,3 +810,13 @@ A `401` now becomes its own error (`NetError::Unauthorized`) that names the kind
 
 **Not included.** Dropping files (a `.torrent` file dropped here is not read, use Add), moving the window (it is placed in the corner each time), remembering where it was left, a different size, and a drop target on other systems (written for Windows, not tried elsewhere). The window and the drag from a real browser can only be tried on Windows (C41); the page itself (links, messages, click) is tested here.
 
+## ADR-0079: Looking for a newer version (and what is left for a real updater)
+
+**What.** Settings → General has "Updates": the GitHub repository (`owner/name`) where Mohona's releases are published, and "Check for updates". Mohona asks GitHub for the repository's latest release, compares its version with its own, and, if it is newer, shows the version and "Open the release page". `mohona update [--repo owner/name] [--show]` does the same. Nothing is checked until a repository is set, and nothing is checked by itself in the background.
+
+**Why only looking.** An updater that downloads and runs a new program must be able to prove the program is the author's, which means a signing key whose private half only the author holds, and a signed installer (Tauri's updater uses its own key; Windows' SmartScreen wants a code-signing certificate). Those are the author's to create and keep, and cannot be done or tried here. Looking and pointing to the release page is safe without them: the person installs it themselves, from a page of the chosen repository.
+
+**How.** The daemon asks `https://api.github.com/repos/<repo>/releases/latest` (which never returns drafts or pre-releases), reads `tag_name`, `html_url` and `body` (at most 1 MB read, notes cut to 2000 characters), and compares the version numbers (`v` ignored; a tag that is not a version is reported, not guessed). The repository must be a plain `owner/name`; the page that is opened must start with `https://github.com/<that repository>/` (a different address in GitHub's answer is replaced by the repository's own "latest release" page), and the app refuses to open anything else. The repository is stored in the setting `update.repo`; the address of GitHub's API can be changed with `MOHONA_UPDATE_API` (for tests).
+
+**Not included.** Downloading and installing the update, signature checks, a background check or a reminder, and checking for the browser extension's version. To get a real updater later: create a Tauri updater key pair and a code-signing certificate, add `tauri-plugin-updater` with the public key and a release feed, and sign the installer in `scripts/build-windows.ps1`; this ADR's check can stay as the "is there something newer" test.
+

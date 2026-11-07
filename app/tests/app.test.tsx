@@ -2,7 +2,7 @@ import { cleanup, render, screen, waitFor, within } from "@testing-library/react
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { App } from "../src/App";
-import type { Api, Category, Config, ConfigChange, EngineStatus, ExtensionSettings, Details, Plan, PlanWindow, Queue, Row, Rule, SiteProfile, ToolInfo, GrabOptions, GrabFile, GrabState, Startup } from "../src/types";
+import type { Api, Category, Config, ConfigChange, EngineStatus, ExtensionSettings, Details, Plan, PlanWindow, Queue, Row, Rule, SiteProfile, ToolInfo, GrabOptions, GrabFile, GrabState, Startup, UpdateInfo } from "../src/types";
 
 const row = (id: number, name: string, status: string, extra: Partial<Row> = {}): Row => ({
   id, name, url: `https://x.test/${name}`, status, downloaded: 50, size: 100, percent: 50, speed: 0, eta: null,
@@ -31,6 +31,7 @@ function fake(initial: Row[], running = true) {
   let polls = 0;
   let grab: GrabState = { state: "idle", pages: 0, found: 0, current: "", files: [], skippedByRobots: 0, failedPages: 0, note: null, error: null };
   let browser: string | null = null;
+  let updating: UpdateInfo = { repo: "", current: "0.0.1", latest: null, newer: false, url: null, notes: null };
   let started: Startup = { available: true, enabled: false };
   let scanned: { mode: "off" | "defender" | "custom"; command: string; defender: string | null } = { mode: "off", command: "", defender: null };
   let seeding: { ratio: number | null; minutes: number | null } = { ratio: null, minutes: null };
@@ -70,6 +71,10 @@ function fake(initial: Row[], running = true) {
     grabDownload: vi.fn(async (files: GrabFile[], _f: string | null, _q: number | null) => ({ added: files.length, skipped: [] })),
     seeding: vi.fn(async () => seeding),
     setSeeding: vi.fn(async (s: { ratio: number | null; minutes: number | null }) => (seeding = { ratio: s.ratio, minutes: s.minutes })),
+    update: vi.fn(async () => updating),
+    setUpdateRepo: vi.fn(async (repo: string) => (updating = { ...updating, repo, latest: null, newer: false, url: null })),
+    checkUpdate: vi.fn(async () => (updating = { ...updating, latest: "0.2.0", newer: true, url: "https://github.com/o/r/releases/tag/v0.2.0" })),
+    openReleasePage: vi.fn(async () => undefined),
     setDropTarget: vi.fn(async () => undefined),
     showMain: vi.fn(async () => undefined),
     startup: vi.fn(async () => started),
@@ -262,6 +267,21 @@ describe("App", () => {
     await userEvent.type(await within(dialog).findByLabelText("Scanner command"), "scan.exe {{file}");
     await userEvent.click(within(dialog).getByRole("button", { name: "Save" }));
     await waitFor(() => expect(api.setScan).toHaveBeenLastCalledWith("custom", "scan.exe {file}"));
+  });
+
+  it("looks for a newer version in the chosen repository and opens its page", async () => {
+    const api = fake([]);
+    render(<App api={api} every={50} />);
+    const dialog = await openGroup("General");
+    expect(await within(dialog).findByText("This is version 0.0.1.")).toBeTruthy();
+    expect((within(dialog).getByRole("button", { name: "Check for updates" }) as HTMLButtonElement).disabled).toBe(true);
+    await userEvent.type(within(dialog).getByLabelText("GitHub repository"), "o/r");
+    await userEvent.click(within(dialog).getByRole("button", { name: "Save" }));
+    await waitFor(() => expect(api.setUpdateRepo).toHaveBeenCalledWith("o/r"));
+    await userEvent.click(await within(dialog).findByRole("button", { name: "Check for updates" }));
+    expect(await within(dialog).findByText("A newer version is out: 0.2.0")).toBeTruthy();
+    await userEvent.click(within(dialog).getByRole("button", { name: "Open the release page" }));
+    expect(api.openReleasePage).toHaveBeenCalledWith("https://github.com/o/r/releases/tag/v0.2.0");
   });
 
   it("starts with Windows only when asked, and only once Save is pressed", async () => {

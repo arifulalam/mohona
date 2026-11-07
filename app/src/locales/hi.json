@@ -325,5 +325,14 @@
   "Drop a link here. Click to open Mohona.": "लिंक यहाँ छोड़ें। Mohona खोलने के लिए क्लिक करें।",
   "Drop it": "छोड़ दें",
   "Not a link": "लिंक नहीं है",
-  "Show a small drop target on the screen (drop a link on it to download)": "स्क्रीन पर छोटा ड्रॉप टारगेट दिखाएँ (डाउनलोड के लिए उस पर लिंक छोड़ें)"
+  "Show a small drop target on the screen (drop a link on it to download)": "स्क्रीन पर छोटा ड्रॉप टारगेट दिखाएँ (डाउनलोड के लिए उस पर लिंक छोड़ें)",
+  "A newer version is out: {v}": "नया संस्करण उपलब्ध है: {v}",
+  "Check for updates": "अपडेट जाँचें",
+  "GitHub repository": "GitHub रिपॉज़िटरी",
+  "Mohona can look on GitHub for a newer version. It only looks: you install it yourself from the release page.": "Mohona GitHub पर नया संस्करण खोज सकता है। यह केवल देखता है: इंस्टॉल आप स्वयं रिलीज़ पेज से करते हैं।",
+  "Open the release page": "रिलीज़ पेज खोलें",
+  "owner/name": "मालिक/नाम",
+  "This is version {v}.": "यह संस्करण {v} है।",
+  "Updates": "अपडेट",
+  "You have the newest version.": "आपके पास नवीनतम संस्करण है।"
 }

@@ -325,5 +325,14 @@
   "Drop a link here. Click to open Mohona.": "Jatuhkan tautan di sini. Klik untuk membuka Mohona.",
   "Drop it": "Lepaskan",
   "Not a link": "Bukan tautan",
-  "Show a small drop target on the screen (drop a link on it to download)": "Tampilkan target kecil di layar (jatuhkan tautan di atasnya untuk mengunduh)"
+  "Show a small drop target on the screen (drop a link on it to download)": "Tampilkan target kecil di layar (jatuhkan tautan di atasnya untuk mengunduh)",
+  "A newer version is out: {v}": "Versi lebih baru tersedia: {v}",
+  "Check for updates": "Periksa pembaruan",
+  "GitHub repository": "Repositori GitHub",
+  "Mohona can look on GitHub for a newer version. It only looks: you install it yourself from the release page.": "Mohona dapat mencari versi lebih baru di GitHub. Ia hanya mencari: Anda memasangnya sendiri dari halaman rilis.",
+  "Open the release page": "Buka halaman rilis",
+  "owner/name": "pemilik/nama",
+  "This is version {v}.": "Ini adalah versi {v}.",
+  "Updates": "Pembaruan",
+  "You have the newest version.": "Anda memakai versi terbaru."
 }

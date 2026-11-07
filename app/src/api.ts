@@ -1,4 +1,4 @@
-import type { Api, Category, Config, ConfigChange, EngineStatus, ExtensionSettings, Details, Plan, PlanWindow, Queue, Row, Rule, SiteProfile, TorrentList, ToolInfo, Seeding, GrabState, GrabFile, GrabAdded, ScanSetting, Startup } from "./types";
+import type { Api, Category, Config, ConfigChange, EngineStatus, ExtensionSettings, Details, Plan, PlanWindow, Queue, Row, Rule, SiteProfile, TorrentList, ToolInfo, Seeding, GrabState, GrabFile, GrabAdded, ScanSetting, Startup, UpdateInfo } from "./types";
 
 /** True inside the Tauri window; false in a plain browser (development, tests). */
 export function insideTauri(): boolean {
@@ -30,6 +30,10 @@ function tauriApi(): Api {
     openToolPage: (url) => call<void>("open_tool_page", { url }),
     seeding: () => call<Seeding>("get_seeding"),
     setSeeding: (s) => call<Seeding>("set_seeding", { ratio: s.ratio, minutes: s.minutes }),
+    update: () => call<UpdateInfo>("get_update"),
+    setUpdateRepo: (repo) => call<UpdateInfo>("set_update_repo", { repo }),
+    checkUpdate: () => call<UpdateInfo>("check_update"),
+    openReleasePage: (url) => call<void>("open_release_page", { url }),
     setDropTarget: (on) => call<void>("set_drop_target", { on }),
     showMain: () => call<void>("show_main"),
     startup: () => call<Startup>("get_startup"),
@@ -201,6 +205,10 @@ let demoScan: ScanSetting = { mode: "off", command: "", defender: null };
     openToolPage: async (url) => void window.open(url, "_blank", "noopener"),
     seeding: async () => (need(), { ...demoSeeding }),
     setSeeding: async (s) => ((demoSeeding = { ratio: s.ratio || null, minutes: s.minutes || null }), { ...demoSeeding }),
+    update: async () => (need(), { repo: "", current: "0.0.1", latest: null, newer: false, url: null, notes: null }),
+    setUpdateRepo: async (repo) => ({ repo, current: "0.0.1", latest: null, newer: false, url: null, notes: null }),
+    checkUpdate: async () => { throw new Error("The demo cannot look for updates."); },
+    openReleasePage: async () => undefined,
     setDropTarget: async () => undefined,
     showMain: async () => undefined,
     startup: async () => (need(), demoStartup),

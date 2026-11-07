@@ -325,5 +325,14 @@
   "Drop a link here. Click to open Mohona.": "Déposez un lien ici. Cliquez pour ouvrir Mohona.",
   "Drop it": "Lâchez",
   "Not a link": "Pas un lien",
-  "Show a small drop target on the screen (drop a link on it to download)": "Afficher une petite cible sur l'écran (déposez un lien dessus pour télécharger)"
+  "Show a small drop target on the screen (drop a link on it to download)": "Afficher une petite cible sur l'écran (déposez un lien dessus pour télécharger)",
+  "A newer version is out: {v}": "Une version plus récente est disponible : {v}",
+  "Check for updates": "Rechercher des mises à jour",
+  "GitHub repository": "Dépôt GitHub",
+  "Mohona can look on GitHub for a newer version. It only looks: you install it yourself from the release page.": "Mohona peut chercher sur GitHub une version plus récente. Il ne fait que chercher : vous l'installez vous-même depuis la page de la version.",
+  "Open the release page": "Ouvrir la page de la version",
+  "owner/name": "propriétaire/nom",
+  "This is version {v}.": "Ceci est la version {v}.",
+  "Updates": "Mises à jour",
+  "You have the newest version.": "Vous avez la version la plus récente."
 }

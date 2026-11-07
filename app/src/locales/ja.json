@@ -325,5 +325,14 @@
   "Drop a link here. Click to open Mohona.": "ここにリンクをドロップ。クリックで Mohona を開きます。",
   "Drop it": "放してください",
   "Not a link": "リンクではありません",
-  "Show a small drop target on the screen (drop a link on it to download)": "画面に小さなドロップ先を表示する（リンクをドロップしてダウンロード）"
+  "Show a small drop target on the screen (drop a link on it to download)": "画面に小さなドロップ先を表示する（リンクをドロップしてダウンロード）",
+  "A newer version is out: {v}": "新しいバージョンがあります: {v}",
+  "Check for updates": "更新を確認",
+  "GitHub repository": "GitHub リポジトリ",
+  "Mohona can look on GitHub for a newer version. It only looks: you install it yourself from the release page.": "Mohona は GitHub で新しいバージョンを探せます。探すだけで、インストールはリリースページからご自身で行います。",
+  "Open the release page": "リリースページを開く",
+  "owner/name": "所有者/名前",
+  "This is version {v}.": "これはバージョン {v} です。",
+  "Updates": "更新",
+  "You have the newest version.": "最新バージョンです。"
 }
