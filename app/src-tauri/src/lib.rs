@@ -246,6 +246,36 @@ async fn set_seeding(app: State<'_, App>, ratio: Option<u32>, minutes: Option<u6
     app.engine.set_seeding(Seeding { ratio, minutes }).await
 }
 
+/// Shows the small drop target in the lower right corner of the main screen, or hides it.
+#[tauri::command]
+fn set_drop_target(handle: AppHandle, on: bool) -> Result<()> {
+    let Some(window) = handle.get_webview_window("drop") else {
+        return Ok(());
+    };
+    if on {
+        if let Ok(Some(monitor)) = window.primary_monitor() {
+            let size = monitor.size();
+            let at = monitor.position();
+            let scale = monitor.scale_factor();
+            let side = (110.0 * scale) as i32;
+            let margin = (24.0 * scale) as i32;
+            let _ = window.set_position(tauri::PhysicalPosition::new(
+                at.x + size.width as i32 - side - margin,
+                at.y + size.height as i32 - side - margin * 3,
+            ));
+        }
+        let _ = window.show();
+    } else {
+        let _ = window.hide();
+    }
+    Ok(())
+}
+
+#[tauri::command]
+fn show_main(handle: AppHandle) {
+    show_window(&handle);
+}
+
 #[tauri::command]
 fn get_startup(app: State<'_, App>) -> Result<mohona_appcore::Startup> {
     app.engine.startup()
@@ -449,6 +479,14 @@ pub fn run() {
             Ok(())
         })
         .on_window_event(|window, event| {
+            // The drop target has no close button; if it is closed anyway it only hides.
+            if window.label() == "drop" {
+                if let WindowEvent::CloseRequested { api, .. } = event {
+                    api.prevent_close();
+                    let _ = window.hide();
+                }
+                return;
+            }
             if let WindowEvent::CloseRequested { api, .. } = event {
                 // Decided here, not by the page: hide to the tray, or really quit.
                 api.prevent_close();
@@ -493,6 +531,8 @@ pub fn run() {
             open_tool_page,
             get_seeding,
             set_seeding,
+            set_drop_target,
+            show_main,
             get_startup,
             set_startup,
             get_scan,

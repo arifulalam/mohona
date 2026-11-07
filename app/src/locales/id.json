@@ -319,5 +319,11 @@
   "Windows Defender": "Windows Defender",
   "Windows Defender was not found on this computer.": "Windows Defender tidak ditemukan di komputer ini.",
   "For example: scan.exe --quick {file}": "Contoh: scan.exe --quick {file}",
-  "Start Mohona when I sign in to Windows (in the tray)": "Jalankan Mohona saat saya masuk ke Windows (di baki sistem)"
+  "Start Mohona when I sign in to Windows (in the tray)": "Jalankan Mohona saat saya masuk ke Windows (di baki sistem)",
+  "Added {n}": "{n} ditambahkan",
+  "Drop a link here": "Jatuhkan tautan di sini",
+  "Drop a link here. Click to open Mohona.": "Jatuhkan tautan di sini. Klik untuk membuka Mohona.",
+  "Drop it": "Lepaskan",
+  "Not a link": "Bukan tautan",
+  "Show a small drop target on the screen (drop a link on it to download)": "Tampilkan target kecil di layar (jatuhkan tautan di atasnya untuk mengunduh)"
 }

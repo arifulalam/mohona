@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { I18n, LANGUAGES, loadLanguage, saveLanguage, translator, useT } from "./i18n";
 import { AddDialog, Modal } from "./AddDialog";
 import { GrabberDialog } from "./GrabberDialog";
+import { loadDropTarget } from "./droptarget";
 import { loadClipboardWatch, saveClipboardWatch, useClipboardOffer } from "./clipboard";
 import { DetailsDialog } from "./DetailsDialog";
 import { categoryCounts, categoryOf, SORTS, sortRows, type SortKey } from "./organize";
@@ -80,6 +81,10 @@ function Main({ api, every, language, onLanguage }: { api: Api; every?: number; 
   const finished = useFinished(api, d.rows);
   const clip = useClipboardOffer(api, watchClipboard, d.rows, running);
   useEffect(() => saveClipboardWatch(watchClipboard), [watchClipboard]);
+  // The small drop target, if the person wanted it, comes back at every start.
+  useEffect(() => {
+    if (loadDropTarget()) api.setDropTarget(true).catch(() => undefined);
+  }, [api]);
 
   const shown = useMemo(
     () =>

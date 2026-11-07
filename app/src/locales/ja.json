@@ -319,5 +319,11 @@
   "Windows Defender": "Windows Defender",
   "Windows Defender was not found on this computer.": "このコンピューターで Windows Defender が見つかりませんでした。",
   "For example: scan.exe --quick {file}": "例: scan.exe --quick {file}",
-  "Start Mohona when I sign in to Windows (in the tray)": "Windows にサインインしたときに Mohona を起動する（トレイ内）"
+  "Start Mohona when I sign in to Windows (in the tray)": "Windows にサインインしたときに Mohona を起動する（トレイ内）",
+  "Added {n}": "{n} 件追加しました",
+  "Drop a link here": "ここにリンクをドロップ",
+  "Drop a link here. Click to open Mohona.": "ここにリンクをドロップ。クリックで Mohona を開きます。",
+  "Drop it": "放してください",
+  "Not a link": "リンクではありません",
+  "Show a small drop target on the screen (drop a link on it to download)": "画面に小さなドロップ先を表示する（リンクをドロップしてダウンロード）"
 }

@@ -70,6 +70,8 @@ function fake(initial: Row[], running = true) {
     grabDownload: vi.fn(async (files: GrabFile[], _f: string | null, _q: number | null) => ({ added: files.length, skipped: [] })),
     seeding: vi.fn(async () => seeding),
     setSeeding: vi.fn(async (s: { ratio: number | null; minutes: number | null }) => (seeding = { ratio: s.ratio, minutes: s.minutes })),
+    setDropTarget: vi.fn(async () => undefined),
+    showMain: vi.fn(async () => undefined),
     startup: vi.fn(async () => started),
     setStartup: vi.fn(async (on: boolean) => (started = { available: true, enabled: on })),
     scan: vi.fn(async () => scanned),

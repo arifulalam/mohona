@@ -802,3 +802,11 @@ A `401` now becomes its own error (`NetError::Unauthorized`) that names the kind
 
 **Not included.** A delay after sign-in, "start the engine only" (the app starts the engine itself when it opens), and macOS or Linux (they have their own ways and are not the target now). The registry part and the hidden window can only be seen on Windows (C40); the command line text and the reading of `reg` output are unit tested here.
 
+## ADR-0078: A small drop target on the screen
+
+**What.** Settings → Downloads has "Show a small drop target on the screen (drop a link on it to download)", off by default. It is a small always-on-top window in the lower right corner of the main screen, with no title bar and no taskbar button. Drop a link on it, dragged from a browser's address bar or a page, or selected text: every http, https, ftp or magnet link in it is added to the downloads (the same as pressing Add). It says "Added" (or how many), "Not a link", or "Not added". Clicking it opens the Mohona window. It comes back at every start if it was wanted.
+
+**How.** A second window declared in `tauri.conf.json` (label `drop`, created hidden, `dragDropEnabled: false`) that loads the same page with `#drop`, which shows only the drop target. It is declared, not built in code, so it needs no window-building code. `dragDropEnabled: false` is needed on Windows so that the page itself receives the browser's drags (otherwise the system takes them over and only files can be dropped). Turning it on or off is a command (`set_drop_target`) that places the window at the screen's corner and shows or hides it; the choice is remembered on this computer with the language and theme. Closing the window (Alt+F4) only hides it, and the close of the main window is not affected.
+
+**Not included.** Dropping files (a `.torrent` file dropped here is not read, use Add), moving the window (it is placed in the corner each time), remembering where it was left, a different size, and a drop target on other systems (written for Windows, not tried elsewhere). The window and the drag from a real browser can only be tried on Windows (C41); the page itself (links, messages, click) is tested here.
+

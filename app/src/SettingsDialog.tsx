@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { loadDropTarget, saveDropTarget } from "./droptarget";
 import { useT } from "./i18n";
 import { Modal } from "./AddDialog";
 import { parseHosts, parseLimit, parseMegabytes, splitLimit, type Unit } from "./limits";
@@ -21,6 +22,7 @@ export function SettingsDialog({ api, onClose, clipboard, onClipboard }: { api: 
   const [busy, setBusy] = useState(false);
   const [startup, setStartup] = useState<{ available: boolean; enabled: boolean } | null>(null);
   const [startupWas, setStartupWas] = useState(false);
+  const [dropTarget, setDropTarget] = useState(loadDropTarget());
 
   useEffect(() => {
     let alive = true;
@@ -47,6 +49,12 @@ export function SettingsDialog({ api, onClose, clipboard, onClipboard }: { api: 
       alive = false;
     };
   }, [api]);
+
+  function chooseDropTarget(on: boolean) {
+    setDropTarget(on);
+    saveDropTarget(on);
+    api.setDropTarget(on).catch((e: Error) => setError(e.message));
+  }
 
   async function save(event: React.FormEvent) {
     event.preventDefault();
@@ -121,6 +129,7 @@ export function SettingsDialog({ api, onClose, clipboard, onClipboard }: { api: 
             {startup?.available && (
               <Check label={t("Start Mohona when I sign in to Windows (in the tray)")} value={startup.enabled} onChange={(v) => setStartup({ ...startup, enabled: v })} />
             )}
+            <Check label={t("Show a small drop target on the screen (drop a link on it to download)")} value={dropTarget} onChange={chooseDropTarget} />
             <Check label={t("Offer to download a link when I copy one")} value={clipboard} onChange={onClipboard} />
           </fieldset>
 

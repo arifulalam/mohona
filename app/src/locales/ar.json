@@ -319,5 +319,11 @@
   "Windows Defender": "Windows Defender",
   "Windows Defender was not found on this computer.": "لم يتم العثور على Windows Defender على هذا الكمبيوتر.",
   "For example: scan.exe --quick {file}": "مثال: scan.exe --quick {file}",
-  "Start Mohona when I sign in to Windows (in the tray)": "تشغيل Mohona عند تسجيل الدخول إلى Windows (في شريط المهام)"
+  "Start Mohona when I sign in to Windows (in the tray)": "تشغيل Mohona عند تسجيل الدخول إلى Windows (في شريط المهام)",
+  "Added {n}": "تمت إضافة {n}",
+  "Drop a link here": "أفلت رابطًا هنا",
+  "Drop a link here. Click to open Mohona.": "أفلت رابطًا هنا. انقر لفتح Mohona.",
+  "Drop it": "أفلته",
+  "Not a link": "ليس رابطًا",
+  "Show a small drop target on the screen (drop a link on it to download)": "إظهار هدف صغير على الشاشة (أفلت رابطًا عليه للتنزيل)"
 }

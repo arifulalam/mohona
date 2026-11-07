@@ -319,5 +319,11 @@
   "Windows Defender": "Windows Defender",
   "Windows Defender was not found on this computer.": "এই কম্পিউটারে Windows Defender পাওয়া যায়নি।",
   "For example: scan.exe --quick {file}": "উদাহরণ: scan.exe --quick {file}",
-  "Start Mohona when I sign in to Windows (in the tray)": "Windows-এ সাইন ইন করলে Mohona চালু করুন (ট্রেতে)"
+  "Start Mohona when I sign in to Windows (in the tray)": "Windows-এ সাইন ইন করলে Mohona চালু করুন (ট্রেতে)",
+  "Added {n}": "{n}টি যোগ হয়েছে",
+  "Drop a link here": "লিংক এখানে ছাড়ুন",
+  "Drop a link here. Click to open Mohona.": "লিংক এখানে ছাড়ুন। Mohona খুলতে ক্লিক করুন।",
+  "Drop it": "ছেড়ে দিন",
+  "Not a link": "লিংক নয়",
+  "Show a small drop target on the screen (drop a link on it to download)": "স্ক্রিনে একটি ছোট ড্রপ টার্গেট দেখান (ডাউনলোডের জন্য তাতে লিংক ছাড়ুন)"
 }

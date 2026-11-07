@@ -150,6 +150,7 @@ Numbers are the steps of the "Desktop app" section.
 - [ ] C32 Settings sync: the steps of "Settings sync" in `docs/manual-tests.md` (two computers or two user accounts, one synced folder)
 - [ ] C33 Plugins: the steps of "Plugins" in `docs/manual-tests.md` (the PowerShell example plugin)
 - [ ] C34 Torrent file selection: the steps of "Torrent file selection" in `docs/manual-tests.md` (also check that a torrent of several files gets its own folder)
+- [ ] C41 Drop target: "Drop target" in `docs/manual-tests.md` (also check the main window still opens normally and Alt+F4 on it still goes to the tray)
 - [ ] C40 Start with Windows: "Start with Windows" in `docs/manual-tests.md`
 - [ ] C39 Virus scan: "Virus scan" in `docs/manual-tests.md` (Windows Defender and the EICAR test file)
 - [ ] C38 Site Grabber: "Site Grabber" in `docs/manual-tests.md`

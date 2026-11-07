@@ -250,6 +250,10 @@ export interface Api {
   seeding(): Promise<Seeding>;
   setSeeding(seeding: Seeding): Promise<Seeding>;
   /** The browser whose sign-in yt-dlp uses for video pages (null: none). */
+  /** Shows or hides the small drop target window. */
+  setDropTarget(on: boolean): Promise<void>;
+  /** Brings the main window to the front. */
+  showMain(): Promise<void>;
   startup(): Promise<Startup>;
   setStartup(on: boolean): Promise<Startup>;
   scan(): Promise<ScanSetting>;

@@ -18,6 +18,22 @@
         "minWidth": 760,
         "minHeight": 420,
         "visible": false
+      },
+      {
+        "label": "drop",
+        "title": "Mohona drop target",
+        "url": "index.html#drop",
+        "width": 110,
+        "height": 110,
+        "resizable": false,
+        "decorations": false,
+        "alwaysOnTop": true,
+        "skipTaskbar": true,
+        "visible": false,
+        "dragDropEnabled": false,
+        "focus": false,
+        "maximizable": false,
+        "minimizable": false
       }
     ],
     "security": {
@@ -27,6 +43,10 @@
   "bundle": {
     "active": true,
     "targets": "all",
-    "icon": ["icons/32x32.png", "icons/128x128.png", "icons/icon.ico"]
+    "icon": [
+      "icons/32x32.png",
+      "icons/128x128.png",
+      "icons/icon.ico"
+    ]
   }
 }

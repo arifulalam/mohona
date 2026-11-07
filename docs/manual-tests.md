@@ -420,6 +420,15 @@ Needs yt-dlp (`winget install yt-dlp.yt-dlp`); ffmpeg for the best quality (`win
 - [ ] Untick, Save: the entry is gone from Startup apps; after the next sign-in nothing starts.
 - [ ] Move or reinstall to another folder: the box shows unticked until saved again.
 
+## Drop target
+
+- [ ] Settings → Downloads: tick "Show a small drop target on the screen…". A small dashed square with an arrow appears in the lower right corner, above the taskbar, on top of other windows, with no taskbar button.
+- [ ] In a browser, drag a link (or the address from the address bar) onto it: it says "Drop it" while over it, then "Added", and a download appears in Mohona.
+- [ ] Select a few lines with several links, drag the selection onto it: "Added 3" (or the number).
+- [ ] Drag some plain words onto it: "Not a link".
+- [ ] Click it: the Mohona window comes to the front. Press Alt+F4 on it: it hides and Mohona keeps running.
+- [ ] Close and start Mohona again: it is back (if it was on). Untick the setting: it goes away at once.
+
 ## Add new items here
 
 When a step adds something that can't be tested on this PC (FTP server, SFTP server, WebDAV, a custom CA, a mirror site, a browser, an Android phone), add it to this list in the same step.
