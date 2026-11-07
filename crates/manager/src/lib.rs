@@ -38,6 +38,11 @@ const SAVE_INTERVAL: Duration = Duration::from_secs(1);
 /// The setting that names the browser whose sign-in yt-dlp uses (empty: none).
 pub const VIDEO_BROWSER: &str = "video.browser";
 
+/// Sharing finished torrents: stop at this upload ratio (settings; empty or 0: no limit) ...
+pub const TORRENT_RATIO: &str = "torrent.ratio";
+/// ... or after this many minutes. With neither set, a finished torrent is not shared.
+pub const TORRENT_MINUTES: &str = "torrent.minutes";
+
 /// Errors a command can return.
 #[derive(Debug, thiserror::Error)]
 pub enum ManagerError {
@@ -1281,6 +1286,9 @@ impl Actor {
                         .set_setting(&key, &value)
                         .map_err(ManagerError::from),
                 );
+                if key == TORRENT_RATIO || key == TORRENT_MINUTES {
+                    self.apply_seeding();
+                }
             }
             Command::TorrentFiles(url, reply) => {
                 let torrents = self.torrents.clone();
@@ -1802,6 +1810,7 @@ impl Actor {
         );
         self.set_status(row.id, Status::Probing, None);
         if mohona_torrent::is_torrent_address(&row.url) {
+            self.apply_seeding();
             let route = row
                 .auto_category
                 .then(|| self.store.categories().ok())
@@ -1886,6 +1895,22 @@ impl Actor {
             return;
         }
         self.start_http(row, cancel);
+    }
+
+    /// Tells the torrent engine how long to share finished torrents (the two settings).
+    fn apply_seeding(&self) {
+        let number = |key: &str| {
+            self.store
+                .setting(key)
+                .ok()
+                .flatten()
+                .and_then(|v| v.trim().parse::<f64>().ok())
+                .filter(|v| v.is_finite() && *v > 0.0)
+        };
+        self.torrents.set_seeding(mohona_torrent::Seeding {
+            ratio: number(TORRENT_RATIO),
+            minutes: number(TORRENT_MINUTES).map(|m| m as u64),
+        });
     }
 
     /// The ordinary download of an address.

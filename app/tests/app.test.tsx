@@ -29,6 +29,7 @@ function fake(initial: Row[], running = true) {
   let rules: Rule[] = [];
   let profiles: SiteProfile[] = [];
   let browser: string | null = null;
+  let seeding: { ratio: number | null; minutes: number | null } = { ratio: null, minutes: null };
   let tools: ToolInfo[] = [
     { name: "ffmpeg", purpose: "join separate video and audio", chosen: null, found: null, page: "https://ffmpeg.org/download.html", windowsPage: "https://www.gyan.dev/ffmpeg/builds/", winget: "winget install Gyan.FFmpeg" },
     { name: "yt-dlp", purpose: "download videos from YouTube", chosen: null, found: "C:\\tools\\yt-dlp.exe", page: "https://github.com/yt-dlp/yt-dlp#installation", windowsPage: "https://github.com/yt-dlp/yt-dlp/releases/latest", winget: "winget install yt-dlp.yt-dlp" },
@@ -44,6 +45,8 @@ function fake(initial: Row[], running = true) {
       return tools.map((x) => ({ ...x }));
     }),
     openToolPage: vi.fn(async (_url: string) => undefined),
+    seeding: vi.fn(async () => seeding),
+    setSeeding: vi.fn(async (s: { ratio: number | null; minutes: number | null }) => (seeding = { ratio: s.ratio, minutes: s.minutes })),
     videoBrowser: vi.fn(async () => browser),
     setVideoBrowser: vi.fn(async (b: string | null) => (browser = b)),
     torrentFiles: vi.fn(async (_url: string) => ({
@@ -120,12 +123,59 @@ function fake(initial: Row[], running = true) {
     extensionSettings: vi.fn(async () => ext),
     setExtensionSettings: vi.fn(async (s: ExtensionSettings) => (ext = s)),
   } satisfies Api;
-  return Object.assign(api, { copy: (text: string | null) => void (clip = text) });
+  return Object.assign(api, {
+    copy: (text: string | null) => void (clip = text),
+    finish: (id: number) => void (rows = rows.map((r) => (r.id === id ? { ...r, status: "completed" } : r))),
+    mute: () => void (cfg = { ...cfg, notifications: false }),
+  });
 }
 
 afterEach(cleanup);
 
 describe("App", () => {
+  it("says when a download finishes, with buttons to open it or show it in its folder", async () => {
+    const api = fake([row(1, "movie.mp4", "downloading"), row(2, "old.zip", "completed")]);
+    render(<App api={api} every={50} />);
+    await screen.findByText("movie.mp4");
+    expect(screen.queryByText("Download finished")).toBeNull(); // what was done before is not news
+    api.finish(1);
+    await screen.findByText("Download finished");
+    const box = screen.getByRole("status");
+    expect(within(box).getByText("movie.mp4")).toBeTruthy();
+    expect(within(box).getByRole("button", { name: "Show in folder" })).toBeTruthy();
+    await userEvent.click(within(box).getByRole("button", { name: "Open" }));
+    await waitFor(() => expect(api.open).toHaveBeenCalledWith(1));
+    await waitFor(() => expect(screen.queryByText("Download finished")).toBeNull());
+  });
+
+  it("stays quiet when messages are switched off", async () => {
+    const api = fake([row(1, "movie.mp4", "downloading")]);
+    api.mute();
+    render(<App api={api} every={50} />);
+    await screen.findByText("movie.mp4");
+    api.finish(1);
+    await new Promise((r) => setTimeout(r, 300));
+    expect(screen.queryByText("Download finished")).toBeNull();
+  });
+
+  it("sets how long finished torrents are shared", async () => {
+    const api = fake([]);
+    render(<App api={api} every={50} />);
+    const dialog = await openGroup("Torrents");
+    expect(await within(dialog).findByText("Finished torrents are not shared.")).toBeTruthy();
+    await userEvent.type(within(dialog).getByLabelText("Stop sharing at an upload ratio of"), "1.5");
+    await userEvent.type(within(dialog).getByLabelText("or after (minutes)"), "90");
+    await userEvent.click(within(dialog).getByRole("button", { name: "Save" }));
+    await waitFor(() => expect(api.setSeeding).toHaveBeenCalledWith({ ratio: 150, minutes: 90 }));
+    expect(await within(dialog).findByText("Finished torrents are shared.")).toBeTruthy();
+    await userEvent.clear(within(dialog).getByLabelText("or after (minutes)"));
+    await userEvent.type(within(dialog).getByLabelText("or after (minutes)"), "abc");
+    await userEvent.click(within(dialog).getByRole("button", { name: "Save" }));
+    expect(await within(dialog).findByRole("alert")).toBeTruthy();
+    await userEvent.click(within(dialog).getByRole("button", { name: "Do not share" }));
+    await waitFor(() => expect(api.setSeeding).toHaveBeenLastCalledWith({ ratio: null, minutes: null }));
+  });
+
   it("shows the outside tools, how to get a missing one, and lets the person say where it is", async () => {
     const api = fake([]);
     render(<App api={api} every={50} />);
@@ -511,7 +561,7 @@ describe("App", () => {
     await userEvent.click(await screen.findByRole("button", { name: "Settings" }));
     const dialog = await screen.findByRole("dialog", { name: "Settings" });
     const nav = within(dialog).getByRole("navigation", { name: "Settings groups" });
-    expect(within(nav).getAllByRole("button").map((b) => b.textContent)).toEqual(["General", "Downloads", "Categories", "Queues", "Schedule", "Rules", "Site profiles", "Tools"]);
+    expect(within(nav).getAllByRole("button").map((b) => b.textContent)).toEqual(["General", "Downloads", "Categories", "Queues", "Schedule", "Rules", "Site profiles", "Torrents", "Tools"]);
     // General is first and holds language and theme.
     expect(within(dialog).getByLabelText("Language")).toBeTruthy();
     expect(within(dialog).getByLabelText("Colour theme")).toBeTruthy();

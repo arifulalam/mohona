@@ -269,5 +269,15 @@
   "Mohona asks yt-dlp about web pages (Facebook, X, Instagram, Pinterest, SoundCloud and many more). Posts you can only see when signed in need your browser's sign-in:": "يسأل موهونا yt-dlp عن صفحات الويب (فيسبوك وX وإنستغرام وبينتريست وساوندكلاود وغيرها الكثير). المنشورات التي لا تظهر إلا بعد تسجيل الدخول تحتاج إلى تسجيل الدخول في متصفحك:",
   "Use the sign-in of": "استخدم تسجيل الدخول في",
   "No browser": "بدون متصفح",
-  "Close that browser if a download says it cannot read the cookies.": "أغلق ذلك المتصفح إذا ذكر التنزيل أنه لا يستطيع قراءة ملفات تعريف الارتباط."
+  "Close that browser if a download says it cannot read the cookies.": "أغلق ذلك المتصفح إذا ذكر التنزيل أنه لا يستطيع قراءة ملفات تعريف الارتباط.",
+  "Torrents": "التورنت",
+  "Type a number (for example 1.5 for the ratio, 120 for the minutes), or leave a box empty.": "اكتب رقمًا (مثل 1.5 للنسبة و120 للدقائق) أو اترك الخانة فارغة.",
+  "While a torrent downloads, Mohona uploads to others as the protocol asks. After it finishes it can keep sharing (seeding) until one of these limits is reached. With both empty, a finished torrent is not shared.": "أثناء تنزيل التورنت يرفع موهونا البيانات إلى الآخرين كما يتطلب البروتوكول. وبعد انتهائه يمكنه مواصلة المشاركة (البذر) حتى بلوغ أحد هذين الحدّين. وإذا تُرك الاثنان فارغين فلا تُشارَك التورنتات المكتملة.",
+  "Stop sharing at an upload ratio of": "إيقاف المشاركة عند نسبة رفع تبلغ",
+  "or after (minutes)": "أو بعد (دقائق)",
+  "Whichever comes first. The files stay in your download folder.": "أيهما أسبق. تبقى الملفات في مجلد التنزيلات لديك.",
+  "Finished torrents are shared.": "تتم مشاركة التورنتات المكتملة.",
+  "Finished torrents are not shared.": "لا تتم مشاركة التورنتات المكتملة.",
+  "Do not share": "عدم المشاركة",
+  "Download finished": "اكتمل التنزيل"
 }

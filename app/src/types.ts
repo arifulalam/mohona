@@ -102,6 +102,14 @@ export interface TorrentList {
   files: TorrentFile[];
 }
 
+/** How long finished torrents are shared. */
+export interface Seeding {
+  /** Stop at this upload ratio, in hundredths (150 is 1.5). */
+  ratio: number | null;
+  /** Stop after this many minutes. */
+  minutes: number | null;
+}
+
 /** An outside program Mohona can use (ffmpeg, yt-dlp). */
 export interface ToolInfo {
   name: string;
@@ -194,6 +202,9 @@ export interface Api {
   setTool(name: string, path: string | null): Promise<ToolInfo[]>;
   /** Opens one of the tools' download pages in the browser. */
   openToolPage(url: string): Promise<void>;
+  /** How long finished torrents are shared (ratio in hundredths; neither: not shared). */
+  seeding(): Promise<Seeding>;
+  setSeeding(seeding: Seeding): Promise<Seeding>;
   /** The browser whose sign-in yt-dlp uses for video pages (null: none). */
   videoBrowser(): Promise<string | null>;
   setVideoBrowser(browser: string | null): Promise<string | null>;

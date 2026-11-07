@@ -269,5 +269,15 @@
   "Mohona asks yt-dlp about web pages (Facebook, X, Instagram, Pinterest, SoundCloud and many more). Posts you can only see when signed in need your browser's sign-in:": "Mohona 会就网页（Facebook、X、Instagram、Pinterest、SoundCloud 等众多网站）询问 yt-dlp。登录后才能看到的帖子需要用到浏览器的登录状态：",
   "Use the sign-in of": "使用其登录状态的浏览器",
   "No browser": "不使用浏览器",
-  "Close that browser if a download says it cannot read the cookies.": "如果下载提示无法读取 Cookie，请关闭该浏览器。"
+  "Close that browser if a download says it cannot read the cookies.": "如果下载提示无法读取 Cookie，请关闭该浏览器。",
+  "Torrents": "种子",
+  "Type a number (for example 1.5 for the ratio, 120 for the minutes), or leave a box empty.": "请输入数字（例如比率填 1.5，分钟填 120），或将框留空。",
+  "While a torrent downloads, Mohona uploads to others as the protocol asks. After it finishes it can keep sharing (seeding) until one of these limits is reached. With both empty, a finished torrent is not shared.": "种子下载时，Mohona 会按协议要求同时向他人上传。下载完成后，可以继续共享（做种），直到达到下列任一限制。两项都留空时，已完成的种子不会被共享。",
+  "Stop sharing at an upload ratio of": "上传比率达到以下值时停止共享",
+  "or after (minutes)": "或在以下分钟后",
+  "Whichever comes first. The files stay in your download folder.": "以先到者为准。文件会保留在你的下载文件夹中。",
+  "Finished torrents are shared.": "已完成的种子会被共享。",
+  "Finished torrents are not shared.": "已完成的种子不会被共享。",
+  "Do not share": "不共享",
+  "Download finished": "下载完成"
 }

@@ -269,5 +269,15 @@
   "Mohona asks yt-dlp about web pages (Facebook, X, Instagram, Pinterest, SoundCloud and many more). Posts you can only see when signed in need your browser's sign-in:": "Mohona bertanya ke yt-dlp untuk halaman web (Facebook, X, Instagram, Pinterest, SoundCloud, dan banyak lagi). Kiriman yang hanya terlihat saat masuk memerlukan sesi masuk browser Anda:",
   "Use the sign-in of": "Pakai sesi masuk dari",
   "No browser": "Tanpa browser",
-  "Close that browser if a download says it cannot read the cookies.": "Tutup browser itu jika unduhan menyatakan tidak bisa membaca cookie."
+  "Close that browser if a download says it cannot read the cookies.": "Tutup browser itu jika unduhan menyatakan tidak bisa membaca cookie.",
+  "Torrents": "Torrent",
+  "Type a number (for example 1.5 for the ratio, 120 for the minutes), or leave a box empty.": "Ketik angka (misalnya 1,5 untuk rasio, 120 untuk menit) atau kosongkan kotaknya.",
+  "While a torrent downloads, Mohona uploads to others as the protocol asks. After it finishes it can keep sharing (seeding) until one of these limits is reached. With both empty, a finished torrent is not shared.": "Saat torrent diunduh, Mohona juga mengunggah ke orang lain sesuai protokol. Setelah selesai, torrent bisa terus dibagikan (seeding) sampai salah satu batas ini tercapai. Jika keduanya kosong, torrent yang selesai tidak dibagikan.",
+  "Stop sharing at an upload ratio of": "Berhenti berbagi pada rasio unggah",
+  "or after (minutes)": "atau setelah (menit)",
+  "Whichever comes first. The files stay in your download folder.": "Mana yang lebih dulu. Berkas tetap di folder unduhan Anda.",
+  "Finished torrents are shared.": "Torrent yang selesai dibagikan.",
+  "Finished torrents are not shared.": "Torrent yang selesai tidak dibagikan.",
+  "Do not share": "Jangan bagikan",
+  "Download finished": "Unduhan selesai"
 }

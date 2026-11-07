@@ -2,15 +2,16 @@
 //!
 //! The engine is [librqbit]. This layer gives it the shape the rest of Mohona
 //! uses: start from an address, report progress, stop when asked, and say
-//! where the finished files are. A finished torrent is not seeded: it is
-//! removed from the session as soon as it is complete (the files stay).
+//! where the finished files are. A finished torrent is removed from the session at once (the
+//! files stay), unless seeding is on ([`Torrents::set_seeding`]): then it stays and uploads to
+//! others until the ratio or the time limit is reached.
 //!
 //! [librqbit]: https://crates.io/crates/librqbit
 
 use std::net::SocketAddr;
 use std::path::{Path, PathBuf};
-use std::sync::Arc;
-use std::time::Duration;
+use std::sync::{Arc, Mutex};
+use std::time::{Duration, Instant};
 
 use librqbit::{
     AddTorrent, AddTorrentOptions, AddTorrentResponse, Session, SessionOptions, TorrentStatsState,
@@ -109,6 +110,21 @@ pub struct Listing {
 pub struct Torrents {
     state_dir: PathBuf,
     session: OnceCell<Arc<Session>>,
+    seeding: Mutex<(Option<Seeding>, CancelToken)>,
+}
+
+/// How long a finished torrent is shared: until it has sent `ratio` times its size, or after
+/// `minutes`, whichever comes first (a limit left out does not apply). With neither, it is not shared.
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub struct Seeding {
+    pub ratio: Option<f64>,
+    pub minutes: Option<u64>,
+}
+
+impl Seeding {
+    fn is_on(&self) -> bool {
+        self.ratio.is_some_and(|r| r > 0.0) || self.minutes.is_some_and(|m| m > 0)
+    }
 }
 
 impl Torrents {
@@ -117,6 +133,27 @@ impl Torrents {
         Self {
             state_dir: state_dir.into(),
             session: OnceCell::new(),
+            seeding: Mutex::new((None, CancelToken::new())),
+        }
+    }
+
+    /// Sets how finished torrents are shared from now on, and ends the sharing of those already
+    /// shared when it is turned off.
+    pub fn set_seeding(&self, seeding: Seeding) {
+        let mut state = self.seeding.lock().unwrap_or_else(|e| e.into_inner());
+        let policy = seeding.is_on().then_some(seeding);
+        if policy.is_none() && state.0.is_some() {
+            state.1.cancel();
+            state.1 = CancelToken::new();
+        }
+        state.0 = policy;
+    }
+
+    /// How many torrents the session holds: those being downloaded and those being shared.
+    pub async fn active(&self) -> usize {
+        match self.session.get() {
+            Some(session) => session.with_torrents(|all| all.count()),
+            None => 0,
         }
     }
 
@@ -273,8 +310,21 @@ impl Torrents {
                 ));
             }
             if stats.finished {
-                forget().await;
                 let name = name.unwrap_or_else(|| "torrent".into());
+                let policy = self
+                    .seeding
+                    .lock()
+                    .unwrap_or_else(|e| e.into_inner())
+                    .clone();
+                match policy {
+                    (Some(seeding), stop) => {
+                        // Stay in the session and share; the download itself is done.
+                        let session = session.clone();
+                        let total = stats.total_bytes;
+                        tokio::spawn(share(session, id, handle, seeding, total, stop));
+                    }
+                    (None, _) => forget().await,
+                }
                 let inside = dest.join(&name);
                 let path = if many || !inside.exists() {
                     dest.to_path_buf()
@@ -289,6 +339,42 @@ impl Torrents {
             }
         }
     }
+}
+
+/// Uploads a finished torrent until a limit is reached or sharing is turned off, then leaves the
+/// session (the files stay).
+async fn share(
+    session: Arc<Session>,
+    id: usize,
+    handle: Arc<librqbit::ManagedTorrent>,
+    seeding: Seeding,
+    total: u64,
+    stop: CancelToken,
+) {
+    let began = Instant::now();
+    let mut tick = tokio::time::interval(Duration::from_secs(5));
+    loop {
+        tokio::select! {
+            () = stop.cancelled() => break,
+            _ = tick.tick() => {}
+        }
+        let stats = handle.stats();
+        if matches!(stats.state, TorrentStatsState::Error) {
+            break;
+        }
+        let ratio_reached = seeding.ratio.is_some_and(|r| {
+            r > 0.0 && total > 0 && stats.uploaded_bytes as f64 >= r * total as f64
+        });
+        let time_reached = seeding
+            .minutes
+            .is_some_and(|m| m > 0 && began.elapsed() >= Duration::from_secs(m * 60));
+        if ratio_reached || time_reached {
+            break;
+        }
+    }
+    let _ = session
+        .delete(librqbit::api::TorrentIdOrHash::Id(id), false)
+        .await;
 }
 
 /// A torrent's name as one safe folder name.

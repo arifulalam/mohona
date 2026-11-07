@@ -269,5 +269,15 @@
   "Mohona asks yt-dlp about web pages (Facebook, X, Instagram, Pinterest, SoundCloud and many more). Posts you can only see when signed in need your browser's sign-in:": "Mohona interroge yt-dlp pour les pages web (Facebook, X, Instagram, Pinterest, SoundCloud et bien d'autres). Les publications visibles seulement une fois connecté demandent la session de votre navigateur :",
   "Use the sign-in of": "Utiliser la session de",
   "No browser": "Aucun navigateur",
-  "Close that browser if a download says it cannot read the cookies.": "Fermez ce navigateur si un téléchargement dit qu'il ne peut pas lire les cookies."
+  "Close that browser if a download says it cannot read the cookies.": "Fermez ce navigateur si un téléchargement dit qu'il ne peut pas lire les cookies.",
+  "Torrents": "Torrents",
+  "Type a number (for example 1.5 for the ratio, 120 for the minutes), or leave a box empty.": "Saisissez un nombre (par exemple 1,5 pour le ratio, 120 pour les minutes) ou laissez la case vide.",
+  "While a torrent downloads, Mohona uploads to others as the protocol asks. After it finishes it can keep sharing (seeding) until one of these limits is reached. With both empty, a finished torrent is not shared.": "Pendant qu'un torrent se télécharge, Mohona envoie aussi des données aux autres, comme le veut le protocole. Une fois terminé, il peut continuer à partager (seeding) jusqu'à une de ces limites. Si les deux sont vides, un torrent terminé n'est pas partagé.",
+  "Stop sharing at an upload ratio of": "Arrêter le partage à un ratio d'envoi de",
+  "or after (minutes)": "ou après (minutes)",
+  "Whichever comes first. The files stay in your download folder.": "Selon ce qui arrive en premier. Les fichiers restent dans votre dossier de téléchargement.",
+  "Finished torrents are shared.": "Les torrents terminés sont partagés.",
+  "Finished torrents are not shared.": "Les torrents terminés ne sont pas partagés.",
+  "Do not share": "Ne pas partager",
+  "Download finished": "Téléchargement terminé"
 }

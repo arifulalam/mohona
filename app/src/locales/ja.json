@@ -269,5 +269,15 @@
   "Mohona asks yt-dlp about web pages (Facebook, X, Instagram, Pinterest, SoundCloud and many more). Posts you can only see when signed in need your browser's sign-in:": "Mohona は Web ページ(Facebook、X、Instagram、Pinterest、SoundCloud など多数)について yt-dlp に問い合わせます。ログインしないと見られる投稿には、ブラウザーのログイン情報が必要です:",
   "Use the sign-in of": "ログイン情報を使うブラウザー",
   "No browser": "ブラウザーなし",
-  "Close that browser if a download says it cannot read the cookies.": "Cookie を読めないと表示されたら、そのブラウザーを閉じてください。"
+  "Close that browser if a download says it cannot read the cookies.": "Cookie を読めないと表示されたら、そのブラウザーを閉じてください。",
+  "Torrents": "トレント",
+  "Type a number (for example 1.5 for the ratio, 120 for the minutes), or leave a box empty.": "数字を入力してください(比率なら 1.5、分なら 120 など)。空欄のままでも構いません。",
+  "While a torrent downloads, Mohona uploads to others as the protocol asks. After it finishes it can keep sharing (seeding) until one of these limits is reached. With both empty, a finished torrent is not shared.": "トレントのダウンロード中、Mohona はプロトコルに従って他のユーザーにもアップロードします。完了後は、次のどちらかの上限に達するまで共有(シード)を続けられます。両方が空欄なら、完了したトレントは共有されません。",
+  "Stop sharing at an upload ratio of": "アップロード比率がこの値になったら共有を止める",
+  "or after (minutes)": "または次の時間(分)後",
+  "Whichever comes first. The files stay in your download folder.": "どちらか早い方です。ファイルはダウンロードフォルダーに残ります。",
+  "Finished torrents are shared.": "完了したトレントを共有します。",
+  "Finished torrents are not shared.": "完了したトレントは共有しません。",
+  "Do not share": "共有しない",
+  "Download finished": "ダウンロード完了"
 }

@@ -275,7 +275,8 @@ The window cannot be built where the tests run (it needs the system web view), s
 3. When it finishes, the file or folder is in the download folder and no upload continues (check Task Manager's network use drops).
 4. Close the app and the daemon in the middle of a torrent, start again: it continues, after a short check of the files.
 5. In the browser, right-click a magnet link: "Download with Mohona" adds it. A `.torrent` file link from a site is taken over like other downloads and the torrent's contents are downloaded.
-6. Add a link of a torrent nobody seeds: it keeps "probing"; it can be paused and removed.
+6. Settings, Torrents: type a ratio (1.5) and minutes (60), Save: it says "Finished torrents are shared." Download a torrent: after it finishes, a torrent client on another computer (or a phone on mobile data) can still fetch from you; "Do not share" stops that within a few seconds. Closing Mohona ends all sharing.
+7. Add a link of a torrent nobody seeds: it keeps "probing"; it can be paused and removed.
 
 ## Store packaging
 
@@ -385,6 +386,12 @@ Needs yt-dlp (`winget install yt-dlp.yt-dlp`); ffmpeg for the best quality (`win
 - [ ] Other sites: "+ Add" a public Vimeo, Pinterest, SoundCloud, X (twitter) post or Facebook video link: it downloads as a row. A plain file link (a `.zip`) and a page yt-dlp does not know (any ordinary article) still download as normal files/pages, without an error.
 - [ ] A post that needs sign-in (an Instagram or Facebook post you can see signed in): fails with the hint about the browser; in Settings, Tools choose your browser ("Use the sign-in of"), close it, add again: it downloads.
 - [ ] In the extension on such a page: the popup lists "Video on this page" last; choosing it downloads the video (the browser's own sign-in is used). On an ordinary article it ends as an error that says there is no video, and nothing is saved.
+
+## Finish message
+
+- [ ] With the window open, start a small download: when it ends a message appears bottom right with the file name, "Open" and "Show in folder". Open opens the file, Show in folder selects it in Explorer; both close the message. It also goes by itself after about 15 seconds.
+- [ ] Hide the window to the tray and finish a download: the system's own message appears (text only, no buttons: expected, ADR-0074).
+- [ ] Settings, Downloads: switch off "Show a message when a download finishes or fails": neither message appears.
 
 ## Add new items here
 

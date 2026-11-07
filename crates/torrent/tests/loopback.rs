@@ -7,7 +7,7 @@ use librqbit::{
     SessionOptions,
 };
 use mohona_core::CancelToken;
-use mohona_torrent::{Source, TorrentError, Torrents};
+use mohona_torrent::{Seeding, Source, TorrentError, Torrents};
 
 fn data(len: usize) -> Vec<u8> {
     (0..len).map(|i| (i.wrapping_mul(31) % 251) as u8).collect()
@@ -268,4 +268,62 @@ async fn only_the_chosen_files_of_a_torrent_are_downloaded() {
     }
     // Nothing spilled into the download folder itself.
     assert!(!out.join("b.bin").exists());
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn a_finished_torrent_is_shared_until_sharing_is_turned_off() {
+    if std::net::UdpSocket::bind("[::]:0").is_err()
+        && std::env::var_os("MOHONA_FORCE_TORRENT_TESTS").is_none()
+    {
+        eprintln!("skipped: this computer has no IPv6 sockets");
+        return;
+    }
+    let dir = tempfile::tempdir().unwrap();
+    let origin = dir.path().join("seed");
+    std::fs::create_dir_all(&origin).unwrap();
+    let file = origin.join("share.bin");
+    std::fs::write(&file, data(200_000)).unwrap();
+    let (torrent, peer, _seeder) = seed(&file, &dir.path().join("seed-state")).await;
+
+    let torrents = Torrents::new(dir.path().join("state"));
+    // Not shared by default: the torrent leaves the session when it is done.
+    torrents
+        .run(
+            Source::File(torrent.clone()),
+            &dir.path().join("a"),
+            vec![peer],
+            None,
+            &CancelToken::new(),
+            |_| {},
+        )
+        .await
+        .unwrap();
+    tokio::time::sleep(Duration::from_millis(300)).await;
+    assert_eq!(torrents.active().await, 0);
+
+    // Shared for a long time: it stays in the session after it is done ...
+    torrents.set_seeding(Seeding {
+        ratio: Some(100.0),
+        minutes: Some(600),
+    });
+    torrents
+        .run(
+            Source::File(torrent.clone()),
+            &dir.path().join("b"),
+            vec![peer],
+            None,
+            &CancelToken::new(),
+            |_| {},
+        )
+        .await
+        .unwrap();
+    assert_eq!(torrents.active().await, 1);
+
+    // ... until sharing is turned off.
+    torrents.set_seeding(Seeding::default());
+    let started = Instant::now();
+    while torrents.active().await != 0 {
+        assert!(started.elapsed() < Duration::from_secs(20), "still shared");
+        tokio::time::sleep(Duration::from_millis(100)).await;
+    }
 }

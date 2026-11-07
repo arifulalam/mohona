@@ -269,5 +269,15 @@
   "Mohona asks yt-dlp about web pages (Facebook, X, Instagram, Pinterest, SoundCloud and many more). Posts you can only see when signed in need your browser's sign-in:": "Mohona спрашивает yt-dlp о веб-страницах (Facebook, X, Instagram, Pinterest, SoundCloud и многие другие). Записи, видимые только после входа, требуют вход в вашем браузере:",
   "Use the sign-in of": "Использовать вход из",
   "No browser": "Без браузера",
-  "Close that browser if a download says it cannot read the cookies.": "Закройте этот браузер, если загрузка сообщает, что не может прочитать cookie."
+  "Close that browser if a download says it cannot read the cookies.": "Закройте этот браузер, если загрузка сообщает, что не может прочитать cookie.",
+  "Torrents": "Торренты",
+  "Type a number (for example 1.5 for the ratio, 120 for the minutes), or leave a box empty.": "Введите число (например, 1,5 для коэффициента, 120 для минут) или оставьте поле пустым.",
+  "While a torrent downloads, Mohona uploads to others as the protocol asks. After it finishes it can keep sharing (seeding) until one of these limits is reached. With both empty, a finished torrent is not shared.": "Пока торрент скачивается, Mohona также отдаёт данные другим, как требует протокол. После завершения он может продолжать раздачу (сидирование) до одного из этих пределов. Если оба поля пусты, завершённый торрент не раздаётся.",
+  "Stop sharing at an upload ratio of": "Прекратить раздачу при коэффициенте отдачи",
+  "or after (minutes)": "или через (минут)",
+  "Whichever comes first. The files stay in your download folder.": "Что наступит раньше. Файлы остаются в вашей папке загрузок.",
+  "Finished torrents are shared.": "Завершённые торренты раздаются.",
+  "Finished torrents are not shared.": "Завершённые торренты не раздаются.",
+  "Do not share": "Не раздавать",
+  "Download finished": "Загрузка завершена"
 }

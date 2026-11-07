@@ -269,5 +269,15 @@
   "Mohona asks yt-dlp about web pages (Facebook, X, Instagram, Pinterest, SoundCloud and many more). Posts you can only see when signed in need your browser's sign-in:": "موہنا ویب صفحات (فیس بک، X، انسٹاگرام، پنٹرسٹ، ساؤنڈ کلاؤڈ اور بہت سے دوسرے) کے بارے میں yt-dlp سے پوچھتا ہے۔ جو پوسٹیں صرف لاگ اِن ہونے پر نظر آتی ہیں ان کے لیے آپ کے براؤزر کا لاگ اِن درکار ہے:",
   "Use the sign-in of": "اس کا لاگ اِن استعمال کریں",
   "No browser": "کوئی براؤزر نہیں",
-  "Close that browser if a download says it cannot read the cookies.": "اگر ڈاؤن لوڈ کہے کہ وہ کوکیز نہیں پڑھ سکتا تو اس براؤزر کو بند کر دیں۔"
+  "Close that browser if a download says it cannot read the cookies.": "اگر ڈاؤن لوڈ کہے کہ وہ کوکیز نہیں پڑھ سکتا تو اس براؤزر کو بند کر دیں۔",
+  "Torrents": "ٹورنٹس",
+  "Type a number (for example 1.5 for the ratio, 120 for the minutes), or leave a box empty.": "کوئی عدد لکھیں (مثلاً تناسب کے لیے 1.5، منٹوں کے لیے 120) یا خانہ خالی چھوڑ دیں۔",
+  "While a torrent downloads, Mohona uploads to others as the protocol asks. After it finishes it can keep sharing (seeding) until one of these limits is reached. With both empty, a finished torrent is not shared.": "ٹورنٹ ڈاؤن لوڈ ہوتے وقت موہنا پروٹوکول کے مطابق دوسروں کو اپ لوڈ بھی کرتا ہے۔ مکمل ہونے کے بعد وہ ان میں سے کسی حد تک پہنچنے تک شیئر (سیڈنگ) جاری رکھ سکتا ہے۔ دونوں خالی ہوں تو مکمل ٹورنٹ شیئر نہیں ہوتا۔",
+  "Stop sharing at an upload ratio of": "اس اپ لوڈ تناسب پر شیئرنگ بند کریں",
+  "or after (minutes)": "یا اتنے منٹ بعد",
+  "Whichever comes first. The files stay in your download folder.": "جو پہلے ہو۔ فائلیں آپ کے ڈاؤن لوڈ فولڈر میں رہتی ہیں۔",
+  "Finished torrents are shared.": "مکمل ٹورنٹس شیئر کیے جاتے ہیں۔",
+  "Finished torrents are not shared.": "مکمل ٹورنٹس شیئر نہیں کیے جاتے۔",
+  "Do not share": "شیئر نہ کریں",
+  "Download finished": "ڈاؤن لوڈ مکمل"
 }

@@ -269,5 +269,15 @@
   "Mohona asks yt-dlp about web pages (Facebook, X, Instagram, Pinterest, SoundCloud and many more). Posts you can only see when signed in need your browser's sign-in:": "মোহোনা ওয়েব পেজের (Facebook, X, Instagram, Pinterest, SoundCloud এবং আরও অনেক) জন্য yt-dlp-কে জিজ্ঞেস করে। যেসব পোস্ট শুধু সাইন ইন করলে দেখা যায়, তাদের জন্য আপনার ব্রাউজারের সাইন-ইন লাগে:",
   "Use the sign-in of": "যার সাইন-ইন ব্যবহার করবেন",
   "No browser": "কোনো ব্রাউজার নয়",
-  "Close that browser if a download says it cannot read the cookies.": "ডাউনলোড কুকি পড়তে পারছে না বললে সেই ব্রাউজার বন্ধ করুন।"
+  "Close that browser if a download says it cannot read the cookies.": "ডাউনলোড কুকি পড়তে পারছে না বললে সেই ব্রাউজার বন্ধ করুন।",
+  "Torrents": "টরেন্ট",
+  "Type a number (for example 1.5 for the ratio, 120 for the minutes), or leave a box empty.": "একটি সংখ্যা লিখুন (যেমন অনুপাতের জন্য 1.5, মিনিটের জন্য 120) অথবা ঘরটি খালি রাখুন।",
+  "While a torrent downloads, Mohona uploads to others as the protocol asks. After it finishes it can keep sharing (seeding) until one of these limits is reached. With both empty, a finished torrent is not shared.": "টরেন্ট ডাউনলোড হওয়ার সময় মোহোনা প্রোটোকল অনুযায়ী অন্যদেরও আপলোড করে। শেষ হওয়ার পর এই সীমার একটিতে পৌঁছানো পর্যন্ত সে শেয়ার (সিডিং) চালিয়ে যেতে পারে। দুটোই খালি থাকলে শেষ হওয়া টরেন্ট শেয়ার হয় না।",
+  "Stop sharing at an upload ratio of": "এই আপলোড অনুপাতে শেয়ার বন্ধ করুন",
+  "or after (minutes)": "অথবা এত মিনিট পরে",
+  "Whichever comes first. The files stay in your download folder.": "যেটি আগে হয়। ফাইলগুলো আপনার ডাউনলোড ফোল্ডারেই থাকে।",
+  "Finished torrents are shared.": "শেষ হওয়া টরেন্ট শেয়ার করা হয়।",
+  "Finished torrents are not shared.": "শেষ হওয়া টরেন্ট শেয়ার করা হয় না।",
+  "Do not share": "শেয়ার করবেন না",
+  "Download finished": "ডাউনলোড শেষ"
 }

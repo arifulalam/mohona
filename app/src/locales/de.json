@@ -269,5 +269,15 @@
   "Mohona asks yt-dlp about web pages (Facebook, X, Instagram, Pinterest, SoundCloud and many more). Posts you can only see when signed in need your browser's sign-in:": "Mohona fragt yt-dlp bei Webseiten (Facebook, X, Instagram, Pinterest, SoundCloud und viele mehr). Beiträge, die man nur angemeldet sieht, brauchen die Anmeldung Ihres Browsers:",
   "Use the sign-in of": "Anmeldung verwenden von",
   "No browser": "Kein Browser",
-  "Close that browser if a download says it cannot read the cookies.": "Schließen Sie diesen Browser, wenn ein Download meldet, dass er die Cookies nicht lesen kann."
+  "Close that browser if a download says it cannot read the cookies.": "Schließen Sie diesen Browser, wenn ein Download meldet, dass er die Cookies nicht lesen kann.",
+  "Torrents": "Torrents",
+  "Type a number (for example 1.5 for the ratio, 120 for the minutes), or leave a box empty.": "Geben Sie eine Zahl ein (zum Beispiel 1,5 für das Verhältnis, 120 für die Minuten) oder lassen Sie ein Feld leer.",
+  "While a torrent downloads, Mohona uploads to others as the protocol asks. After it finishes it can keep sharing (seeding) until one of these limits is reached. With both empty, a finished torrent is not shared.": "Während ein Torrent lädt, lädt Mohona wie vom Protokoll verlangt auch hoch. Nach dem Ende kann es weiter teilen (Seeding), bis eine dieser Grenzen erreicht ist. Sind beide leer, wird ein fertiger Torrent nicht geteilt.",
+  "Stop sharing at an upload ratio of": "Teilen beenden bei einem Upload-Verhältnis von",
+  "or after (minutes)": "oder nach (Minuten)",
+  "Whichever comes first. The files stay in your download folder.": "Was zuerst eintritt. Die Dateien bleiben in Ihrem Download-Ordner.",
+  "Finished torrents are shared.": "Fertige Torrents werden geteilt.",
+  "Finished torrents are not shared.": "Fertige Torrents werden nicht geteilt.",
+  "Do not share": "Nicht teilen",
+  "Download finished": "Download beendet"
 }

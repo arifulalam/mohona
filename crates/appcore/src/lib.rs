@@ -183,6 +183,16 @@ impl From<mohona_daemon::rules::Rule> for Rule {
     }
 }
 
+/// How finished torrents are shared, as the page shows it.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Seeding {
+    /// Stop at this upload ratio, in hundredths (150 is 1.5).
+    pub ratio: Option<u32>,
+    /// Stop after this many minutes.
+    pub minutes: Option<u64>,
+}
+
 /// One outside program (ffmpeg, yt-dlp), as the page shows it.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, serde::Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -747,6 +757,24 @@ impl Engine {
     ) -> Result<Vec<ToolInfo>, AppError> {
         self.call(Call::SetTool { name, path }).await?;
         self.tools().await
+    }
+
+    /// How finished torrents are shared: the upload ratio and the minutes to stop at (none: no limit;
+    /// neither: not shared).
+    pub async fn seeding(&self) -> Result<Seeding, AppError> {
+        match self.call(Call::GetSeeding).await? {
+            Response::Seeding { ratio, minutes } => Ok(Seeding { ratio, minutes }),
+            _ => Err(AppError::Engine("unexpected answer from the engine".into())),
+        }
+    }
+
+    pub async fn set_seeding(&self, new: Seeding) -> Result<Seeding, AppError> {
+        self.call(Call::SetSeeding {
+            ratio: new.ratio,
+            minutes: new.minutes,
+        })
+        .await?;
+        self.seeding().await
     }
 
     /// The browser whose sign-in yt-dlp uses for video pages, if one is chosen.

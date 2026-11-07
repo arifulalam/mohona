@@ -299,3 +299,54 @@ echo "MOHONA_FILE $folder/A reel.mp4"
     assert!(!args.contains("--use-extractors"), "{args}");
     shutdown.notify_one();
 }
+
+#[tokio::test]
+async fn the_sharing_of_finished_torrents_is_kept_and_checked() {
+    let dir = tempfile::tempdir().unwrap();
+    let (client, shutdown) = start(dir.path()).await;
+    assert!(matches!(
+        client.call(Call::GetSeeding).await.unwrap(),
+        Response::Seeding {
+            ratio: None,
+            minutes: None
+        }
+    ));
+    assert!(matches!(
+        client
+            .call(Call::SetSeeding {
+                ratio: Some(150),
+                minutes: Some(90)
+            })
+            .await
+            .unwrap(),
+        Response::Seeding {
+            ratio: Some(150),
+            minutes: Some(90)
+        }
+    ));
+    assert!(matches!(
+        client
+            .call(Call::SetSeeding {
+                ratio: Some(u32::MAX),
+                minutes: None
+            })
+            .await
+            .unwrap(),
+        Response::Error { .. }
+    ));
+    // Zero or nothing turns it off.
+    assert!(matches!(
+        client
+            .call(Call::SetSeeding {
+                ratio: Some(0),
+                minutes: None
+            })
+            .await
+            .unwrap(),
+        Response::Seeding {
+            ratio: None,
+            minutes: None
+        }
+    ));
+    shutdown.notify_one();
+}

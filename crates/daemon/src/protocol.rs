@@ -131,6 +131,15 @@ pub enum Call {
     SetVideoBrowser {
         browser: Option<String>,
     },
+    /// How long finished torrents are shared (answered as `Seeding`).
+    GetSeeding,
+    /// Share finished torrents until this upload ratio is reached and/or this many minutes have
+    /// passed. Both empty (or 0): finished torrents are not shared.
+    SetSeeding {
+        /// In hundredths (150 is a ratio of 1.5).
+        ratio: Option<u32>,
+        minutes: Option<u64>,
+    },
     /// The plugins found in the plugins folder.
     GetPlugins,
     /// Switch a plugin on or off (by its name).
@@ -480,6 +489,12 @@ pub enum Response {
         countdown: Option<u32>,
         /// What happened last with the action (done or failed), for the person to read.
         message: Option<String>,
+    },
+    /// How finished torrents are shared (none set: they are not).
+    Seeding {
+        /// In hundredths (150 is a ratio of 1.5).
+        ratio: Option<u32>,
+        minutes: Option<u64>,
     },
     /// The value of a setting, if there is one.
     Setting {

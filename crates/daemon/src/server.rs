@@ -739,6 +739,27 @@ fn done(result: Result<(), ManagerError>) -> Response {
     }
 }
 
+async fn seeding(state: &State) -> Response {
+    let read = |key: &'static str| async move {
+        state
+            .manager
+            .setting(key)
+            .await
+            .ok()
+            .flatten()
+            .and_then(|v| v.trim().parse::<f64>().ok())
+            .filter(|v| v.is_finite() && *v > 0.0)
+    };
+    Response::Seeding {
+        ratio: read(mohona_manager::TORRENT_RATIO)
+            .await
+            .map(|r| (r * 100.0).round() as u32),
+        minutes: read(mohona_manager::TORRENT_MINUTES)
+            .await
+            .map(|m| m as u64),
+    }
+}
+
 async fn load_profiles(state: &State) -> Vec<crate::profiles::Profile> {
     let text = state
         .manager
@@ -971,6 +992,36 @@ pub(crate) async fn handle(state: &State, call: Call) -> Response {
                     },
                 },
             }
+        }
+        Call::GetSeeding => seeding(state).await,
+        Call::SetSeeding { ratio, minutes } => {
+            if ratio.is_some_and(|r| r > 100_000) || minutes.is_some_and(|m| m > 10_000_000) {
+                return Response::Error {
+                    message:
+                        "the ratio can be at most 1000, and the time at most 10 million minutes"
+                            .into(),
+                };
+            }
+            let text = |v: Option<String>| v.unwrap_or_default();
+            for (key, value) in [
+                (
+                    mohona_manager::TORRENT_RATIO,
+                    text(
+                        ratio
+                            .filter(|r| *r > 0)
+                            .map(|r| (f64::from(r) / 100.0).to_string()),
+                    ),
+                ),
+                (
+                    mohona_manager::TORRENT_MINUTES,
+                    text(minutes.filter(|m| *m > 0).map(|m| m.to_string())),
+                ),
+            ] {
+                if let Err(e) = manager.set_setting(key, &value).await {
+                    return error(e);
+                }
+            }
+            seeding(state).await
         }
         Call::GetVideoBrowser => match manager.setting(mohona_manager::VIDEO_BROWSER).await {
             Ok(value) => Response::Setting {

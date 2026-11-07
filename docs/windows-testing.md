@@ -142,7 +142,7 @@ Numbers are the steps of the "Desktop app" section.
 - [ ] C24 Quiet when idle: with the window hidden for 10 minutes, Task Manager shows the app near 0% CPU
 - [ ] C25 Local API: `mohona api`, then the steps of "Local API" in `docs/manual-tests.md` (token works, web page refused, read-only token cannot add)
 - [ ] C26 Rules: the steps of "Rules" in `docs/manual-tests.md` (folder routing, block, test, and the app's Rules window)
-- [ ] C29 BitTorrent: the steps of "BitTorrent" in `docs/manual-tests.md` (magnet link, resume, firewall prompt, no seeding after finish)
+- [ ] C29 BitTorrent: the steps of "BitTorrent" in `docs/manual-tests.md` (magnet link, resume, firewall prompt, no sharing after finish unless Settings, Torrents says so)
 - [ ] C28 Settings window: the steps of "Settings window" in `docs/manual-tests.md` (one button, groups on the left, language and theme in General)
 - [ ] C27 Site profiles: the steps of "Site profiles" in `docs/manual-tests.md` (connection cap, speed cap, the app's window)
 - [ ] C30 Cloud links: the steps of "Cloud links" in `docs/manual-tests.md` (a Drive, Dropbox, OneDrive and GitHub link each download the real file)
@@ -150,6 +150,7 @@ Numbers are the steps of the "Desktop app" section.
 - [ ] C32 Settings sync: the steps of "Settings sync" in `docs/manual-tests.md` (two computers or two user accounts, one synced folder)
 - [ ] C33 Plugins: the steps of "Plugins" in `docs/manual-tests.md` (the PowerShell example plugin)
 - [ ] C34 Torrent file selection: the steps of "Torrent file selection" in `docs/manual-tests.md` (also check that a torrent of several files gets its own folder)
+- [ ] C37 Torrent sharing and the finish message: "BitTorrent" step 6 and "Finish message" in `docs/manual-tests.md`
 - [ ] C36 YouTube and Tools: the steps of "YouTube and Tools" in `docs/manual-tests.md`
 - [ ] C35 Installer: the steps of "Installer" in `docs/manual-tests.md` (install on a clean user account, start, browser host registered, uninstall)
 - [ ] B4 Extension "Open" and "Show in folder" for finished downloads: the steps of "Extension: open finished downloads" in `docs/manual-tests.md`

@@ -19,6 +19,18 @@ pub enum TorrentCommand {
         #[arg(long)]
         folder: Option<String>,
     },
+    /// Show or set how long finished torrents are shared. Without options: show. `--off` stops sharing.
+    Seed {
+        /// Stop at this upload ratio (for example 1.5)
+        #[arg(long)]
+        ratio: Option<f64>,
+        /// Stop after this many minutes
+        #[arg(long)]
+        minutes: Option<u64>,
+        /// Do not share finished torrents
+        #[arg(long, conflicts_with_all = ["ratio", "minutes"])]
+        off: bool,
+    },
 }
 
 async fn run_inner(command: TorrentCommand, info: Option<PathBuf>) -> Result<(), String> {
@@ -41,6 +53,49 @@ async fn run_inner(command: TorrentCommand, info: Option<PathBuf>) -> Result<(),
                             crate::format_bytes(f.size),
                             f.path
                         );
+                    }
+                    Ok(())
+                }
+                Response::Error { message } => Err(message),
+                _ => Err("the daemon sent an unexpected answer".into()),
+            }
+        }
+        TorrentCommand::Seed {
+            ratio,
+            minutes,
+            off,
+        } => {
+            if ratio.is_some_and(|r| !r.is_finite() || !(0.0..=1000.0).contains(&r)) {
+                return Err("the ratio must be a number from 0 to 1000".into());
+            }
+            let call = if off || ratio.is_some() || minutes.is_some() {
+                Call::SetSeeding {
+                    ratio: ratio.map(|r| (r * 100.0).round() as u32),
+                    minutes,
+                }
+            } else {
+                Call::GetSeeding
+            };
+            match client.call(call).await.map_err(|e| e.to_string())? {
+                Response::Seeding { ratio, minutes } => {
+                    match (ratio, minutes) {
+                        (None, None) => println!("Finished torrents are not shared."),
+                        (r, m) => {
+                            let mut parts = Vec::new();
+                            if let Some(r) = r {
+                                parts.push(format!(
+                                    "an upload ratio of {:.2}",
+                                    f64::from(r) / 100.0
+                                ));
+                            }
+                            if let Some(m) = m {
+                                parts.push(format!("{m} minutes"));
+                            }
+                            println!(
+                                "Finished torrents are shared until {} (whichever comes first).",
+                                parts.join(" or ")
+                            );
+                        }
                     }
                     Ok(())
                 }

@@ -269,5 +269,15 @@
   "Mohona asks yt-dlp about web pages (Facebook, X, Instagram, Pinterest, SoundCloud and many more). Posts you can only see when signed in need your browser's sign-in:": "Mohona web sayfaları için yt-dlp'ye sorar (Facebook, X, Instagram, Pinterest, SoundCloud ve daha fazlası). Yalnızca oturum açıkken görülen gönderiler tarayıcınızın oturumunu gerektirir:",
   "Use the sign-in of": "Şunun oturumunu kullan",
   "No browser": "Tarayıcı yok",
-  "Close that browser if a download says it cannot read the cookies.": "Bir indirme çerezleri okuyamadığını söylerse o tarayıcıyı kapatın."
+  "Close that browser if a download says it cannot read the cookies.": "Bir indirme çerezleri okuyamadığını söylerse o tarayıcıyı kapatın.",
+  "Torrents": "Torrentler",
+  "Type a number (for example 1.5 for the ratio, 120 for the minutes), or leave a box empty.": "Bir sayı yazın (örneğin oran için 1,5, dakika için 120) ya da kutuyu boş bırakın.",
+  "While a torrent downloads, Mohona uploads to others as the protocol asks. After it finishes it can keep sharing (seeding) until one of these limits is reached. With both empty, a finished torrent is not shared.": "Bir torrent inerken Mohona, protokolün istediği gibi başkalarına da yükleme yapar. Bittikten sonra bu sınırlardan birine ulaşılana kadar paylaşmaya (seeding) devam edebilir. İkisi de boşsa biten torrent paylaşılmaz.",
+  "Stop sharing at an upload ratio of": "Şu yükleme oranında paylaşmayı bırak:",
+  "or after (minutes)": "ya da şu kadar dakika sonra",
+  "Whichever comes first. The files stay in your download folder.": "Hangisi önce olursa. Dosyalar indirme klasörünüzde kalır.",
+  "Finished torrents are shared.": "Biten torrentler paylaşılır.",
+  "Finished torrents are not shared.": "Biten torrentler paylaşılmaz.",
+  "Do not share": "Paylaşma",
+  "Download finished": "İndirme bitti"
 }

@@ -11,6 +11,7 @@ import { SettingsWindow } from "./SettingsWindow";
 import { applyTheme, loadTheme, saveTheme, type Theme } from "./theme";
 import type { Api, Category } from "./types";
 import { useDownloads } from "./useDownloads";
+import { FinishedMessages, useFinished } from "./Finished";
 
 function loadSort(): SortKey {
   try {
@@ -74,6 +75,7 @@ function Main({ api, every, language, onLanguage }: { api: Api; every?: number; 
     }
   }, [sort]);
 
+  const finished = useFinished(api, d.rows);
   const clip = useClipboardOffer(api, watchClipboard, d.rows, running);
   useEffect(() => saveClipboardWatch(watchClipboard), [watchClipboard]);
 
@@ -292,6 +294,7 @@ function Main({ api, every, language, onLanguage }: { api: Api; every?: number; 
         </main>
       </div>
 
+      <FinishedMessages notices={finished.notices} onDismiss={finished.dismiss} onOpen={(id) => void d.act(() => api.open(id))} onShow={(id) => void d.act(() => api.show(id))} />
       {detailsId !== null && d.rows.some((r) => r.id === detailsId) && (
         <DetailsDialog api={api} row={d.rows.find((r) => r.id === detailsId)!} onClose={() => setDetailsId(null)} />
       )}

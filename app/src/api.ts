@@ -1,4 +1,4 @@
-import type { Api, Category, Config, ConfigChange, EngineStatus, ExtensionSettings, Details, Plan, PlanWindow, Queue, Row, Rule, SiteProfile, TorrentList, ToolInfo } from "./types";
+import type { Api, Category, Config, ConfigChange, EngineStatus, ExtensionSettings, Details, Plan, PlanWindow, Queue, Row, Rule, SiteProfile, TorrentList, ToolInfo, Seeding } from "./types";
 
 /** True inside the Tauri window; false in a plain browser (development, tests). */
 export function insideTauri(): boolean {
@@ -24,6 +24,8 @@ function tauriApi(): Api {
     tools: () => call<ToolInfo[]>("get_tools"),
     setTool: (name, path) => call<ToolInfo[]>("set_tool", { name, path }),
     openToolPage: (url) => call<void>("open_tool_page", { url }),
+    seeding: () => call<Seeding>("get_seeding"),
+    setSeeding: (s) => call<Seeding>("set_seeding", { ratio: s.ratio, minutes: s.minutes }),
     videoBrowser: () => call<string | null>("get_video_browser"),
     setVideoBrowser: (browser) => call<string | null>("set_video_browser", { browser }),
     profiles: () => call<SiteProfile[]>("get_profiles"),
@@ -88,6 +90,7 @@ export function demoApi(tick = 1000): Api {
   let ruleList: Rule[] = [];
   let nextRule = 1;
   let demoBrowser: string | null = null;
+  let demoSeeding: Seeding = { ratio: null, minutes: null };
   let toolList: ToolInfo[] = [
     { name: "ffmpeg", purpose: "join separate video and audio, add subtitles to a video, convert files, and merge the best video and sound of a YouTube download", chosen: null, found: null, page: "https://ffmpeg.org/download.html", windowsPage: "https://www.gyan.dev/ffmpeg/builds/", winget: "winget install Gyan.FFmpeg" },
     { name: "yt-dlp", purpose: "download videos from YouTube, Vimeo and similar sites (they hide the real file behind a web page that needs a program to read it)", chosen: null, found: null, page: "https://github.com/yt-dlp/yt-dlp#installation", windowsPage: "https://github.com/yt-dlp/yt-dlp/releases/latest", winget: "winget install yt-dlp.yt-dlp" },
@@ -171,6 +174,8 @@ export function demoApi(tick = 1000): Api {
       return toolList.map((t) => ({ ...t }));
     },
     openToolPage: async (url) => void window.open(url, "_blank", "noopener"),
+    seeding: async () => (need(), { ...demoSeeding }),
+    setSeeding: async (s) => ((demoSeeding = { ratio: s.ratio || null, minutes: s.minutes || null }), { ...demoSeeding }),
     videoBrowser: async () => (need(), demoBrowser),
     setVideoBrowser: async (browser) => ((demoBrowser = browser), demoBrowser),
     profiles: async () => (need(), profileList),

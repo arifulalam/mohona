@@ -7,7 +7,7 @@ use std::time::Duration;
 
 use mohona_appcore::{
     AppError, Category, Config, ConfigChange, Engine, EngineStatus, ExtensionSettings, Plan,
-    Details, PlanWindow, Queue, QueueChange, Row, Rule, SiteProfile, SpeedTracker, ToolInfo, TorrentList, Watcher,
+    Details, PlanWindow, Queue, QueueChange, Row, Rule, SiteProfile, Seeding, SpeedTracker, ToolInfo, TorrentList, Watcher,
 };
 use tauri::menu::{Menu, MenuItem};
 use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
@@ -206,6 +206,16 @@ async fn get_tools(app: State<'_, App>) -> Result<Vec<ToolInfo>> {
 #[tauri::command]
 async fn set_tool(app: State<'_, App>, name: String, path: Option<String>) -> Result<Vec<ToolInfo>> {
     app.engine.set_tool(name, path).await
+}
+
+#[tauri::command]
+async fn get_seeding(app: State<'_, App>) -> Result<Seeding> {
+    app.engine.seeding().await
+}
+
+#[tauri::command]
+async fn set_seeding(app: State<'_, App>, ratio: Option<u32>, minutes: Option<u64>) -> Result<Seeding> {
+    app.engine.set_seeding(Seeding { ratio, minutes }).await
 }
 
 #[tauri::command]
@@ -423,6 +433,8 @@ pub fn run() {
             get_tools,
             set_tool,
             open_tool_page,
+            get_seeding,
+            set_seeding,
             get_video_browser,
             set_video_browser,
             get_profiles,

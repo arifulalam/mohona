@@ -757,3 +757,19 @@ A `401` now becomes its own error (`NetError::Unauthorized`) that names the kind
 **The extension.** The popup and the on-page button list "Video on this page" last on any web page; choosing it adds the page with `video: true`. Then the page goes to yt-dlp whatever it is, and a page without a video ends as an error ("there is no video on this page that yt-dlp knows") instead of being saved as a web page. The API's add call takes the same `video` field.
 
 **Limits.** Facebook, Instagram and X change often and break yt-dlp often: update it (`winget upgrade yt-dlp.yt-dlp`). Paid or DRM-protected content (many music and video services) is not supported and will not be worked around. Only the first page of a link is looked at: no playlists, no profile pages. Verified here with a stand-in yt-dlp; real sites are C36.
+
+## ADR-0073: Sharing finished torrents (seeding) with a ratio or time limit
+
+**What.** ADR-0063 left a finished torrent at once. Now two settings, `torrent.ratio` (an upload ratio, such as 1.5) and `torrent.minutes`, keep a finished torrent in the session and uploading until the first of them is reached, then it leaves (the files stay). With both empty, nothing changes: not shared, the default. Settings, Torrents in the app; `mohona torrent seed [--ratio R] [--minutes M] [--off]`; the daemon calls `GetSeeding`/`SetSeeding` (the ratio travels in hundredths, at most 1000; empty or 0 is no limit). Turning sharing off ends every torrent being shared at once.
+
+**Why these limits.** A ratio is what people expect from a torrent client and is polite to the swarm; the time limit stops a torrent nobody wants from being shared for ever. Nothing is shared by default because uploading uses the person's connection and exposes their address to the swarm, and a download manager's user asked for a download.
+
+**Not included.** Per-torrent control (the shared torrent is not a list row you can stop one by one; the download is already "completed"), sharing after Mohona is closed or restarted (the engine's session ends with the program; a resumed torrent that is already complete is shared again only if it is downloaded again), and speed limits for torrents (Mohona's limits still do not apply to them). Tested here with two sessions on one computer (it stays in the session when shared, is gone when not, and stops when sharing is turned off); a real swarm is not tested.
+
+## ADR-0074: A "download finished" message with Open and Show in folder
+
+**What.** When a download finishes while the Mohona window is open, a small message appears in the corner with its name and two buttons, Open and Show in folder (the same safe open as the list's: programs and scripts are still refused). It goes by itself after 15 seconds, at most three show at once, and it follows the existing switch "Show a message when a download finishes or fails". Downloads that were already finished when the window opened are not news.
+
+**Why in the window.** The operating system's own message (the tray's, shown when the window is hidden) comes from Tauri's notification plugin, which on Windows can show text only: no buttons, and no answer when it is clicked. Buttons there would need a Windows-specific toast library in the Tauri shell, which cannot be built or tried here; this is left until the app is built on Windows and the plain messages are seen to work. The browser extension already has its own Open and Show in folder buttons (ADR-0070).
+
+**Not included.** Buttons on the system message, a sound, failed downloads in this message (the list and the system message already say so).

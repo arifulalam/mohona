@@ -221,7 +221,7 @@ A plugin is a small program that turns a link of one site into the real download
 
 ## BitTorrent
 
-Magnet links and `.torrent` addresses download like any other item (librqbit underneath; ADR-0063). Files only, no seeding after the download finishes.
+Magnet links and `.torrent` addresses download like any other item (librqbit underneath; ADR-0063). Files only. After a download finishes it can keep sharing (seeding) until an upload ratio and/or a time you choose (Settings, Torrents; `mohona torrent seed`); by default it does not (ADR-0073).
 
 ## Browser extension (early)
 
