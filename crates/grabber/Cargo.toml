@@ -1,0 +1,16 @@
+[package]
+name = "mohona-grabber"
+description = "Mohona site grabber: finds the files linked from a web page and the pages it links to"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+mohona-core = { path = "../core" }
+mohona-net = { path = "../net" }
+tokio.workspace = true
+url = "2"
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["rt-multi-thread", "macros", "net", "io-util"] }

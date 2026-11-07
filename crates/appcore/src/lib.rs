@@ -123,6 +123,54 @@ pub struct Queue {
     pub open_now: bool,
 }
 
+/// What the site grabber is to look for.
+#[derive(Debug, Clone, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GrabOptions {
+    pub url: String,
+    pub depth: u32,
+    pub same_site: bool,
+    pub types: Vec<String>,
+    pub max_pages: Option<u32>,
+    pub robots: bool,
+}
+
+/// A file the site grabber found.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GrabFile {
+    pub url: String,
+    pub name: String,
+    pub group: String,
+    /// The page that links to it.
+    pub page: String,
+}
+
+/// How the site grabber is doing, and what it found.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GrabState {
+    /// `idle`, `running`, `done`, `stopped` or `failed`.
+    pub state: String,
+    pub pages: u32,
+    pub found: u32,
+    pub current: String,
+    pub files: Vec<GrabFile>,
+    pub skipped_by_robots: u32,
+    pub failed_pages: u32,
+    pub note: Option<String>,
+    pub error: Option<String>,
+}
+
+/// What came of adding the files the grabber found.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GrabAdded {
+    pub added: u32,
+    /// Files that were not added, with the reason (already in the list, for one).
+    pub skipped: Vec<String>,
+}
+
 /// One file inside a torrent.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, serde::Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -480,6 +528,116 @@ impl Engine {
             }),
             _ => Err(AppError::Engine("unexpected answer from the engine".into())),
         }
+    }
+
+    /// Starts the site grabber (one run at a time).
+    pub async fn grab_start(&self, options: GrabOptions) -> Result<(), AppError> {
+        let url = options.url.trim().to_string();
+        if url.is_empty() {
+            return Err(AppError::Input("type or paste a web address".into()));
+        }
+        if options.depth > 5 {
+            return Err(AppError::Input("the depth can be at most 5".into()));
+        }
+        self.call(Call::GrabStart {
+            url,
+            depth: options.depth,
+            same_site: options.same_site,
+            types: options.types,
+            max_pages: options.max_pages,
+            robots: options.robots,
+        })
+        .await?;
+        Ok(())
+    }
+
+    /// How the site grabber is doing, and (once it is over) what it found.
+    pub async fn grab_status(&self) -> Result<GrabState, AppError> {
+        match self.call(Call::GrabStatus).await? {
+            Response::Grab {
+                state,
+                pages,
+                found,
+                current,
+                files,
+                skipped_by_robots,
+                failed_pages,
+                note,
+                error,
+            } => Ok(GrabState {
+                state,
+                pages,
+                found,
+                current,
+                files: files
+                    .into_iter()
+                    .map(|f| GrabFile {
+                        url: f.url,
+                        name: f.name,
+                        group: f.group,
+                        page: f.page,
+                    })
+                    .collect(),
+                skipped_by_robots,
+                failed_pages,
+                note,
+                error,
+            }),
+            _ => Err(AppError::Engine("unexpected answer from the engine".into())),
+        }
+    }
+
+    /// Stops the site grabber; what it found so far stays.
+    pub async fn grab_stop(&self) -> Result<(), AppError> {
+        self.call(Call::GrabStop).await?;
+        Ok(())
+    }
+
+    /// Adds the files the grabber found (the page that links to each is sent as its referrer,
+    /// which many sites want), into a folder and queue. Files already in the list are skipped.
+    pub async fn grab_download(
+        &self,
+        files: Vec<GrabFile>,
+        folder: Option<&str>,
+        queue: Option<i64>,
+    ) -> Result<GrabAdded, AppError> {
+        if files.is_empty() {
+            return Err(AppError::Input("choose at least one file".into()));
+        }
+        let folder = folder.map(str::trim).filter(|f| !f.is_empty());
+        let mut added = 0;
+        let mut skipped = Vec::new();
+        for file in files {
+            let lower = file.url.to_ascii_lowercase();
+            if !(lower.starts_with("http://") || lower.starts_with("https://")) {
+                skipped.push(format!("{}: not a web address", file.name));
+                continue;
+            }
+            match self
+                .call(Call::Add {
+                    url: file.url.clone(),
+                    dest_dir: folder.map(str::to_string),
+                    cookies: None,
+                    referrer: Some(file.page.clone()).filter(|p| p.starts_with("http")),
+                    user_agent: None,
+                    headers: Vec::new(),
+                    sort: false,
+                    duplicates: Some("skip".into()),
+                    queue,
+                    files: None,
+                    video: false,
+                })
+                .await
+            {
+                Ok(Response::Added { .. }) => added += 1,
+                Ok(Response::Skipped { reason }) => {
+                    skipped.push(format!("{}: {reason}", file.name))
+                }
+                Ok(_) => {}
+                Err(e) => skipped.push(format!("{}: {e}", file.name)),
+            }
+        }
+        Ok(GrabAdded { added, skipped })
     }
 
     /// Add a torrent and download only the chosen files (numbers from [`Engine::torrent_files`]).

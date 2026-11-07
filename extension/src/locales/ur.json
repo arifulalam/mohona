@@ -69,5 +69,20 @@
   "Sent": "بھیج دیا",
   "Hide on {site}": "{site} پر چھپائیں",
   "Open": "کھولیں",
-  "Show in folder": "فولڈر میں دکھائیں"
+  "Show in folder": "فولڈر میں دکھائیں",
+  "All files": "تمام فائلیں",
+  "Archives": "آرکائیوز",
+  "Audio": "آڈیو",
+  "Documents": "دستاویزات",
+  "Download selected": "منتخب ڈاؤن لوڈ کریں",
+  "Files on this page": "اس صفحے کی فائلیں",
+  "No files found on this page.": "اس صفحے پر کوئی فائل نہیں ملی۔",
+  "Other": "دیگر",
+  "Pictures": "تصاویر",
+  "Pictures, videos, documents and other files this page links to.": "تصاویر، ویڈیوز، دستاویزات اور دوسری فائلیں جن سے یہ صفحہ لنک ہے۔",
+  "Programs": "پروگرام",
+  "Select all": "سب منتخب کریں",
+  "Select none": "کچھ منتخب نہ کریں",
+  "Sent to Mohona": "موہنا کو بھیج دیا گیا",
+  "Videos": "ویڈیوز"
 }

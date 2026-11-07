@@ -69,5 +69,20 @@
   "Sent": "送信しました",
   "Hide on {site}": "{site} で非表示",
   "Open": "開く",
-  "Show in folder": "フォルダーで表示"
+  "Show in folder": "フォルダーで表示",
+  "All files": "すべてのファイル",
+  "Archives": "アーカイブ",
+  "Audio": "音声",
+  "Documents": "ドキュメント",
+  "Download selected": "選んだものをダウンロード",
+  "Files on this page": "このページのファイル",
+  "No files found on this page.": "このページにファイルは見つかりませんでした。",
+  "Other": "その他",
+  "Pictures": "画像",
+  "Pictures, videos, documents and other files this page links to.": "このページがリンクしている画像、動画、ドキュメントなどのファイル。",
+  "Programs": "プログラム",
+  "Select all": "すべて選択",
+  "Select none": "選択を解除",
+  "Sent to Mohona": "Mohona に送りました",
+  "Videos": "動画"
 }

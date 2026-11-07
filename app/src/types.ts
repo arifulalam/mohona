@@ -96,6 +96,45 @@ export interface TorrentFile {
   size: number;
 }
 
+/** What the site grabber is to look for. */
+export interface GrabOptions {
+  url: string;
+  /** 0: this page only; 1: also the pages it links to; ... (at most 5) */
+  depth: number;
+  sameSite: boolean;
+  /** Groups (`images`, `video`, `audio`, `documents`, `archives`, `programs`) or endings; none: every file. */
+  types: string[];
+  maxPages: number | null;
+  robots: boolean;
+}
+
+/** A file the site grabber found. */
+export interface GrabFile {
+  url: string;
+  name: string;
+  group: string;
+  /** The page that links to it. */
+  page: string;
+}
+
+/** How the site grabber is doing, and what it found. */
+export interface GrabState {
+  state: "idle" | "running" | "done" | "stopped" | "failed";
+  pages: number;
+  found: number;
+  current: string;
+  files: GrabFile[];
+  skippedByRobots: number;
+  failedPages: number;
+  note: string | null;
+  error: string | null;
+}
+
+export interface GrabAdded {
+  added: number;
+  skipped: string[];
+}
+
 /** What a torrent holds. */
 export interface TorrentList {
   name: string;
@@ -196,6 +235,11 @@ export interface Api {
   add(url: string, folder: string | null, queue?: number, files?: number[]): Promise<number>;
   /** What is inside a torrent; a magnet link can take up to 90 seconds. */
   torrentFiles(url: string): Promise<TorrentList>;
+  grabStart(options: GrabOptions): Promise<void>;
+  grabStatus(): Promise<GrabState>;
+  grabStop(): Promise<void>;
+  /** Adds the chosen files (each with the page that links to it as referrer). */
+  grabDownload(files: GrabFile[], folder: string | null, queue: number | null): Promise<GrabAdded>;
   details(id: number): Promise<Details>;
   tools(): Promise<ToolInfo[]>;
   /** Chooses where a tool is (null: find it by itself); resolves with the new state. */

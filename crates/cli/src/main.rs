@@ -13,6 +13,7 @@ use mohona_net::{ClientConfig, HttpClient};
 use tokio::sync::mpsc;
 
 mod daemon;
+mod grab;
 mod history;
 mod plugins;
 mod profiles;
@@ -79,6 +80,9 @@ enum Command {
         #[arg(long)]
         info: Option<PathBuf>,
     },
+    /// Site grabber: list (and download) the files a web page and the pages it links to offer
+    /// (the daemon must be running)
+    Grab(grab::GrabArgs),
     /// Torrents: look inside one and download only some of its files (the daemon must be running)
     Torrent {
         #[command(subcommand)]
@@ -622,6 +626,7 @@ async fn main() -> ExitCode {
         Some(Command::Resolve { url }) => resolve::run(&url),
         Some(Command::Tool { command, info }) => toolcmd::run(command, info).await,
         Some(Command::Torrent { command, info }) => torrent::run(command, info).await,
+        Some(Command::Grab(args)) => grab::run(args).await,
         Some(Command::Plugins { command, info }) => plugins::run(command, info).await,
         Some(Command::Sync { command, info }) => sync::run(command, info).await,
         Some(Command::Remote { command, info }) => remote::run(command, info).await,

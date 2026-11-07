@@ -206,6 +206,30 @@ pub enum Call {
         #[serde(default)]
         video: bool,
     },
+    /// Start the site grabber on a web page (one run at a time; follow it with `GrabStatus`).
+    GrabStart {
+        url: String,
+        /// 0: only this page; 1: also the pages it links to; ... (at most 5)
+        #[serde(default)]
+        depth: u32,
+        /// Follow links to pages of the same site only.
+        #[serde(default = "yes")]
+        same_site: bool,
+        /// File groups (`images`, `video`, `audio`, `documents`, `archives`, `programs`) or
+        /// endings (`pdf`); none: every file.
+        #[serde(default)]
+        types: Vec<String>,
+        /// Most pages to read (default 100, at most 500).
+        #[serde(default)]
+        max_pages: Option<u32>,
+        /// Obey the site's robots.txt (default yes).
+        #[serde(default = "yes")]
+        robots: bool,
+    },
+    /// How the grabber is doing, and what it found (answered as `Grab`).
+    GrabStatus,
+    /// Stop the grabber; what it found so far stays.
+    GrabStop,
     /// What is inside a torrent (a magnet link or a `.torrent` address); can take up to 90 seconds.
     TorrentFiles {
         url: String,
@@ -302,6 +326,20 @@ pub struct DownloadInfo {
     /// which usually means the link expired and a fresh one may work.
     #[serde(default)]
     pub expired: bool,
+}
+
+fn yes() -> bool {
+    true
+}
+
+/// One file the site grabber found.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct GrabFile {
+    pub url: String,
+    pub name: String,
+    pub group: String,
+    /// The page that links to it.
+    pub page: String,
 }
 
 /// One file inside a torrent.
@@ -445,6 +483,20 @@ pub enum Response {
     TorrentFiles {
         name: String,
         files: Vec<TorrentFileInfo>,
+    },
+    /// The site grabber: `idle` (never run), `running`, `done`, `stopped` or `failed`.
+    Grab {
+        state: String,
+        pages: u32,
+        found: u32,
+        /// The page being read.
+        current: String,
+        /// The files found (listed once the run is over, so a status call stays small).
+        files: Vec<GrabFile>,
+        skipped_by_robots: u32,
+        failed_pages: u32,
+        note: Option<String>,
+        error: Option<String>,
     },
     Tools {
         tools: Vec<ToolStatus>,

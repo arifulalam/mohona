@@ -69,5 +69,20 @@
   "Sent": "পাঠানো হয়েছে",
   "Hide on {site}": "{site}-এ লুকান",
   "Open": "খুলুন",
-  "Show in folder": "ফোল্ডারে দেখান"
+  "Show in folder": "ফোল্ডারে দেখান",
+  "All files": "সব ফাইল",
+  "Archives": "আর্কাইভ",
+  "Audio": "অডিও",
+  "Documents": "ডকুমেন্ট",
+  "Download selected": "বাছাইগুলো ডাউনলোড করুন",
+  "Files on this page": "এই পেজের ফাইল",
+  "No files found on this page.": "এই পেজে কোনো ফাইল পাওয়া যায়নি।",
+  "Other": "অন্যান্য",
+  "Pictures": "ছবি",
+  "Pictures, videos, documents and other files this page links to.": "এই পেজ যেসব ছবি, ভিডিও, ডকুমেন্ট ও অন্য ফাইলের লিংক দিয়েছে।",
+  "Programs": "প্রোগ্রাম",
+  "Select all": "সব বাছুন",
+  "Select none": "কিছুই না বাছুন",
+  "Sent to Mohona": "মোহোনায় পাঠানো হয়েছে",
+  "Videos": "ভিডিও"
 }

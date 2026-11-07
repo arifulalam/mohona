@@ -1235,6 +1235,100 @@
           }
         }
       }
+    },
+    "/v1/grab": {
+      "post": {
+        "operationId": "grabStart",
+        "summary": "Start the site grabber on a web page: it lists the files the page links to, and those of the pages it links to, to the depth asked. One run at a time; follow it with GET /v1/grab.",
+        "x-scope": "write",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "url"
+                ],
+                "properties": {
+                  "url": {
+                    "type": "string"
+                  },
+                  "depth": {
+                    "type": "integer",
+                    "description": "0: this page only; 1: also the pages it links to; ... at most 5. Default 0."
+                  },
+                  "same_site": {
+                    "type": "boolean",
+                    "description": "Follow links to pages of the same site only. Default true."
+                  },
+                  "types": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    },
+                    "description": "Groups (images, video, audio, documents, archives, programs) or endings (pdf); none: every file."
+                  },
+                  "max_pages": {
+                    "type": "integer",
+                    "description": "Most pages to read. Default 100, at most 500."
+                  },
+                  "robots": {
+                    "type": "boolean",
+                    "description": "Obey the site's robots.txt. Default true."
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Started."
+          },
+          "400": {
+            "$ref": "#/components/responses/Error"
+          },
+          "401": {
+            "$ref": "#/components/responses/Error"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      },
+      "get": {
+        "operationId": "grabStatus",
+        "summary": "How the site grabber is doing; once it is over, the files it found.",
+        "x-scope": "read",
+        "responses": {
+          "200": {
+            "description": "state (idle, running, done, stopped, failed), pages, found, current, files: [{url, name, group, page}], skipped_by_robots, failed_pages, note, error."
+          },
+          "401": {
+            "$ref": "#/components/responses/Error"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      },
+      "delete": {
+        "operationId": "grabStop",
+        "summary": "Stop the site grabber; what it found so far stays.",
+        "x-scope": "write",
+        "responses": {
+          "200": {
+            "description": "Stopped."
+          },
+          "401": {
+            "$ref": "#/components/responses/Error"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
     }
   },
   "components": {

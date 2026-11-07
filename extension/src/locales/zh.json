@@ -69,5 +69,20 @@
   "Sent": "已发送",
   "Hide on {site}": "在 {site} 上隐藏",
   "Open": "打开",
-  "Show in folder": "在文件夹中显示"
+  "Show in folder": "在文件夹中显示",
+  "All files": "所有文件",
+  "Archives": "压缩包",
+  "Audio": "音频",
+  "Documents": "文档",
+  "Download selected": "下载所选项",
+  "Files on this page": "此页面上的文件",
+  "No files found on this page.": "此页面上没有找到文件。",
+  "Other": "其他",
+  "Pictures": "图片",
+  "Pictures, videos, documents and other files this page links to.": "此页面链接的图片、视频、文档及其他文件。",
+  "Programs": "程序",
+  "Select all": "全选",
+  "Select none": "全不选",
+  "Sent to Mohona": "已发送到 Mohona",
+  "Videos": "视频"
 }

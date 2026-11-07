@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { I18n, LANGUAGES, loadLanguage, saveLanguage, translator, useT } from "./i18n";
 import { AddDialog, Modal } from "./AddDialog";
+import { GrabberDialog } from "./GrabberDialog";
 import { loadClipboardWatch, saveClipboardWatch, useClipboardOffer } from "./clipboard";
 import { DetailsDialog } from "./DetailsDialog";
 import { categoryCounts, categoryOf, SORTS, sortRows, type SortKey } from "./organize";
@@ -46,6 +47,7 @@ function Main({ api, every, language, onLanguage }: { api: Api; every?: number; 
   const [filter, setFilter] = useState<Filter>("all");
   const [selected, setSelected] = useState<Set<number>>(new Set());
   const [adding, setAdding] = useState(false);
+  const [grabbing, setGrabbing] = useState(false);
   const [removing, setRemoving] = useState(false);
   const [settings, setSettings] = useState(false);
   const [queueList, setQueueList] = useState<{ id: number; name: string }[]>([]);
@@ -223,6 +225,17 @@ function Main({ api, every, language, onLanguage }: { api: Api; every?: number; 
         >
           {t("+ Add")}
         </button>
+        <button
+          className="btn"
+          onClick={() => {
+            setGrabbing(true);
+            api.config().then((c) => setDefaultFolder(c.downloadFolder)).catch(() => undefined);
+            api.queues().then(setQueueList).catch(() => undefined);
+          }}
+          disabled={!running}
+        >
+          {t("Site Grabber")}
+        </button>
         <button className="btn" disabled={!can.pause} onClick={() => void each(chosen, api.pause)}>
           {t("Pause")}
         </button>
@@ -301,6 +314,7 @@ function Main({ api, every, language, onLanguage }: { api: Api; every?: number; 
       {settings && (
         <SettingsWindow api={api} running={running} language={language} onLanguage={onLanguage} theme={theme} onTheme={setTheme} clipboard={watchClipboard} onClipboard={setWatchClipboard} onClose={() => setSettings(false)} />
       )}
+      {grabbing && <GrabberDialog api={api} queues={queueList} defaultFolder={defaultFolder} every={every} onClose={() => setGrabbing(false)} />}
       {adding && <AddDialog onAdd={addAll} onTorrentFiles={(u) => api.torrentFiles(u)} onAddTorrent={addTorrent} queues={queueList} onBrowse={() => api.pickFolder()} defaultFolder={defaultFolder} onClose={() => setAdding(false)} />}
       {removing && (
         <Modal title={t("Remove from the list")} onClose={() => setRemoving(false)}>

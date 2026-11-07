@@ -69,5 +69,20 @@
   "Sent": "भेज दिया",
   "Hide on {site}": "{site} पर छिपाएँ",
   "Open": "खोलें",
-  "Show in folder": "फ़ोल्डर में दिखाएँ"
+  "Show in folder": "फ़ोल्डर में दिखाएँ",
+  "All files": "सभी फ़ाइलें",
+  "Archives": "आर्काइव",
+  "Audio": "ऑडियो",
+  "Documents": "दस्तावेज़",
+  "Download selected": "चुने हुए डाउनलोड करें",
+  "Files on this page": "इस पेज की फ़ाइलें",
+  "No files found on this page.": "इस पेज पर कोई फ़ाइल नहीं मिली।",
+  "Other": "अन्य",
+  "Pictures": "तस्वीरें",
+  "Pictures, videos, documents and other files this page links to.": "तस्वीरें, वीडियो, दस्तावेज़ और अन्य फ़ाइलें जिनसे यह पेज जुड़ा है।",
+  "Programs": "प्रोग्राम",
+  "Select all": "सभी चुनें",
+  "Select none": "कोई न चुनें",
+  "Sent to Mohona": "मोहोना को भेजा गया",
+  "Videos": "वीडियो"
 }

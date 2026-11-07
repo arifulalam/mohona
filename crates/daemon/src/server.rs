@@ -44,6 +44,16 @@ pub(crate) struct State {
     /// The port the remote companion listens on (0: not listening).
     remote_port: std::sync::atomic::AtomicU16,
     plugins_dir: PathBuf,
+    grab: Arc<std::sync::Mutex<Option<GrabJob>>>,
+}
+
+/// The site grabber's run: the newest one, running or over.
+struct GrabJob {
+    cancel: mohona_core::CancelToken,
+    progress: mohona_grabber::Progress,
+    state: &'static str,
+    result: Option<mohona_grabber::Grabbed>,
+    error: Option<String>,
 }
 
 /// The newest numbers about a running download, from the manager's events.
@@ -313,6 +323,7 @@ pub async fn serve(manager: Manager, config: ServerConfig) -> std::io::Result<()
         action: std::sync::Mutex::new(ActionState::default()),
         live: std::sync::Mutex::new(std::collections::HashMap::new()),
         remote_port: std::sync::atomic::AtomicU16::new(0),
+        grab: Arc::new(std::sync::Mutex::new(None)),
         plugins_dir: config
             .info_path
             .parent()
@@ -956,6 +967,128 @@ pub(crate) async fn handle(state: &State, call: Call) -> Response {
                     reason: why.to_string(),
                 },
                 Err(e) => error(e),
+            }
+        }
+        Call::GrabStart {
+            url,
+            depth,
+            same_site,
+            types,
+            max_pages,
+            robots,
+        } => {
+            let mut job = state.grab.lock().unwrap_or_else(|e| e.into_inner());
+            if job.as_ref().is_some_and(|j| j.state == "running") {
+                return error("the site grabber is already running: stop it first");
+            }
+            let options = mohona_grabber::Options {
+                depth,
+                same_site,
+                types,
+                max_pages: max_pages.map_or(100, |m| m as usize),
+                robots,
+                ..mohona_grabber::Options::default()
+            };
+            let client = match mohona_net::HttpClient::new(&mohona_net::ClientConfig::default()) {
+                Ok(c) => c,
+                Err(e) => return error(e),
+            };
+            let cancel = mohona_core::CancelToken::new();
+            *job = Some(GrabJob {
+                cancel: cancel.clone(),
+                progress: mohona_grabber::Progress::default(),
+                state: "running",
+                result: None,
+                error: None,
+            });
+            drop(job);
+            let slot = state.grab.clone();
+            tokio::spawn(async move {
+                let progress_slot = slot.clone();
+                let done = mohona_grabber::grab(&client, &url, &options, &cancel, |p| {
+                    if let Some(j) = progress_slot
+                        .lock()
+                        .unwrap_or_else(|e| e.into_inner())
+                        .as_mut()
+                    {
+                        j.progress = p;
+                    }
+                })
+                .await;
+                let mut job = slot.lock().unwrap_or_else(|e| e.into_inner());
+                if let Some(j) = job
+                    .as_mut()
+                    .filter(|j| j.cancel.is_cancelled() || j.state == "running")
+                {
+                    match done {
+                        Ok(r) => {
+                            j.state = if r.note.as_deref() == Some("stopped") {
+                                "stopped"
+                            } else {
+                                "done"
+                            };
+                            j.result = Some(r);
+                        }
+                        Err(e) => {
+                            j.state = "failed";
+                            j.error = Some(e);
+                        }
+                    }
+                }
+            });
+            Response::Done
+        }
+        Call::GrabStop => {
+            if let Some(j) = state
+                .grab
+                .lock()
+                .unwrap_or_else(|e| e.into_inner())
+                .as_ref()
+            {
+                j.cancel.cancel();
+            }
+            Response::Done
+        }
+        Call::GrabStatus => {
+            let job = state.grab.lock().unwrap_or_else(|e| e.into_inner());
+            match job.as_ref() {
+                None => Response::Grab {
+                    state: "idle".into(),
+                    pages: 0,
+                    found: 0,
+                    current: String::new(),
+                    files: Vec::new(),
+                    skipped_by_robots: 0,
+                    failed_pages: 0,
+                    note: None,
+                    error: None,
+                },
+                Some(j) => {
+                    let r = j.result.as_ref();
+                    Response::Grab {
+                        state: j.state.into(),
+                        pages: r.map_or(j.progress.pages, |r| r.pages) as u32,
+                        found: r.map_or(j.progress.files, |r| r.files.len()) as u32,
+                        current: j.progress.current.clone(),
+                        files: r
+                            .map(|r| {
+                                r.files
+                                    .iter()
+                                    .map(|f| crate::protocol::GrabFile {
+                                        url: f.url.clone(),
+                                        name: f.name.clone(),
+                                        group: f.group.into(),
+                                        page: f.page.clone(),
+                                    })
+                                    .collect()
+                            })
+                            .unwrap_or_default(),
+                        skipped_by_robots: r.map_or(0, |r| r.skipped_by_robots as u32),
+                        failed_pages: r.map_or(0, |r| r.failed_pages as u32),
+                        note: r.and_then(|r| r.note.clone()),
+                        error: j.error.clone(),
+                    }
+                }
             }
         }
         Call::TorrentFiles { url } => {

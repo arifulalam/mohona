@@ -2,7 +2,7 @@ import { cleanup, render, screen, waitFor, within } from "@testing-library/react
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { App } from "../src/App";
-import type { Api, Category, Config, ConfigChange, EngineStatus, ExtensionSettings, Details, Plan, PlanWindow, Queue, Row, Rule, SiteProfile, ToolInfo } from "../src/types";
+import type { Api, Category, Config, ConfigChange, EngineStatus, ExtensionSettings, Details, Plan, PlanWindow, Queue, Row, Rule, SiteProfile, ToolInfo, GrabOptions, GrabFile, GrabState } from "../src/types";
 
 const row = (id: number, name: string, status: string, extra: Partial<Row> = {}): Row => ({
   id, name, url: `https://x.test/${name}`, status, downloaded: 50, size: 100, percent: 50, speed: 0, eta: null,
@@ -28,6 +28,8 @@ function fake(initial: Row[], running = true) {
   let queues: Queue[] = [{ id: 1, name: "Main", maxActive: 4, speedLimit: null, windows: [], openNow: true }];
   let rules: Rule[] = [];
   let profiles: SiteProfile[] = [];
+  let polls = 0;
+  let grab: GrabState = { state: "idle", pages: 0, found: 0, current: "", files: [], skippedByRobots: 0, failedPages: 0, note: null, error: null };
   let browser: string | null = null;
   let seeding: { ratio: number | null; minutes: number | null } = { ratio: null, minutes: null };
   let tools: ToolInfo[] = [
@@ -45,6 +47,25 @@ function fake(initial: Row[], running = true) {
       return tools.map((x) => ({ ...x }));
     }),
     openToolPage: vi.fn(async (_url: string) => undefined),
+    grabStart: vi.fn(async (_o: GrabOptions) => void ((grab = { ...grab, state: "running", pages: 1, found: 1, files: [] }), (polls = 0))),
+    grabStatus: vi.fn(async () => {
+      if (grab.state === "running" && ++polls >= 2) {
+        grab = {
+          ...grab,
+          state: "done",
+          pages: 2,
+          found: 3,
+          files: [
+            { url: "https://example.com/a.jpg", name: "a.jpg", group: "images", page: "https://example.com/" },
+            { url: "https://example.com/b.pdf", name: "b.pdf", group: "documents", page: "https://example.com/" },
+            { url: "https://example.com/c.zip", name: "c.zip", group: "archives", page: "https://example.com/x.html" },
+          ],
+        };
+      }
+      return grab;
+    }),
+    grabStop: vi.fn(async () => undefined),
+    grabDownload: vi.fn(async (files: GrabFile[], _f: string | null, _q: number | null) => ({ added: files.length, skipped: [] })),
     seeding: vi.fn(async () => seeding),
     setSeeding: vi.fn(async (s: { ratio: number | null; minutes: number | null }) => (seeding = { ratio: s.ratio, minutes: s.minutes })),
     videoBrowser: vi.fn(async () => browser),
@@ -156,6 +177,38 @@ describe("App", () => {
     api.finish(1);
     await new Promise((r) => setTimeout(r, 300));
     expect(screen.queryByText("Download finished")).toBeNull();
+  });
+
+  it("looks through a web page for files and downloads the ones chosen", async () => {
+    const api = fake([]);
+    render(<App api={api} every={20} />);
+    await userEvent.click(await screen.findByRole("button", { name: "Site Grabber" }));
+    const dialog = await screen.findByRole("dialog", { name: "Site Grabber" });
+    await userEvent.click(within(dialog).getByRole("button", { name: "Look for files" }));
+    expect(await within(dialog).findByRole("alert")).toBeTruthy(); // no address yet
+    await userEvent.type(within(dialog).getByLabelText("Web page"), "https://example.com/");
+    await userEvent.selectOptions(within(dialog).getByLabelText("How far to follow links"), "2");
+    await userEvent.click(within(dialog).getByLabelText("Pictures"));
+    await userEvent.type(within(dialog).getByLabelText("Other endings"), "pdf, epub");
+    await userEvent.click(within(dialog).getByRole("button", { name: "Look for files" }));
+    await waitFor(() =>
+      expect(api.grabStart).toHaveBeenCalledWith({ url: "https://example.com/", depth: 2, sameSite: true, types: ["images", "pdf", "epub"], maxPages: null, robots: true }),
+    );
+    // The list appears when the run is over, everything ticked.
+    const list = await within(dialog).findByRole("list", { name: "Files found" });
+    expect(within(list).getAllByRole("checkbox")).toHaveLength(3);
+    expect(await within(dialog).findByText("3 / 3")).toBeTruthy();
+    // Filter, untick one, and download the rest.
+    await userEvent.click(within(list).getByLabelText("c.zip"));
+    expect(within(dialog).getByText("2 / 3")).toBeTruthy();
+    await userEvent.type(within(dialog).getByLabelText("Filter the list"), "pdf");
+    expect(within(list).queryByLabelText("a.jpg")).toBeNull();
+    await userEvent.clear(within(dialog).getByLabelText("Filter the list"));
+    await userEvent.click(within(dialog).getByRole("button", { name: "Download selected" }));
+    await waitFor(() => expect(api.grabDownload).toHaveBeenCalled());
+    const [sent] = api.grabDownload.mock.calls[0]!;
+    expect(sent.map((f: GrabFile) => f.name)).toEqual(["a.jpg", "b.pdf"]);
+    expect(await within(dialog).findByText("Added: 2")).toBeTruthy();
   });
 
   it("sets how long finished torrents are shared", async () => {

@@ -218,7 +218,7 @@ export function AddDialog({ onAdd, onTorrentFiles, onAddTorrent, onBrowse, queue
 /** Inside the settings window a dialog shows only its content: the window has the frame. */
 export const Embedded = createContext(false);
 
-export function Modal({ title, onClose, children }: { title: string; onClose(): void; children: React.ReactNode }) {
+export function Modal({ title, onClose, children, wide }: { title: string; onClose(): void; children: React.ReactNode; wide?: boolean }) {
   const embedded = useContext(Embedded);
   useEffect(() => {
     if (embedded) return;
@@ -229,7 +229,7 @@ export function Modal({ title, onClose, children }: { title: string; onClose(): 
   if (embedded) return <div className="flex min-w-0 flex-col">{children}</div>;
   return (
     <div className="fixed inset-0 z-10 flex items-center justify-center bg-black/40 p-4" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
-      <div role="dialog" aria-modal="true" aria-label={title} className="w-full max-w-lg rounded-xl border border-[var(--line)] bg-[var(--panel)] p-5 shadow-xl">
+      <div role="dialog" aria-modal="true" aria-label={title} className={`w-full ${wide ? "max-w-3xl" : "max-w-lg"} max-h-[90vh] overflow-auto rounded-xl border border-[var(--line)] bg-[var(--panel)] p-5 shadow-xl`}>
         <h2 className="mb-3 text-base font-semibold">{title}</h2>
         {children}
       </div>

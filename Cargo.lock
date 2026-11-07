@@ -2671,6 +2671,7 @@ dependencies = [
  "getrandom 0.4.3",
  "librqbit",
  "mohona-core",
+ "mohona-grabber",
  "mohona-manager",
  "mohona-media",
  "mohona-net",
@@ -2683,6 +2684,16 @@ dependencies = [
  "tempfile",
  "thiserror 2.0.21",
  "tokio",
+]
+
+[[package]]
+name = "mohona-grabber"
+version = "0.0.1"
+dependencies = [
+ "mohona-core",
+ "mohona-net",
+ "tokio",
+ "url",
 ]
 
 [[package]]

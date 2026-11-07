@@ -69,5 +69,20 @@
   "Sent": "تم الإرسال",
   "Hide on {site}": "إخفاء في {site}",
   "Open": "فتح",
-  "Show in folder": "إظهار في المجلد"
+  "Show in folder": "إظهار في المجلد",
+  "All files": "كل الملفات",
+  "Archives": "الأرشيفات",
+  "Audio": "الصوت",
+  "Documents": "المستندات",
+  "Download selected": "تنزيل المحدد",
+  "Files on this page": "الملفات في هذه الصفحة",
+  "No files found on this page.": "لم يُعثر على ملفات في هذه الصفحة.",
+  "Other": "أخرى",
+  "Pictures": "الصور",
+  "Pictures, videos, documents and other files this page links to.": "الصور والفيديوهات والمستندات وملفات أخرى تربط بها هذه الصفحة.",
+  "Programs": "البرامج",
+  "Select all": "تحديد الكل",
+  "Select none": "إلغاء التحديد",
+  "Sent to Mohona": "أُرسل إلى موهونا",
+  "Videos": "الفيديوهات"
 }

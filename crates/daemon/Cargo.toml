@@ -9,6 +9,8 @@ rust-version.workspace = true
 [dependencies]
 base64 = "0.22"
 getrandom = "0.4"
+mohona-core = { path = "../core" }
+mohona-grabber = { path = "../grabber" }
 mohona-manager = { path = "../manager" }
 mohona-media = { path = "../media" }
 mohona-net = { version = "0.0.1", path = "../net" }
@@ -22,6 +24,5 @@ tokio = { workspace = true, features = ["process"] }
 
 [dev-dependencies]
 librqbit = { version = "9.1.0", default-features = false, features = ["rust-tls"] }
-mohona-core = { path = "../core" }
 mohona-testserver = { path = "../../tools/testserver" }
 tempfile = "3"

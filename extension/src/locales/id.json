@@ -69,5 +69,20 @@
   "Sent": "Terkirim",
   "Hide on {site}": "Sembunyikan di {site}",
   "Open": "Buka",
-  "Show in folder": "Tampilkan di folder"
+  "Show in folder": "Tampilkan di folder",
+  "All files": "Semua berkas",
+  "Archives": "Arsip",
+  "Audio": "Audio",
+  "Documents": "Dokumen",
+  "Download selected": "Unduh yang dipilih",
+  "Files on this page": "Berkas di halaman ini",
+  "No files found on this page.": "Tidak ada berkas di halaman ini.",
+  "Other": "Lainnya",
+  "Pictures": "Gambar",
+  "Pictures, videos, documents and other files this page links to.": "Gambar, video, dokumen, dan berkas lain yang ditautkan halaman ini.",
+  "Programs": "Program",
+  "Select all": "Pilih semua",
+  "Select none": "Batal pilih semua",
+  "Sent to Mohona": "Dikirim ke Mohona",
+  "Videos": "Video"
 }

@@ -1,4 +1,4 @@
-import type { Api, Category, Config, ConfigChange, EngineStatus, ExtensionSettings, Details, Plan, PlanWindow, Queue, Row, Rule, SiteProfile, TorrentList, ToolInfo, Seeding } from "./types";
+import type { Api, Category, Config, ConfigChange, EngineStatus, ExtensionSettings, Details, Plan, PlanWindow, Queue, Row, Rule, SiteProfile, TorrentList, ToolInfo, Seeding, GrabState, GrabFile, GrabAdded } from "./types";
 
 /** True inside the Tauri window; false in a plain browser (development, tests). */
 export function insideTauri(): boolean {
@@ -20,6 +20,10 @@ function tauriApi(): Api {
     list: () => call<Row[]>("list_downloads"),
     add: (url, folder, queue, files) => call<number>("add_download", { url, folder, queue, files }),
     torrentFiles: (url) => call<TorrentList>("torrent_files", { url }),
+    grabStart: (options) => call<void>("grab_start", { options }),
+    grabStatus: () => call<GrabState>("grab_status"),
+    grabStop: () => call<void>("grab_stop"),
+    grabDownload: (files, folder, queue) => call<GrabAdded>("grab_download", { files, folder, queue }),
     details: (id) => call<Details>("get_details", { id }),
     tools: () => call<ToolInfo[]>("get_tools"),
     setTool: (name, path) => call<ToolInfo[]>("set_tool", { name, path }),
@@ -89,7 +93,13 @@ export function demoApi(tick = 1000): Api {
   let nextQueue = 2;
   let ruleList: Rule[] = [];
   let nextRule = 1;
-  let demoBrowser: string | null = null;
+  let demoGrab: GrabState = { state: "idle", pages: 0, found: 0, current: "", files: [], skippedByRobots: 0, failedPages: 0, note: null, error: null };
+const demoGrabFiles = (url: string): GrabFile[] => [
+  { url: new URL("photo.jpg", url).href, name: "photo.jpg", group: "images", page: url },
+  { url: new URL("guide.pdf", url).href, name: "guide.pdf", group: "documents", page: url },
+  { url: new URL("files/all.zip", url).href, name: "all.zip", group: "archives", page: url },
+];
+let demoBrowser: string | null = null;
   let demoSeeding: Seeding = { ratio: null, minutes: null };
   let toolList: ToolInfo[] = [
     { name: "ffmpeg", purpose: "join separate video and audio, add subtitles to a video, convert files, and merge the best video and sound of a YouTube download", chosen: null, found: null, page: "https://ffmpeg.org/download.html", windowsPage: "https://www.gyan.dev/ffmpeg/builds/", winget: "winget install Gyan.FFmpeg" },
@@ -122,6 +132,13 @@ export function demoApi(tick = 1000): Api {
       rows = [...rows, demoRow(id, name, "downloading", 0, 300_000_000, 5_000_000)];
       return id;
     },
+    grabStart: async (options) => {
+      need();
+      demoGrab = { ...demoGrab, state: "done", pages: 2, found: 3, files: demoGrabFiles(options.url) };
+    },
+    grabStatus: async () => (need(), demoGrab),
+    grabStop: async () => undefined,
+    grabDownload: async (files) => (need(), { added: files.length, skipped: [] }),
     torrentFiles: async () => {
       need();
       await new Promise((r) => setTimeout(r, 300));

@@ -6,7 +6,8 @@
 use std::time::Duration;
 
 use mohona_appcore::{
-    AppError, Category, Config, ConfigChange, Engine, EngineStatus, ExtensionSettings, Plan,
+    AppError, Category, Config, ConfigChange, Engine, EngineStatus, ExtensionSettings, GrabAdded, GrabFile,
+    GrabOptions, GrabState, Plan,
     Details, PlanWindow, Queue, QueueChange, Row, Rule, SiteProfile, Seeding, SpeedTracker, ToolInfo, TorrentList, Watcher,
 };
 use tauri::menu::{Menu, MenuItem};
@@ -61,6 +62,33 @@ async fn add_download(
 #[tauri::command]
 async fn torrent_files(app: State<'_, App>, url: String) -> Result<TorrentList> {
     app.engine.torrent_files(&url).await
+}
+
+#[tauri::command]
+async fn grab_start(app: State<'_, App>, options: GrabOptions) -> Result<()> {
+    app.engine.grab_start(options).await
+}
+
+#[tauri::command]
+async fn grab_status(app: State<'_, App>) -> Result<GrabState> {
+    app.engine.grab_status().await
+}
+
+#[tauri::command]
+async fn grab_stop(app: State<'_, App>) -> Result<()> {
+    app.engine.grab_stop().await
+}
+
+#[tauri::command]
+async fn grab_download(
+    app: State<'_, App>,
+    files: Vec<GrabFile>,
+    folder: Option<String>,
+    queue: Option<i64>,
+) -> Result<GrabAdded> {
+    app.engine
+        .grab_download(files, folder.as_deref(), queue)
+        .await
 }
 
 #[tauri::command]
@@ -418,6 +446,10 @@ pub fn run() {
             list_downloads,
             add_download,
             torrent_files,
+            grab_start,
+            grab_status,
+            grab_stop,
+            grab_download,
             pause_download,
             resume_download,
             cancel_download,

@@ -69,5 +69,20 @@
   "Sent": "Отправлено",
   "Hide on {site}": "Скрыть на {site}",
   "Open": "Открыть",
-  "Show in folder": "Показать в папке"
+  "Show in folder": "Показать в папке",
+  "All files": "Все файлы",
+  "Archives": "Архивы",
+  "Audio": "Аудио",
+  "Documents": "Документы",
+  "Download selected": "Скачать выбранное",
+  "Files on this page": "Файлы на этой странице",
+  "No files found on this page.": "На этой странице файлы не найдены.",
+  "Other": "Другие",
+  "Pictures": "Изображения",
+  "Pictures, videos, documents and other files this page links to.": "Изображения, видео, документы и другие файлы, на которые ссылается эта страница.",
+  "Programs": "Программы",
+  "Select all": "Выбрать все",
+  "Select none": "Снять выбор",
+  "Sent to Mohona": "Отправлено в Mohona",
+  "Videos": "Видео"
 }

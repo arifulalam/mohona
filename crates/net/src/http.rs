@@ -111,6 +111,32 @@ impl Body {
         }
     }
 
+    /// The `Content-Type` the server sent (HTTP only), without its parameters, in lower case.
+    pub fn content_type(&self) -> Option<String> {
+        match &self.inner {
+            BodyInner::Http(response) => response
+                .headers()
+                .get(reqwest::header::CONTENT_TYPE)
+                .and_then(|v| v.to_str().ok())
+                .map(|v| {
+                    v.split(';')
+                        .next()
+                        .unwrap_or("")
+                        .trim()
+                        .to_ascii_lowercase()
+                }),
+            _ => None,
+        }
+    }
+
+    /// The address the body really came from, after redirects (HTTP only).
+    pub fn final_url(&self) -> Option<String> {
+        match &self.inner {
+            BodyInner::Http(response) => Some(response.url().to_string()),
+            _ => None,
+        }
+    }
+
     /// The next piece of the body, or `None` at the end.
     pub async fn chunk(&mut self) -> Result<Option<Bytes>, NetError> {
         match &mut self.inner {

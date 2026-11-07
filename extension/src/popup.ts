@@ -4,6 +4,7 @@ import type { Settings } from "./settings";
 import { label as languageLabel, LANGUAGES, loadLanguage, saveLanguage, translator, type Language, type Translate } from "./i18n";
 import { ALL_THEMES, applyTheme, loadTheme, saveTheme } from "./popuptheme";
 import type { DownloadRow } from "./protocol";
+import { collectLinks, filesOf, GROUPS, type PageFile, type RawLink } from "./pagelinks";
 import { bytes, eta, isRunning, nameOf, speed, speeds, summarize } from "./summary";
 
 let t: Translate = translator({});
@@ -321,12 +322,103 @@ function translatePage(language: Language): void {
   select.value = current || "system";
 }
 
+/** The files the page links to, to choose from. */
+let pageFiles: PageFile[] = [];
+const picked = new Set<string>();
+let pageUrl = "";
+
+function drawFiles(): void {
+  const list = $("fileList");
+  const group = ($("fileGroup") as HTMLSelectElement).value;
+  list.replaceChildren();
+  const shown = pageFiles.filter((f) => group === "" || f.group === group);
+  if (shown.length === 0) {
+    const none = document.createElement("li");
+    none.className = "empty";
+    none.textContent = t("No files found on this page.");
+    list.append(none);
+  }
+  for (const file of shown) {
+    const row = document.createElement("li");
+    row.className = "item";
+    const label = document.createElement("label");
+    label.className = "name";
+    label.title = file.url;
+    const box = document.createElement("input");
+    box.type = "checkbox";
+    box.checked = picked.has(file.url);
+    box.addEventListener("change", () => {
+      if (box.checked) picked.add(file.url);
+      else picked.delete(file.url);
+      ($("fileGo") as HTMLButtonElement).disabled = picked.size === 0;
+    });
+    label.append(box, ` ${file.name}`);
+    row.append(label);
+    list.append(row);
+  }
+  ($("fileGo") as HTMLButtonElement).disabled = picked.size === 0;
+}
+
+async function showPageFiles(): Promise<void> {
+  const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+  pageFiles = [];
+  picked.clear();
+  pageUrl = tab?.url ?? "";
+  const group = $("fileGroup") as HTMLSelectElement;
+  if (group.options.length === 0) {
+    group.append(new Option(t("All files"), ""));
+    for (const [id, name] of GROUPS) group.append(new Option(t(name), id));
+    group.addEventListener("change", drawFiles);
+  }
+  if (tab?.id !== undefined && /^https?:/i.test(pageUrl)) {
+    try {
+      const [result] = await chrome.scripting.executeScript({ target: { tabId: tab.id }, func: collectLinks });
+      pageFiles = filesOf((result?.result as RawLink[] | undefined) ?? [], pageUrl);
+    } catch {
+      pageFiles = []; // a page the browser does not let extensions read
+    }
+  }
+  drawFiles();
+}
+
 async function redraw(): Promise<void> {
   await refresh();
   await showExpired();
   await showMedia();
   await pollDownloads();
 }
+
+$("pagefiles").addEventListener("toggle", () => {
+  if (($("pagefiles") as HTMLDetailsElement).open) void showPageFiles();
+});
+const chooseFiles = (on: boolean): void => {
+  const group = ($("fileGroup") as HTMLSelectElement).value;
+  for (const f of pageFiles) {
+    if (group !== "" && f.group !== group) continue;
+    if (on) picked.add(f.url);
+    else picked.delete(f.url);
+  }
+  drawFiles();
+};
+$("fileAll").addEventListener("click", () => chooseFiles(true));
+$("fileNone").addEventListener("click", () => chooseFiles(false));
+$("fileGo").addEventListener("click", async () => {
+  const go = $("fileGo") as HTMLButtonElement;
+  go.disabled = true;
+  let sent = 0;
+  for (const file of pageFiles.filter((f) => picked.has(f.url))) {
+    const answer = await ask({ kind: "downloadMedia", media: { url: file.url, kind: "file", name: file.name, referrer: pageUrl } });
+    if (answer.kind === "outcome" && answer.outcome?.kind === "error") {
+      setResult(describe(answer.outcome));
+      break;
+    }
+    sent += 1;
+  }
+  if (sent > 0) setResult(`${t("Sent to Mohona")}: ${sent}`);
+  picked.clear();
+  drawFiles();
+  await refresh();
+});
 
 function setUpTheme(): void {
   const select = $<HTMLSelectElement>("theme");

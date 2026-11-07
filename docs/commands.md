@@ -629,6 +629,18 @@ mohona profiles disable 1     # also: enable, remove
 
 `mohona remote status` shows whether the companion is on and its address; `enable [--port N]` / `disable` change the setting (they take effect when the daemon starts again); `token [--name NAME] [--read-only]` makes a login token and shows it once. Open the address in a phone's browser and type the token. Plain HTTP, so only on a network you trust. A phone can add, pause, resume, cancel and remove downloads (the file stays on disk), but not change settings or choose folders.
 
+## `grab` — the site grabber: the files a page offers
+
+```
+mohona grab https://example.com/gallery/                       # list what the page and the pages it links to offer
+mohona grab URL --depth 2 --types images,pdf                    # two levels deep; pictures and pdf files only
+mohona grab URL --download --folder D:\Grabbed                  # also download everything found
+```
+
+Starts at one web page, lists the files it links to (pictures, videos, audio, documents, archives, programs and any other file with an ending) and, to `--depth` levels (0 is the page alone, at most 5; default 1), follows the links to other pages and lists theirs. Only pages of the same site are followed unless `--any-site` is given; files are listed wherever they are. `--types` takes groups (`images`, `video`, `audio`, `documents`, `archives`, `programs`) and endings (`pdf,zip`); without it every file is listed. It reads at most `--max-pages` pages (default 100, at most 500), one at a time with a short pause, obeys the site's `robots.txt` unless `--ignore-robots` is given, and stops at once with Ctrl+C (what was found stays listed). The app has the same thing under "Site Grabber" (choose, filter and download), and the browser extension lists "Files on this page".
+
+API: `POST /v1/grab` (write) with `{"url", "depth", "sameSite", "types", "maxPages", "robots"}` starts a run (one at a time), `GET /v1/grab` (read) tells how it is doing and, once over, lists the files, `DELETE /v1/grab` (write) stops it.
+
 ## YouTube and other video pages (needs yt-dlp)
 
 ```
@@ -683,6 +695,9 @@ curl -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
 | `GET`/`POST /v1/queues`, `PUT`/`DELETE /v1/queues/{id}` | read / admin | queues |
 | `GET`/`POST /v1/categories`, `DELETE /v1/categories/{id}` | read / admin | categories |
 | `POST /v1/resolve` | read | direct address of a cloud share link |
+| `POST /v1/grab` | write | start the site grabber on a web page |
+| `GET /v1/grab` | read | how the site grabber is doing, and what it found |
+| `DELETE /v1/grab` | write | stop the site grabber |
 | `GET`/`PUT /v1/rules`, `POST /v1/rules/test` | read / admin (test: read) | rules; `PUT` replaces the whole list |
 | `GET`/`PUT /v1/profiles` | read / admin | site profiles; `PUT` replaces the whole list |
 | `GET`/`PUT /v1/plan`, `PUT`/`DELETE /v1/plan/after-action` | read / admin | schedule and the "when finished" action |

@@ -14,6 +14,7 @@ export function popupTexts() {
   for (const m of ts.matchAll(/\bt\(\s*"((?:[^"\\]|\\.)*)"/g)) found.add(JSON.parse(`"${m[1]}"`));
   const html = readFileSync(join(root, "static", "popup.html"), "utf8");
   for (const m of html.matchAll(/data-t(?:-label|-placeholder)?="([^"]+)"/g)) found.add(m[1]);
+  for (const m of readFileSync(join(root, "src", "pagelinks.ts"), "utf8").matchAll(/\["\w+", "([^"]+)"\]/g)) found.add(m[1]);
   const table = ts.match(/const LABEL[^{]*\{([^}]*)\}/)?.[1] ?? "";
   for (const m of table.matchAll(/:\s*"([^"]+)"/g)) found.add(m[1]);
   for (const m of readFileSync(join(root, "src", "themes.generated.ts"), "utf8").matchAll(/"label": "([^"]+)"/g)) found.add(m[1]);

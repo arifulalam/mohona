@@ -122,6 +122,9 @@ pub const ROUTES: &[Route] = routes![
     ),
     ("POST", "/v1/resolve", "resolveLink", Scope::Read),
     ("POST", "/v1/torrent/files", "torrentFiles", Scope::Read),
+    ("POST", "/v1/grab", "grabStart", Scope::Write),
+    ("GET", "/v1/grab", "grabStatus", Scope::Read),
+    ("DELETE", "/v1/grab", "grabStop", Scope::Write),
     ("GET", "/v1/rules", "getRules", Scope::Read),
     ("PUT", "/v1/rules", "setRules", Scope::Admin),
     ("POST", "/v1/rules/test", "testRules", Scope::Read),
@@ -801,6 +804,9 @@ async fn dispatch(
             }
         }
         "torrentFiles" => ask(state, call("torrent_files", object(&req)?)?).await,
+        "grabStart" => ask(state, call("grab_start", object(&req)?)?).await,
+        "grabStatus" => ask(state, Call::GrabStatus).await,
+        "grabStop" => ask(state, Call::GrabStop).await,
         "getRules" => ask(state, Call::GetRules).await,
         "setRules" => {
             let saved = ask(state, call("set_rules", object(&req)?)?).await;

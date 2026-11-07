@@ -393,6 +393,17 @@ Needs yt-dlp (`winget install yt-dlp.yt-dlp`); ffmpeg for the best quality (`win
 - [ ] Hide the window to the tray and finish a download: the system's own message appears (text only, no buttons: expected, ADR-0074).
 - [ ] Settings, Downloads: switch off "Show a message when a download finishes or fails": neither message appears.
 
+## Site Grabber
+
+- [ ] App: "Site Grabber" in the toolbar. Type the address of a gallery or a download page of a site you know, depth "1 level", press "Look for files". The status shows pages read and files found; a list appears with everything ticked.
+- [ ] Tick only "Pictures": the list holds only pictures. "Other endings": type `pdf`: pdf files appear too.
+- [ ] Filter the list by typing; "Select none", then tick two files, "Download selected": two downloads appear in the main list, in the chosen folder (try "Browse…").
+- [ ] "Stop" during a deeper run (3 levels on a big site): it stops and the files so far are listed.
+- [ ] A site with a `robots.txt` that disallows a part (for example `https://example.com/robots.txt` of a site you know): the note says how many pages were left alone; untick "Obey the site's robots.txt" reads them.
+- [ ] Command line: `mohona grab URL --depth 1 --types pdf`; then with `--download --folder D:\Test`.
+- [ ] Extension: on a page with several files (pictures, pdf links), open the popup, "Files on this page": the list shows them; the kind menu filters; "Download selected" sends them to Mohona. On a page without files it says so.
+- [ ] A page that needs sign-in: the app's grabber cannot read it (expected); the extension's list works because it reads the page you see.
+
 ## Add new items here
 
 When a step adds something that can't be tested on this PC (FTP server, SFTP server, WebDAV, a custom CA, a mirror site, a browser, an Android phone), add it to this list in the same step.

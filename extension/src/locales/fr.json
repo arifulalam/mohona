@@ -69,5 +69,20 @@
   "Sent": "Envoyé",
   "Hide on {site}": "Masquer sur {site}",
   "Open": "Ouvrir",
-  "Show in folder": "Afficher dans le dossier"
+  "Show in folder": "Afficher dans le dossier",
+  "All files": "Tous les fichiers",
+  "Archives": "Archives",
+  "Audio": "Audio",
+  "Documents": "Documents",
+  "Download selected": "Télécharger la sélection",
+  "Files on this page": "Fichiers de cette page",
+  "No files found on this page.": "Aucun fichier trouvé sur cette page.",
+  "Other": "Autres",
+  "Pictures": "Images",
+  "Pictures, videos, documents and other files this page links to.": "Images, vidéos, documents et autres fichiers vers lesquels cette page renvoie.",
+  "Programs": "Programmes",
+  "Select all": "Tout sélectionner",
+  "Select none": "Tout désélectionner",
+  "Sent to Mohona": "Envoyé à Mohona",
+  "Videos": "Vidéos"
 }

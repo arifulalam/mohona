@@ -69,5 +69,20 @@
   "Sent": "Gönderildi",
   "Hide on {site}": "{site} sitesinde gizle",
   "Open": "Aç",
-  "Show in folder": "Klasörde göster"
+  "Show in folder": "Klasörde göster",
+  "All files": "Tüm dosyalar",
+  "Archives": "Arşivler",
+  "Audio": "Ses",
+  "Documents": "Belgeler",
+  "Download selected": "Seçilenleri indir",
+  "Files on this page": "Bu sayfadaki dosyalar",
+  "No files found on this page.": "Bu sayfada dosya bulunamadı.",
+  "Other": "Diğer",
+  "Pictures": "Resimler",
+  "Pictures, videos, documents and other files this page links to.": "Bu sayfanın bağlandığı resimler, videolar, belgeler ve diğer dosyalar.",
+  "Programs": "Programlar",
+  "Select all": "Tümünü seç",
+  "Select none": "Hiçbirini seçme",
+  "Sent to Mohona": "Mohona'ya gönderildi",
+  "Videos": "Videolar"
 }

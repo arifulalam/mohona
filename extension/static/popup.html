@@ -88,6 +88,11 @@
       .item button { flex: none; padding: 2px 8px; }
       .download { padding: 6px 0; border-top: 1px solid var(--line); }
       .download:first-child { border-top: 0; }
+      #pagefiles .hint { margin: 6px 0; color: var(--muted); font-size: 12px; }
+      #pagefiles .row { display: flex; gap: 6px; align-items: center; margin-bottom: 6px; }
+      #pagefiles .row select { flex: 1; min-width: 0; }
+      #fileList { max-height: 180px; overflow: auto; margin-bottom: 6px; }
+      #fileList .name { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
       .download .row { display: flex; justify-content: space-between; gap: 8px; }
       .download .name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 500; }
       .download small { color: var(--muted); white-space: nowrap; }
@@ -155,6 +160,20 @@
       <section>
         <h2 data-t="Media on this page">Media on this page</h2>
         <ul id="media"></ul>
+      </section>
+
+      <section>
+        <details id="pagefiles">
+          <summary data-t="Files on this page">Files on this page</summary>
+          <p class="hint" data-t="Pictures, videos, documents and other files this page links to.">Pictures, videos, documents and other files this page links to.</p>
+          <div class="row">
+            <select id="fileGroup" aria-label="Kind of file"></select>
+            <button id="fileAll" data-t="Select all">Select all</button>
+            <button id="fileNone" data-t="Select none">Select none</button>
+          </div>
+          <ul id="fileList"></ul>
+          <button id="fileGo" class="primary" disabled data-t="Download selected">Download selected</button>
+        </details>
       </section>
 
       <section>
