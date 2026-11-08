@@ -340,5 +340,10 @@
   "Save speed limits": "رفتار کی حدیں محفوظ کریں",
   "Torrent speed": "ٹورنٹ کی رفتار",
   "Type a speed in KB/s (for example 500), or leave a box empty for no limit.": "KB/s میں رفتار لکھیں (مثلاً 500)، یا بغیر حد کے لیے خانہ خالی چھوڑ دیں۔",
-  "Upload at most (KB/s)": "زیادہ سے زیادہ اپ لوڈ (KB/s)"
+  "Upload at most (KB/s)": "زیادہ سے زیادہ اپ لوڈ (KB/s)",
+  "Being shared now": "اس وقت شیئر ہو رہے ہیں",
+  "No torrent is being shared.": "کوئی ٹورنٹ شیئر نہیں ہو رہا۔",
+  "Sent {sent} of {size}": "{size} میں سے {sent} بھیجا گیا",
+  "Stop sharing": "شیئرنگ بند کریں",
+  "Stop sharing {name}": "{name} کی شیئرنگ بند کریں"
 }

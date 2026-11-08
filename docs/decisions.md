@@ -844,3 +844,11 @@ A `401` now becomes its own error (`NetError::Unauthorized`) that names the kind
 
 **Not included.** Buttons on the failure message (Retry), translated button labels (the message text is English like the rest of the system message), and buttons on other systems. Only Windows itself can show whether the buttons appear and work (C44); this part of the app is not built on Linux, so it has only been checked against the library's documented interface. If it does not compile, the first error is all that is needed.
 
+## ADR-0083: Stopping the sharing of one torrent
+
+**What.** Settings → Torrents → "Being shared now" lists the finished torrents that are being shared (name, how much has been sent, the Stop sharing button). Stopping one leaves the others as they are. `mohona torrent shared` lists them and `mohona torrent shared --stop ID` stops one. The general rule (ratio and minutes) and the on/off of sharing are as before (ADR-0073).
+
+**How.** The torrent engine keeps a list of the torrents it is sharing, each with its own stop signal beside the general one; the sharing task of each updates how much it has sent every 5 seconds, and removes itself from the list when it ends, whatever the reason (ratio, time, one stop, sharing turned off). The daemon answers `GetSharing` and `StopSharing` with the list that is left; stopping a torrent that is not being shared is an error. The page looks every 3 seconds while it is open. The real loopback transfer test lists a shared torrent, refuses a wrong number, stops the right one, and sees the session empty.
+
+**Not included.** A ratio or time of its own for one torrent (only the one rule for all), starting to share a torrent that was not shared, and sharing a torrent again after it was stopped (it ends its work like any finished torrent; start it again from the list if you want its files shared once more).
+

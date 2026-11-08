@@ -319,7 +319,34 @@ async fn a_finished_torrent_is_shared_until_sharing_is_turned_off() {
         .unwrap();
     assert_eq!(torrents.active().await, 1);
 
-    // ... until sharing is turned off.
+    // It can be listed and stopped on its own ...
+    let listed = torrents.sharing();
+    assert_eq!(listed.len(), 1);
+    assert!(listed[0].total >= 200_000, "{listed:?}");
+    assert!(!torrents.stop_sharing(listed[0].id + 1000));
+    assert!(torrents.stop_sharing(listed[0].id));
+    let started = Instant::now();
+    while torrents.active().await != 0 || !torrents.sharing().is_empty() {
+        assert!(
+            started.elapsed() < Duration::from_secs(20),
+            "still shared after its own stop"
+        );
+        tokio::time::sleep(Duration::from_millis(100)).await;
+    }
+
+    // ... and another one is shared until sharing is turned off.
+    torrents
+        .run(
+            Source::File(torrent.clone()),
+            &dir.path().join("c"),
+            vec![peer],
+            None,
+            &CancelToken::new(),
+            |_| {},
+        )
+        .await
+        .unwrap();
+    assert_eq!(torrents.active().await, 1);
     torrents.set_seeding(Seeding::default());
     let started = Instant::now();
     while torrents.active().await != 0 {

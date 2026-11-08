@@ -159,6 +159,12 @@ pub enum Call {
     },
     /// The speed limits of torrents (answered as `TorrentSpeed`).
     GetTorrentSpeed,
+    /// The finished torrents that are being shared now (answered as `Sharing`).
+    GetSharing,
+    /// Stop sharing one of them (answered as `Sharing`, the list that is left).
+    StopSharing {
+        id: u64,
+    },
     /// Limit all torrents together, in KB/s (empty or 0: no limit).
     SetTorrentSpeed {
         down_kb: Option<u32>,
@@ -588,6 +594,10 @@ pub enum Response {
         ratio: Option<u32>,
         minutes: Option<u64>,
     },
+    /// The torrents being shared now.
+    Sharing {
+        items: Vec<SharedItem>,
+    },
     /// The speed limits of torrents, in KB/s (none: no limit).
     TorrentSpeed {
         down_kb: Option<u32>,
@@ -601,4 +611,16 @@ pub enum Response {
     Error {
         message: String,
     },
+}
+
+/// A finished torrent that is being shared.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct SharedItem {
+    pub id: u64,
+    pub name: String,
+    /// The size of the torrent, and how much of it others have taken so far.
+    pub total: u64,
+    pub uploaded: u64,
+    /// For how long it has been shared.
+    pub seconds: u64,
 }

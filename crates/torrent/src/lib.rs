@@ -114,6 +114,30 @@ pub struct Torrents {
     seeding: Mutex<(Option<Seeding>, CancelToken)>,
     /// Speed limits in bytes per second: download, upload (`None`: no limit).
     speed: Mutex<(Option<NonZeroU32>, Option<NonZeroU32>)>,
+    /// The torrents being shared now, so that one of them can be listed and stopped on its own.
+    shared: Arc<Mutex<Vec<SharedEntry>>>,
+}
+
+struct SharedEntry {
+    id: usize,
+    name: String,
+    total: u64,
+    uploaded: u64,
+    began: Instant,
+    stop: CancelToken,
+}
+
+/// A finished torrent that is being shared.
+#[derive(Clone, Debug, PartialEq)]
+pub struct Shared {
+    /// What to give to [`Torrents::stop_sharing`].
+    pub id: usize,
+    pub name: String,
+    /// The size of the torrent, and how much of it others have taken so far.
+    pub total: u64,
+    pub uploaded: u64,
+    /// For how long it has been shared.
+    pub seconds: u64,
 }
 
 /// How long a finished torrent is shared: until it has sent `ratio` times its size, or after
@@ -138,6 +162,33 @@ impl Torrents {
             session: OnceCell::new(),
             seeding: Mutex::new((None, CancelToken::new())),
             speed: Mutex::new((None, None)),
+            shared: Arc::new(Mutex::new(Vec::new())),
+        }
+    }
+
+    /// The torrents that are being shared now.
+    pub fn sharing(&self) -> Vec<Shared> {
+        let all = self.shared.lock().unwrap_or_else(|e| e.into_inner());
+        all.iter()
+            .map(|e| Shared {
+                id: e.id,
+                name: e.name.clone(),
+                total: e.total,
+                uploaded: e.uploaded,
+                seconds: e.began.elapsed().as_secs(),
+            })
+            .collect()
+    }
+
+    /// Stops sharing one torrent (the others go on). False when it is not being shared.
+    pub fn stop_sharing(&self, id: usize) -> bool {
+        let all = self.shared.lock().unwrap_or_else(|e| e.into_inner());
+        match all.iter().find(|e| e.id == id) {
+            Some(entry) => {
+                entry.stop.cancel();
+                true
+            }
+            None => false,
         }
     }
 
@@ -343,7 +394,25 @@ impl Torrents {
                         // Stay in the session and share; the download itself is done.
                         let session = session.clone();
                         let total = stats.total_bytes;
-                        tokio::spawn(share(session, id, handle, seeding, total, stop));
+                        let own = CancelToken::new();
+                        self.shared
+                            .lock()
+                            .unwrap_or_else(|e| e.into_inner())
+                            .push(SharedEntry {
+                                id,
+                                name: name.clone(),
+                                total,
+                                uploaded: 0,
+                                began: Instant::now(),
+                                stop: own.clone(),
+                            });
+                        let list = self.shared.clone();
+                        tokio::spawn(async move {
+                            share(session, id, handle, seeding, total, stop, own, &list).await;
+                            list.lock()
+                                .unwrap_or_else(|e| e.into_inner())
+                                .retain(|e| e.id != id);
+                        });
                     }
                     (None, _) => forget().await,
                 }
@@ -365,6 +434,7 @@ impl Torrents {
 
 /// Uploads a finished torrent until a limit is reached or sharing is turned off, then leaves the
 /// session (the files stay).
+#[allow(clippy::too_many_arguments)]
 async fn share(
     session: Arc<Session>,
     id: usize,
@@ -372,15 +442,26 @@ async fn share(
     seeding: Seeding,
     total: u64,
     stop: CancelToken,
+    own: CancelToken,
+    list: &Mutex<Vec<SharedEntry>>,
 ) {
     let began = Instant::now();
     let mut tick = tokio::time::interval(Duration::from_secs(5));
     loop {
         tokio::select! {
             () = stop.cancelled() => break,
+            () = own.cancelled() => break,
             _ = tick.tick() => {}
         }
         let stats = handle.stats();
+        if let Some(entry) = list
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .iter_mut()
+            .find(|e| e.id == id)
+        {
+            entry.uploaded = stats.uploaded_bytes;
+        }
         if matches!(stats.state, TorrentStatsState::Error) {
             break;
         }

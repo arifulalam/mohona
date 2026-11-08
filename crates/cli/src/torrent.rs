@@ -31,6 +31,12 @@ pub enum TorrentCommand {
         #[arg(long, conflicts_with_all = ["ratio", "minutes"])]
         off: bool,
     },
+    /// List the finished torrents that are being shared now, or stop sharing one (`--stop ID`).
+    Shared {
+        /// Stop sharing the torrent with this number
+        #[arg(long)]
+        stop: Option<u64>,
+    },
     /// Show or set a speed limit for all torrents together, in KB/s. Without options: show.
     Speed {
         /// Download at most this many KB/s (0 for no limit)
@@ -108,6 +114,32 @@ async fn run_inner(command: TorrentCommand, info: Option<PathBuf>) -> Result<(),
                                 parts.join(" or ")
                             );
                         }
+                    }
+                    Ok(())
+                }
+                Response::Error { message } => Err(message),
+                _ => Err("the daemon sent an unexpected answer".into()),
+            }
+        }
+        TorrentCommand::Shared { stop } => {
+            let call = match stop {
+                Some(id) => Call::StopSharing { id },
+                None => Call::GetSharing,
+            };
+            match client.call(call).await.map_err(|e| e.to_string())? {
+                Response::Sharing { items } => {
+                    if items.is_empty() {
+                        println!("No torrent is being shared.");
+                    }
+                    for i in items {
+                        println!(
+                            "{:>5}  sent {} of {}, for {} min  {}",
+                            i.id,
+                            crate::format_bytes(i.uploaded),
+                            crate::format_bytes(i.total),
+                            i.seconds / 60,
+                            i.name
+                        );
                     }
                     Ok(())
                 }

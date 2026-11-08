@@ -792,6 +792,24 @@ fn done(result: Result<(), ManagerError>) -> Response {
     }
 }
 
+async fn sharing(manager: &Manager) -> Response {
+    match manager.sharing().await {
+        Ok(all) => Response::Sharing {
+            items: all
+                .into_iter()
+                .map(|s| crate::protocol::SharedItem {
+                    id: s.id as u64,
+                    name: s.name,
+                    total: s.total,
+                    uploaded: s.uploaded,
+                    seconds: s.seconds,
+                })
+                .collect(),
+        },
+        Err(e) => error(e),
+    }
+}
+
 async fn torrent_speed(manager: &Manager) -> Response {
     let read = |key: &'static str| async move {
         manager
@@ -1213,6 +1231,19 @@ pub(crate) async fn handle(state: &State, call: Call) -> Response {
                 }
             }
             seeding(state).await
+        }
+        Call::GetSharing => sharing(manager).await,
+        Call::StopSharing { id } => {
+            match manager.stop_sharing(id as usize).await {
+                Ok(true) => {}
+                Ok(false) => {
+                    return Response::Error {
+                        message: "that torrent is not being shared".into(),
+                    }
+                }
+                Err(e) => return error(e),
+            }
+            sharing(manager).await
         }
         Call::GetTorrentSpeed => torrent_speed(manager).await,
         Call::SetTorrentSpeed { down_kb, up_kb } => {

@@ -340,5 +340,10 @@
   "Save speed limits": "Simpan batas kecepatan",
   "Torrent speed": "Kecepatan torrent",
   "Type a speed in KB/s (for example 500), or leave a box empty for no limit.": "Ketik kecepatan dalam KB/s (misalnya 500), atau kosongkan kolom untuk tanpa batas.",
-  "Upload at most (KB/s)": "Unggah paling banyak (KB/s)"
+  "Upload at most (KB/s)": "Unggah paling banyak (KB/s)",
+  "Being shared now": "Sedang dibagikan",
+  "No torrent is being shared.": "Tidak ada torrent yang dibagikan.",
+  "Sent {sent} of {size}": "Terkirim {sent} dari {size}",
+  "Stop sharing": "Berhenti berbagi",
+  "Stop sharing {name}": "Berhenti membagikan {name}"
 }

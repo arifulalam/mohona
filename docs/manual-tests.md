@@ -441,6 +441,7 @@ Needs yt-dlp (`winget install yt-dlp.yt-dlp`); ffmpeg for the best quality (`win
 
 - [ ] Settings → Torrents → Torrent speed: set "Download at most" to 200, Save speed limits. Start a well-seeded torrent: the speed stays near 200 KB/s. Empty the box and Save: it speeds up again at once, without restarting.
 - [ ] Set "Upload at most" to 50 while a finished torrent is shared (see Torrents above): the upload stays near 50 KB/s.
+- [ ] Share a finished torrent (ratio 100, minutes 600): Settings → Torrents → "Being shared now" lists it with how much was sent. "Stop sharing" removes it from the list (and Mohona stops uploading it); another shared torrent stays. `mohona torrent shared` and `mohona torrent shared --stop ID` do the same.
 - [ ] `mohona torrent speed`, `mohona torrent speed --down 300`, `mohona torrent speed --off`.
 
 ## Buttons on the finish message (Windows)

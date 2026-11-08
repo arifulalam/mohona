@@ -687,7 +687,7 @@ mohona torrent files 'magnet:?xt=urn:btih:...'
 mohona torrent add 'magnet:?xt=urn:btih:...' --files 0,2 [--folder D:\\Torrents]
 ```
 
-A torrent of several files is saved in a folder named after the torrent, inside the download folder. Finished torrents are not shared unless you ask: `mohona torrent seed --ratio 1.5 --minutes 120` shares them until an upload ratio of 1.5 or 120 minutes, whichever comes first; `mohona torrent seed` shows the setting and `mohona torrent seed --off` turns sharing off (the app: Settings, Torrents). The speed of all torrents together can be limited: `mohona torrent speed --down 500 --up 100` (KB/s; `--off` for no limit, no options to show); the ordinary speed limits do not apply to torrents (ADR-0080).
+A torrent of several files is saved in a folder named after the torrent, inside the download folder. Finished torrents are not shared unless you ask: `mohona torrent seed --ratio 1.5 --minutes 120` shares them until an upload ratio of 1.5 or 120 minutes, whichever comes first; `mohona torrent seed` shows the setting and `mohona torrent seed --off` turns sharing off (the app: Settings, Torrents). The speed of all torrents together can be limited: `mohona torrent speed --down 500 --up 100` (KB/s; `--off` for no limit, no options to show); the ordinary speed limits do not apply to torrents (ADR-0080). `mohona torrent shared` lists the torrents being shared now with how much each has sent, and `mohona torrent shared --stop ID` stops sharing that one (ADR-0083).
 
 # The local HTTP API
 

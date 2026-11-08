@@ -26,6 +26,6 @@ pub use info::{default_db_path, default_download_dir, default_info_path, DaemonI
 pub use mohona_media::tools::TOOL_PAGES;
 pub use protocol::{
     Call, CategoryInfo, ConnectionInfo, DownloadInfo, GrabFile, JobInfo, QueueInfo, Request,
-    Response, ToolStatus,
+    Response, SharedItem, ToolStatus,
 };
 pub use server::{serve, ServerConfig};

@@ -990,6 +990,16 @@ impl Engine {
         self.startup()
     }
 
+    /// The finished torrents that are being shared now.
+    pub async fn sharing(&self) -> Result<Vec<SharedTorrent>, AppError> {
+        sharing_answer(self.call(Call::GetSharing).await?)
+    }
+
+    /// Stops sharing one torrent and returns the ones that are left.
+    pub async fn stop_sharing(&self, id: u64) -> Result<Vec<SharedTorrent>, AppError> {
+        sharing_answer(self.call(Call::StopSharing { id }).await?)
+    }
+
     /// Where new versions are looked for, without asking GitHub.
     pub async fn update(&self) -> Result<UpdateInfo, AppError> {
         update_answer(self.call(Call::GetUpdate).await?)
@@ -1443,6 +1453,34 @@ pub fn is_release_page(url: &str, repo: &str) -> bool {
 fn torrent_speed_answer(answer: Response) -> Result<TorrentSpeed, AppError> {
     match answer {
         Response::TorrentSpeed { down_kb, up_kb } => Ok(TorrentSpeed { down_kb, up_kb }),
+        Response::Error { message } => Err(AppError::Engine(message)),
+        _ => Err(AppError::Engine("unexpected answer from the engine".into())),
+    }
+}
+
+/// A finished torrent that is being shared, as the app shows it.
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SharedTorrent {
+    pub id: u64,
+    pub name: String,
+    pub total: u64,
+    pub uploaded: u64,
+    pub seconds: u64,
+}
+
+fn sharing_answer(answer: Response) -> Result<Vec<SharedTorrent>, AppError> {
+    match answer {
+        Response::Sharing { items } => Ok(items
+            .into_iter()
+            .map(|i| SharedTorrent {
+                id: i.id,
+                name: i.name,
+                total: i.total,
+                uploaded: i.uploaded,
+                seconds: i.seconds,
+            })
+            .collect()),
         Response::Error { message } => Err(AppError::Engine(message)),
         _ => Err(AppError::Engine("unexpected answer from the engine".into())),
     }

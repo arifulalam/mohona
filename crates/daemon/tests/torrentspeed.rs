@@ -74,5 +74,14 @@ async fn the_torrent_speed_limit_is_kept_and_read_back() {
         client.call(set(Some(4_000_001), None)).await.unwrap(),
         Response::Error { .. }
     ));
+    // Nothing is being shared, so there is nothing to stop.
+    assert!(matches!(
+        client.call(Call::GetSharing).await.unwrap(),
+        Response::Sharing { items } if items.is_empty()
+    ));
+    assert!(matches!(
+        client.call(Call::StopSharing { id: 1 }).await.unwrap(),
+        Response::Error { .. }
+    ));
     shutdown.notify_one();
 }

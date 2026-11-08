@@ -340,5 +340,10 @@
   "Save speed limits": "गति सीमाएँ सहेजें",
   "Torrent speed": "टोरेंट की गति",
   "Type a speed in KB/s (for example 500), or leave a box empty for no limit.": "KB/s में गति लिखें (जैसे 500), या बिना सीमा के लिए खाना खाली छोड़ दें।",
-  "Upload at most (KB/s)": "अधिकतम अपलोड (KB/s)"
+  "Upload at most (KB/s)": "अधिकतम अपलोड (KB/s)",
+  "Being shared now": "अभी साझा हो रहे हैं",
+  "No torrent is being shared.": "कोई टोरेंट साझा नहीं हो रहा।",
+  "Sent {sent} of {size}": "{size} में से {sent} भेजा गया",
+  "Stop sharing": "साझा करना रोकें",
+  "Stop sharing {name}": "{name} साझा करना रोकें"
 }

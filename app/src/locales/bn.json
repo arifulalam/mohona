@@ -340,5 +340,10 @@
   "Save speed limits": "গতিসীমা সংরক্ষণ করুন",
   "Torrent speed": "টরেন্টের গতি",
   "Type a speed in KB/s (for example 500), or leave a box empty for no limit.": "KB/s-এ গতি লিখুন (যেমন 500), অথবা সীমা না চাইলে ঘরটি খালি রাখুন।",
-  "Upload at most (KB/s)": "সর্বোচ্চ আপলোড (KB/s)"
+  "Upload at most (KB/s)": "সর্বোচ্চ আপলোড (KB/s)",
+  "Being shared now": "এখন শেয়ার হচ্ছে",
+  "No torrent is being shared.": "কোনো টরেন্ট শেয়ার হচ্ছে না।",
+  "Sent {sent} of {size}": "{size}-এর মধ্যে {sent} পাঠানো হয়েছে",
+  "Stop sharing": "শেয়ার বন্ধ করুন",
+  "Stop sharing {name}": "{name} শেয়ার বন্ধ করুন"
 }

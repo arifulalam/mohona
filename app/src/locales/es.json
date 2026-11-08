@@ -340,5 +340,10 @@
   "Save speed limits": "Guardar límites de velocidad",
   "Torrent speed": "Velocidad de torrents",
   "Type a speed in KB/s (for example 500), or leave a box empty for no limit.": "Escribe una velocidad en KB/s (por ejemplo 500) o deja una casilla vacía para no tener límite.",
-  "Upload at most (KB/s)": "Subir como máximo (KB/s)"
+  "Upload at most (KB/s)": "Subir como máximo (KB/s)",
+  "Being shared now": "Compartiéndose ahora",
+  "No torrent is being shared.": "Ningún torrent se está compartiendo.",
+  "Sent {sent} of {size}": "Enviado {sent} de {size}",
+  "Stop sharing": "Dejar de compartir",
+  "Stop sharing {name}": "Dejar de compartir {name}"
 }

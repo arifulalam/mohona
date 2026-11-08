@@ -340,5 +340,10 @@
   "Save speed limits": "Сохранить ограничения скорости",
   "Torrent speed": "Скорость торрентов",
   "Type a speed in KB/s (for example 500), or leave a box empty for no limit.": "Введите скорость в КБ/с (например, 500) или оставьте поле пустым, чтобы не ограничивать.",
-  "Upload at most (KB/s)": "Отдача не более (КБ/с)"
+  "Upload at most (KB/s)": "Отдача не более (КБ/с)",
+  "Being shared now": "Раздаются сейчас",
+  "No torrent is being shared.": "Ни один торрент не раздаётся.",
+  "Sent {sent} of {size}": "Отправлено {sent} из {size}",
+  "Stop sharing": "Прекратить раздачу",
+  "Stop sharing {name}": "Прекратить раздачу {name}"
 }

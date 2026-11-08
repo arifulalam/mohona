@@ -237,6 +237,16 @@ async fn set_tool(app: State<'_, App>, name: String, path: Option<String>) -> Re
 }
 
 #[tauri::command]
+async fn get_sharing(app: State<'_, App>) -> Result<Vec<mohona_appcore::SharedTorrent>> {
+    app.engine.sharing().await
+}
+
+#[tauri::command]
+async fn stop_sharing(app: State<'_, App>, id: u64) -> Result<Vec<mohona_appcore::SharedTorrent>> {
+    app.engine.stop_sharing(id).await
+}
+
+#[tauri::command]
 async fn get_torrent_speed(app: State<'_, App>) -> Result<TorrentSpeed> {
     app.engine.torrent_speed().await
 }
@@ -619,6 +629,8 @@ pub fn run() {
             get_tools,
             set_tool,
             open_tool_page,
+            get_sharing,
+            stop_sharing,
             get_torrent_speed,
             set_torrent_speed,
             get_seeding,

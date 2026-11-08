@@ -247,6 +247,8 @@ export interface Api {
   /** Opens one of the tools' download pages in the browser. */
   openToolPage(url: string): Promise<void>;
   /** How long finished torrents are shared (ratio in hundredths; neither: not shared). */
+  sharing(): Promise<SharedTorrent[]>;
+  stopSharing(id: number): Promise<SharedTorrent[]>;
   torrentSpeed(): Promise<TorrentSpeed>;
   setTorrentSpeed(speed: TorrentSpeed): Promise<TorrentSpeed>;
   seeding(): Promise<Seeding>;
@@ -329,4 +331,13 @@ export interface UpdateInfo {
 export interface TorrentSpeed {
   downKb: number | null;
   upKb: number | null;
+}
+
+/** A finished torrent that is being shared. */
+export interface SharedTorrent {
+  id: number;
+  name: string;
+  total: number;
+  uploaded: number;
+  seconds: number;
 }

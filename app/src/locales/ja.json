@@ -340,5 +340,10 @@
   "Save speed limits": "速度制限を保存",
   "Torrent speed": "トレントの速度",
   "Type a speed in KB/s (for example 500), or leave a box empty for no limit.": "速度を KB/s で入力してください（例: 500）。制限しない場合は空欄にします。",
-  "Upload at most (KB/s)": "アップロードの上限 (KB/s)"
+  "Upload at most (KB/s)": "アップロードの上限 (KB/s)",
+  "Being shared now": "現在共有中",
+  "No torrent is being shared.": "共有中のトレントはありません。",
+  "Sent {sent} of {size}": "{size} のうち {sent} を送信",
+  "Stop sharing": "共有を停止",
+  "Stop sharing {name}": "{name} の共有を停止"
 }

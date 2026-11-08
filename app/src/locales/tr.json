@@ -340,5 +340,10 @@
   "Save speed limits": "Hız sınırlarını kaydet",
   "Torrent speed": "Torrent hızı",
   "Type a speed in KB/s (for example 500), or leave a box empty for no limit.": "KB/sn cinsinden bir hız yazın (örneğin 500) veya sınır istemiyorsanız kutuyu boş bırakın.",
-  "Upload at most (KB/s)": "En fazla yükleme (KB/sn)"
+  "Upload at most (KB/s)": "En fazla yükleme (KB/sn)",
+  "Being shared now": "Şu an paylaşılanlar",
+  "No torrent is being shared.": "Paylaşılan torrent yok.",
+  "Sent {sent} of {size}": "{size} içinden {sent} gönderildi",
+  "Stop sharing": "Paylaşmayı durdur",
+  "Stop sharing {name}": "{name} paylaşımını durdur"
 }

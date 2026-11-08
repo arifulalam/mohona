@@ -17,7 +17,10 @@ pub mod scan;
 mod schedule;
 
 pub use actions::{ActionRunner, AfterAction, SystemRunner};
-pub use mohona_torrent::{is_torrent_address, FileEntry as TorrentFile, Listing as TorrentListing};
+pub use mohona_torrent::{
+    is_torrent_address, FileEntry as TorrentFile, Listing as TorrentListing,
+    Shared as SharedTorrent,
+};
 pub use network::{NetworkProbe, NetworkState, SystemNetwork};
 pub use schedule::{parse_days, Moment, Schedule, Window};
 
@@ -340,6 +343,9 @@ enum Command {
         String,
         oneshot::Sender<Result<TorrentListing, ManagerError>>,
     ),
+    /// The torrents being shared, and stopping one of them (false: it is not being shared).
+    Sharing(oneshot::Sender<Result<Vec<SharedTorrent>, ManagerError>>),
+    StopSharing(usize, oneshot::Sender<Result<bool, ManagerError>>),
     GetSetting(
         String,
         oneshot::Sender<Result<Option<String>, ManagerError>>,
@@ -681,6 +687,16 @@ impl Manager {
     pub async fn torrent_files(&self, url: &str) -> Result<TorrentListing, ManagerError> {
         self.ask(|r| Command::TorrentFiles(url.to_string(), r))
             .await
+    }
+
+    /// The finished torrents that are being shared now.
+    pub async fn sharing(&self) -> Result<Vec<SharedTorrent>, ManagerError> {
+        self.ask(Command::Sharing).await
+    }
+
+    /// Stops sharing one torrent; false when it was not being shared.
+    pub async fn stop_sharing(&self, id: usize) -> Result<bool, ManagerError> {
+        self.ask(|r| Command::StopSharing(id, r)).await
     }
 
     /// The request details saved with a download (its source page, cookies, headers).
@@ -1298,6 +1314,12 @@ impl Actor {
                 if key == TORRENT_DOWN_KB || key == TORRENT_UP_KB {
                     self.apply_torrent_speed();
                 }
+            }
+            Command::Sharing(reply) => {
+                let _ = reply.send(Ok(self.torrents.sharing()));
+            }
+            Command::StopSharing(id, reply) => {
+                let _ = reply.send(Ok(self.torrents.stop_sharing(id)));
             }
             Command::TorrentFiles(url, reply) => {
                 let torrents = self.torrents.clone();

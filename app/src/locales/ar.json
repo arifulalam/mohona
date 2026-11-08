@@ -340,5 +340,10 @@
   "Save speed limits": "حفظ حدود السرعة",
   "Torrent speed": "سرعة التورنت",
   "Type a speed in KB/s (for example 500), or leave a box empty for no limit.": "اكتب سرعة بوحدة KB/ث (مثلًا 500) أو اترك الحقل فارغًا لعدم وضع حد.",
-  "Upload at most (KB/s)": "أقصى سرعة رفع (KB/ث)"
+  "Upload at most (KB/s)": "أقصى سرعة رفع (KB/ث)",
+  "Being shared now": "قيد المشاركة الآن",
+  "No torrent is being shared.": "لا يوجد تورنت قيد المشاركة.",
+  "Sent {sent} of {size}": "تم إرسال {sent} من {size}",
+  "Stop sharing": "إيقاف المشاركة",
+  "Stop sharing {name}": "إيقاف مشاركة {name}"
 }

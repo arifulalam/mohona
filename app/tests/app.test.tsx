@@ -32,6 +32,7 @@ function fake(initial: Row[], running = true) {
   let grab: GrabState = { state: "idle", pages: 0, found: 0, current: "", files: [], skippedByRobots: 0, failedPages: 0, note: null, error: null };
   let browser: string | null = null;
   let updating: UpdateInfo = { repo: "", current: "0.0.1", latest: null, newer: false, url: null, notes: null };
+  let shared = [{ id: 7, name: "Album", total: 2_000_000, uploaded: 500_000, seconds: 60 }];
   let started: Startup = { available: true, enabled: false };
   let scanned: { mode: "off" | "defender" | "custom"; command: string; defender: string | null } = { mode: "off", command: "", defender: null };
   let tspeed: TorrentSpeed = { downKb: null, upKb: null };
@@ -70,6 +71,8 @@ function fake(initial: Row[], running = true) {
     }),
     grabStop: vi.fn(async () => undefined),
     grabDownload: vi.fn(async (files: GrabFile[], _f: string | null, _q: number | null) => ({ added: files.length, skipped: [] })),
+    sharing: vi.fn(async () => shared),
+    stopSharing: vi.fn(async (id: number) => (shared = shared.filter((x) => x.id !== id))),
     torrentSpeed: vi.fn(async () => tspeed),
     setTorrentSpeed: vi.fn(async (x: TorrentSpeed) => (tspeed = x)),
     seeding: vi.fn(async () => seeding),
@@ -243,6 +246,11 @@ describe("App", () => {
     expect(await within(dialog).findByRole("alert")).toBeTruthy();
     await userEvent.click(within(dialog).getByRole("button", { name: "Do not share" }));
     await waitFor(() => expect(api.setSeeding).toHaveBeenLastCalledWith({ ratio: null, minutes: null }));
+    // One torrent can be stopped on its own.
+    expect(await within(dialog).findByText("Album")).toBeTruthy();
+    await userEvent.click(within(dialog).getByRole("button", { name: "Stop sharing Album" }));
+    await waitFor(() => expect(api.stopSharing).toHaveBeenCalledWith(7));
+    expect(await within(dialog).findByText("No torrent is being shared.")).toBeTruthy();
     // The speed limit of torrents is its own box and its own button.
     await userEvent.type(within(dialog).getByLabelText("Download at most (KB/s)"), "500");
     await userEvent.click(within(dialog).getByRole("button", { name: "Save speed limits" }));

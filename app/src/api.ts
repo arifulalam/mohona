@@ -1,4 +1,4 @@
-import type { Api, Category, Config, ConfigChange, EngineStatus, ExtensionSettings, Details, Plan, PlanWindow, Queue, Row, Rule, SiteProfile, TorrentList, ToolInfo, Seeding, GrabState, GrabFile, GrabAdded, ScanSetting, Startup, UpdateInfo, TorrentSpeed } from "./types";
+import type { Api, Category, Config, ConfigChange, EngineStatus, ExtensionSettings, Details, Plan, PlanWindow, Queue, Row, Rule, SiteProfile, TorrentList, ToolInfo, Seeding, GrabState, GrabFile, GrabAdded, ScanSetting, SharedTorrent, Startup, UpdateInfo, TorrentSpeed } from "./types";
 
 /** True inside the Tauri window; false in a plain browser (development, tests). */
 export function insideTauri(): boolean {
@@ -28,6 +28,8 @@ function tauriApi(): Api {
     tools: () => call<ToolInfo[]>("get_tools"),
     setTool: (name, path) => call<ToolInfo[]>("set_tool", { name, path }),
     openToolPage: (url) => call<void>("open_tool_page", { url }),
+    sharing: () => call<SharedTorrent[]>("get_sharing"),
+    stopSharing: (id) => call<SharedTorrent[]>("stop_sharing", { id }),
     torrentSpeed: () => call<TorrentSpeed>("get_torrent_speed"),
     setTorrentSpeed: (s) => call<TorrentSpeed>("set_torrent_speed", { downKb: s.downKb, upKb: s.upKb }),
     seeding: () => call<Seeding>("get_seeding"),
@@ -206,6 +208,8 @@ let demoScan: ScanSetting = { mode: "off", command: "", defender: null };
       return toolList.map((t) => ({ ...t }));
     },
     openToolPage: async (url) => void window.open(url, "_blank", "noopener"),
+    sharing: async () => [],
+    stopSharing: async () => [],
     torrentSpeed: async () => (need(), { ...demoSpeed }),
     setTorrentSpeed: async (s) => ((demoSpeed = { downKb: s.downKb || null, upKb: s.upKb || null }), { ...demoSpeed }),
     seeding: async () => (need(), { ...demoSeeding }),

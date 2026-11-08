@@ -340,5 +340,10 @@
   "Save speed limits": "保存限速",
   "Torrent speed": "种子速度",
   "Type a speed in KB/s (for example 500), or leave a box empty for no limit.": "请输入以 KB/s 为单位的速度（例如 500），不限速则留空。",
-  "Upload at most (KB/s)": "上传上限 (KB/s)"
+  "Upload at most (KB/s)": "上传上限 (KB/s)",
+  "Being shared now": "正在共享",
+  "No torrent is being shared.": "没有正在共享的种子。",
+  "Sent {sent} of {size}": "已发送 {sent}（共 {size}）",
+  "Stop sharing": "停止共享",
+  "Stop sharing {name}": "停止共享 {name}"
 }

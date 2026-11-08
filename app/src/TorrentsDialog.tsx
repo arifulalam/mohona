@@ -1,7 +1,8 @@
 import { useEffect, useState } from "react";
 import { useT } from "./i18n";
 import { Modal } from "./AddDialog";
-import type { Api, Seeding, TorrentSpeed } from "./types";
+import { bytes } from "./format";
+import type { Api, Seeding, SharedTorrent, TorrentSpeed } from "./types";
 
 const field = "w-24 rounded-md border border-[var(--line)] bg-[var(--bg)] px-2 py-1";
 
@@ -15,7 +16,7 @@ function parse(text: string, max: number): number | null | "bad" {
 }
 
 /** How long finished torrents are shared: until an upload ratio and/or a time, or not at all. */
-export function TorrentsDialog({ api }: { api: Api }) {
+export function TorrentsDialog({ api, every = 3000 }: { api: Api; every?: number }) {
   const t = useT();
   const [ratio, setRatio] = useState("");
   const [minutes, setMinutes] = useState("");
@@ -25,6 +26,32 @@ export function TorrentsDialog({ api }: { api: Api }) {
   const [down, setDown] = useState("");
   const [up, setUp] = useState("");
   const [speed, setSpeed] = useState<TorrentSpeed | null>(null);
+  const [shared, setShared] = useState<SharedTorrent[]>([]);
+
+  // The torrents being shared now: looked at every few seconds while this page is open.
+  useEffect(() => {
+    let alive = true;
+    const look = () =>
+      api
+        .sharing()
+        .then((x) => alive && setShared(x))
+        .catch(() => undefined);
+    void look();
+    const timer = setInterval(look, every);
+    return () => {
+      alive = false;
+      clearInterval(timer);
+    };
+  }, [api, every]);
+
+  async function stopOne(id: number) {
+    try {
+      setShared(await api.stopSharing(id));
+      setError(null);
+    } catch (e) {
+      setError((e as Error).message);
+    }
+  }
 
   function showSpeed(x: TorrentSpeed) {
     setSpeed(x);
@@ -134,6 +161,23 @@ export function TorrentsDialog({ api }: { api: Api }) {
           </button>
         </div>
       </div>
+      <section aria-label={t("Being shared now")} className="mt-4 flex flex-col gap-2 border-t border-[var(--line)] pt-3">
+        <strong>{t("Being shared now")}</strong>
+        {shared.length === 0 && <p className="my-0 text-sm text-[var(--muted)]">{t("No torrent is being shared.")}</p>}
+        <ul className="m-0 flex list-none flex-col gap-1 p-0">
+          {shared.map((x) => (
+            <li key={x.id} className="flex items-center gap-2 text-sm">
+              <span className="min-w-0 flex-1 truncate" title={x.name}>
+                {x.name}
+              </span>
+              <span className="whitespace-nowrap text-[var(--muted)]">{t("Sent {sent} of {size}", { sent: bytes(x.uploaded), size: bytes(x.total) })}</span>
+              <button type="button" onClick={() => void stopOne(x.id)} aria-label={t("Stop sharing {name}", { name: x.name })}>
+                {t("Stop sharing")}
+              </button>
+            </li>
+          ))}
+        </ul>
+      </section>
       <section aria-label={t("Torrent speed")} className="mt-4 flex flex-col gap-2 border-t border-[var(--line)] pt-3">
         <strong>{t("Torrent speed")}</strong>
         <p className="my-0 text-sm text-[var(--muted)]">{t("A limit for all torrents together. It is separate from the speed limit of ordinary downloads. Empty means no limit.")}</p>
