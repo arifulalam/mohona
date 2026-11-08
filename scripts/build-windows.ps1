@@ -10,7 +10,7 @@ $root = Split-Path -Parent $PSScriptRoot
 Set-Location $root
 
 Write-Host "1/4 Engine and browser host (release)..."
-cargo build --release -p mohona-cli -p mohona-host
+cargo build --release -p mohona -p mohona-host
 if ($LASTEXITCODE -ne 0) { throw "cargo build failed" }
 
 Write-Host "2/4 Copying the programs for the installer..."

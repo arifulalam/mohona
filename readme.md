@@ -29,7 +29,7 @@ You need [Rust](https://rustup.rs) (stable). On Windows, Rust also needs the Vis
 
 ```
 cargo test --workspace
-cargo run -p mohona-cli -- --version
+cargo run -p mohona -- --version
 ```
 
 ### Try the test server
@@ -51,7 +51,7 @@ curl "http://127.0.0.1:8080/file?drop_after=5000" | wc -c     # connection cut a
 With the test server running in another window:
 
 ```
-cargo run -p mohona-cli -- get "http://127.0.0.1:8080/file?size=50000000" --output downloads
+cargo run -p mohona -- get "http://127.0.0.1:8080/file?size=50000000" --output downloads
 ```
 
 Add `-v` to see what Mohona decides about connections. `--connections 16` (or `-c 16`) sets the most connections Mohona may use (1 to 32, default 8). It often uses fewer: it measures the server and only keeps connections that make the download faster. A file is only split when the server supports byte ranges and the file is at least 1 MiB.

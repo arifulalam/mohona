@@ -106,7 +106,7 @@ Automated tests use a local test server. These need real streams from the intern
 
 ## Browser host and daemon
 
-1. Build: `cargo build -p mohona-cli -p mohona-host`. In one terminal: `target\debug\mohona --db test.db daemon` (expect "Mohona is running"). A second `mohona daemon` must say "already running".
+1. Build: `cargo build -p mohona -p mohona-host`. In one terminal: `target\debug\mohona --db test.db daemon` (expect "Mohona is running"). A second `mohona daemon` must say "already running".
 2. Press Ctrl-C in the first terminal; `%LOCALAPPDATA%\Mohona\daemon.json` must disappear. Kill the process from Task Manager instead; the file stays, and the next `mohona daemon` must still start (stale file replaced).
 3. Start the daemon again, then `target\debug\mohona-host --db test.db --engine target\debug\mohona.exe` with no input and stop it with Ctrl-Z, Enter; it must exit quietly (exit code 0, nothing on stdout).
 4. With the daemon stopped, the host's `startEngine` message must start `mohona daemon` without a console window flashing, and it must keep running after the host exits. (Needs a real browser or a small script to send a message; the real browser check comes with host registration in the next step.)
@@ -197,7 +197,7 @@ Automated tests use a local test server. These need real streams from the intern
 
 The window cannot be built where the tests run (it needs the system web view), so its Rust shell (`app/src-tauri`) has only been checked by reading; please run these on Windows.
 
-1. `cargo build --release -p mohona-cli`, then in `app`: `npm install`, set `MOHONA_PROGRAM` to the built `mohona.exe`, `npm run tauri dev`. The window opens and shows "Mohona is not running" with a "Start Mohona" button. If it does not compile, send the first error.
+1. `cargo build --release -p mohona`, then in `app`: `npm install`, set `MOHONA_PROGRAM` to the built `mohona.exe`, `npm run tauri dev`. The window opens and shows "Mohona is not running" with a "Start Mohona" button. If it does not compile, send the first error.
 2. Press "Start Mohona": the banner goes away and "Engine running (0.0.1)" shows. `%LOCALAPPDATA%\Mohona\daemon.json` exists. Close the window: `mohona list` still works (the engine keeps running).
 3. "+ Add", paste a real download address: the row appears within a second, with a moving progress bar, speed and time left. Pause and Resume (row buttons and toolbar) work; Cancel marks it cancelled.
 4. Add the same address again: the dialog shows the reason it was refused. Add `example.com/a.zip` (no http): "the address must start with http://…".

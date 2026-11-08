@@ -21,6 +21,11 @@ exclude = ["app/src-tauri"]
 version = "0.0.1"
 edition = "2021"
 license = "MIT OR Apache-2.0"
+repository = "https://github.com/arifulalam/mohona"
+homepage = "https://github.com/arifulalam/mohona"
+readme = "README.md"
+keywords = ["download-manager", "downloader", "bittorrent", "hls", "cli"]
+categories = ["network-programming", "command-line-utilities"]
 rust-version = "1.85"
 
 [workspace.dependencies]

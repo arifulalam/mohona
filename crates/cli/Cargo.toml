@@ -1,11 +1,15 @@
 [package]
-name = "mohona-cli"
-description = "Mohona command-line interface"
+name = "mohona"
+description = "Mohona: a fast, resumable download manager for the command line (HTTP, FTP, SFTP, torrents, HLS)"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
+readme.workspace = true
+repository.workspace = true
+homepage.workspace = true
+keywords.workspace = true
+categories.workspace = true
 rust-version.workspace = true
-publish = false
 
 [[bin]]
 name = "mohona"
@@ -14,12 +18,12 @@ path = "src/main.rs"
 [dependencies]
 chrono = { version = "0.4", default-features = false, features = ["clock", "std"] }
 clap.workspace = true
-mohona-core = { path = "../core" }
-mohona-daemon = { path = "../daemon" }
-mohona-manager = { path = "../manager" }
-mohona-media = { path = "../media" }
+mohona-core = { version = "0.0.1", path = "../core" }
+mohona-daemon = { version = "0.0.1", path = "../daemon" }
+mohona-manager = { version = "0.0.1", path = "../manager" }
+mohona-media = { version = "0.0.1", path = "../media" }
 mohona-net = { version = "0.0.1", path = "../net" }
-mohona-store = { path = "../store" }
+mohona-store = { version = "0.0.1", path = "../store" }
 tokio.workspace = true
 url = "2"
 

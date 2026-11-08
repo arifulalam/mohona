@@ -828,3 +828,11 @@ A `401` now becomes its own error (`NetError::Unauthorized`) that names the kind
 
 **Not included.** A limit for one torrent only, a limit by time of day, and per-torrent sharing control (stop one torrent's sharing, set its own ratio). The limit is set in the session, so it can only be seen working on a real swarm (C43); the settings, the call and the page are tested here.
 
+## ADR-0081: Ready for crates.io
+
+**What.** Every library and program crate carries what crates.io asks for (description, repository, homepage, readme, keywords, categories, license), each internal dependency names its version next to its path, and the command-line package is now called `mohona` (it was `mohona-cli`; the program was already `mohona`), so `cargo install mohona` installs it. `mohona-appcore` and the test server are marked `publish = false`. `docs/publishing.md` has the steps. `cargo publish --workspace --exclude mohona-appcore --dry-run` passes: every crate is packed and built from its packed copy.
+
+**Why now.** The name `mohona` was reserved on crates.io and nothing was published. The names and metadata cost nothing to prepare; uploading is the one step that cannot be undone, so it is left to the author, after the Windows tests.
+
+**Not included.** A version bump (all crates are still 0.0.1), and a separate README per crate (all use the repository's README).
+

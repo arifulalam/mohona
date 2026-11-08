@@ -23,7 +23,7 @@ From the folder that holds `Cargo.toml` (the `mohona` folder):
 
 ```
 cargo test --workspace
-cargo build --release -p mohona-cli -p mohona-host
+cargo build --release -p mohona -p mohona-host
 ```
 
 - The tests take a few minutes the first time. Expected: every line says `test result: ok`.

@@ -4,11 +4,16 @@ description = "Mohona site grabber: finds the files linked from a web page and t
 version.workspace = true
 edition.workspace = true
 license.workspace = true
+readme.workspace = true
+repository.workspace = true
+homepage.workspace = true
+keywords.workspace = true
+categories.workspace = true
 rust-version.workspace = true
 
 [dependencies]
-mohona-core = { path = "../core" }
-mohona-net = { path = "../net" }
+mohona-core = { version = "0.0.1", path = "../core" }
+mohona-net = { version = "0.0.1", path = "../net" }
 tokio.workspace = true
 url = "2"
 

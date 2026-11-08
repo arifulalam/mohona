@@ -4,7 +4,7 @@ Every command, with an example, what you should see, and what the common errors 
 
 **General**
 
-- Run commands as `mohona ...` (or `cargo run -p mohona-cli -- ...` from the source folder).
+- Install with `cargo install mohona` once it is published (see docs/publishing.md). Run commands as `mohona ...` (or `cargo run -p mohona -- ...` from the source folder).
 - Every command takes `--db FILE` (default `mohona.db` in the current folder): the file that keeps the download list.
 - A successful command exits with `0`; any `error:` line exits with `1`.
 - `mohona --help` and `mohona <command> --help` always show the current options.

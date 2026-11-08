@@ -24,7 +24,7 @@ npm run check      # types, tests, build
 You need the Rust toolchain, Node, and Microsoft's WebView2 (already part of Windows 11).
 
 ```
-cargo build --release -p mohona-cli      # from the repository root; makes target\release\mohona.exe
+cargo build --release -p mohona      # from the repository root; makes target\release\mohona.exe
 cd app
 npm install
 set MOHONA_PROGRAM=..\target\release\mohona.exe

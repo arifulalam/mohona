@@ -2611,23 +2611,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "mohona-appcore"
-version = "0.0.1"
-dependencies = [
- "mohona-daemon",
- "mohona-manager",
- "mohona-net",
- "mohona-store",
- "mohona-testserver",
- "serde",
- "serde_json",
- "tempfile",
- "thiserror 2.0.21",
- "tokio",
-]
-
-[[package]]
-name = "mohona-cli"
+name = "mohona"
 version = "0.0.1"
 dependencies = [
  "chrono",
@@ -2643,6 +2627,22 @@ dependencies = [
  "tempfile",
  "tokio",
  "url",
+]
+
+[[package]]
+name = "mohona-appcore"
+version = "0.0.1"
+dependencies = [
+ "mohona-daemon",
+ "mohona-manager",
+ "mohona-net",
+ "mohona-store",
+ "mohona-testserver",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "thiserror 2.0.21",
+ "tokio",
 ]
 
 [[package]]

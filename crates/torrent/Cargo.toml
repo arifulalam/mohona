@@ -4,12 +4,17 @@ description = "Mohona BitTorrent downloads (a thin layer over librqbit)"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
+readme.workspace = true
+repository.workspace = true
+homepage.workspace = true
+keywords.workspace = true
+categories.workspace = true
 rust-version.workspace = true
 
 [dependencies]
 # No web interface and no default TLS: Mohona only needs the peer protocol and DHT.
 librqbit = { version = "9.1.0", default-features = false, features = ["rust-tls"] }
-mohona-core = { path = "../core" }
+mohona-core = { version = "0.0.1", path = "../core" }
 tokio.workspace = true
 
 [dev-dependencies]
