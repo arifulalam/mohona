@@ -334,5 +334,11 @@
   "owner/name": "所有者/名称",
   "This is version {v}.": "当前版本为 {v}。",
   "Updates": "更新",
-  "You have the newest version.": "你使用的已是最新版本。"
+  "You have the newest version.": "你使用的已是最新版本。",
+  "A limit for all torrents together. It is separate from the speed limit of ordinary downloads. Empty means no limit.": "所有种子合计的限速。它与普通下载的限速分开。留空表示不限速。",
+  "Download at most (KB/s)": "下载上限 (KB/s)",
+  "Save speed limits": "保存限速",
+  "Torrent speed": "种子速度",
+  "Type a speed in KB/s (for example 500), or leave a box empty for no limit.": "请输入以 KB/s 为单位的速度（例如 500），不限速则留空。",
+  "Upload at most (KB/s)": "上传上限 (KB/s)"
 }

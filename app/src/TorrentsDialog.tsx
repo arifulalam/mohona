@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { useT } from "./i18n";
 import { Modal } from "./AddDialog";
-import type { Api, Seeding } from "./types";
+import type { Api, Seeding, TorrentSpeed } from "./types";
 
 const field = "w-24 rounded-md border border-[var(--line)] bg-[var(--bg)] px-2 py-1";
 
@@ -22,6 +22,44 @@ export function TorrentsDialog({ api }: { api: Api }) {
   const [saved, setSaved] = useState<Seeding | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [down, setDown] = useState("");
+  const [up, setUp] = useState("");
+  const [speed, setSpeed] = useState<TorrentSpeed | null>(null);
+
+  function showSpeed(x: TorrentSpeed) {
+    setSpeed(x);
+    setDown(x.downKb ? String(x.downKb) : "");
+    setUp(x.upKb ? String(x.upKb) : "");
+  }
+
+  useEffect(() => {
+    let alive = true;
+    api
+      .torrentSpeed()
+      .then((x) => alive && showSpeed(x))
+      .catch(() => undefined);
+    return () => {
+      alive = false;
+    };
+  }, [api]);
+
+  async function applySpeed() {
+    const d = parse(down, 4_000_000);
+    const u = parse(up, 4_000_000);
+    if (d === "bad" || u === "bad") {
+      setError(t("Type a speed in KB/s (for example 500), or leave a box empty for no limit."));
+      return;
+    }
+    setBusy(true);
+    try {
+      showSpeed(await api.setTorrentSpeed({ downKb: d === null ? null : Math.round(d), upKb: u === null ? null : Math.round(u) }));
+      setError(null);
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }
 
   function show(s: Seeding) {
     setSaved(s);
@@ -96,6 +134,23 @@ export function TorrentsDialog({ api }: { api: Api }) {
           </button>
         </div>
       </div>
+      <section aria-label={t("Torrent speed")} className="mt-4 flex flex-col gap-2 border-t border-[var(--line)] pt-3">
+        <strong>{t("Torrent speed")}</strong>
+        <p className="my-0 text-sm text-[var(--muted)]">{t("A limit for all torrents together. It is separate from the speed limit of ordinary downloads. Empty means no limit.")}</p>
+        <label className="flex flex-wrap items-center gap-2">
+          {t("Download at most (KB/s)")}
+          <input className={field} inputMode="numeric" value={down} onChange={(e) => setDown(e.target.value)} placeholder="500" />
+        </label>
+        <label className="flex flex-wrap items-center gap-2">
+          {t("Upload at most (KB/s)")}
+          <input className={field} inputMode="numeric" value={up} onChange={(e) => setUp(e.target.value)} placeholder="100" />
+        </label>
+        <div>
+          <button type="button" disabled={busy || speed === null} onClick={() => void applySpeed()}>
+            {t("Save speed limits")}
+          </button>
+        </div>
+      </section>
     </Modal>
   );
 }

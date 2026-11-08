@@ -334,5 +334,11 @@
   "owner/name": "proprietário/nome",
   "This is version {v}.": "Esta é a versão {v}.",
   "Updates": "Atualizações",
-  "You have the newest version.": "Você tem a versão mais recente."
+  "You have the newest version.": "Você tem a versão mais recente.",
+  "A limit for all torrents together. It is separate from the speed limit of ordinary downloads. Empty means no limit.": "Um limite para todos os torrents juntos. É separado do limite de velocidade dos downloads comuns. Vazio significa sem limite.",
+  "Download at most (KB/s)": "Baixar no máximo (KB/s)",
+  "Save speed limits": "Salvar limites de velocidade",
+  "Torrent speed": "Velocidade dos torrents",
+  "Type a speed in KB/s (for example 500), or leave a box empty for no limit.": "Digite uma velocidade em KB/s (por exemplo 500) ou deixe um campo vazio para não limitar.",
+  "Upload at most (KB/s)": "Enviar no máximo (KB/s)"
 }

@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { loadDropTarget, saveDropTarget } from "./droptarget";
+import { loadDropTarget, saveDropTarget } from "./dropprefs";
 import { useT } from "./i18n";
 import { Modal } from "./AddDialog";
 import { parseHosts, parseLimit, parseMegabytes, splitLimit, type Unit } from "./limits";

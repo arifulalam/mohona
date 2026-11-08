@@ -334,5 +334,11 @@
   "owner/name": "मालिक/नाम",
   "This is version {v}.": "यह संस्करण {v} है।",
   "Updates": "अपडेट",
-  "You have the newest version.": "आपके पास नवीनतम संस्करण है।"
+  "You have the newest version.": "आपके पास नवीनतम संस्करण है।",
+  "A limit for all torrents together. It is separate from the speed limit of ordinary downloads. Empty means no limit.": "सभी टोरेंट के लिए एक साझा सीमा। यह सामान्य डाउनलोड की गति सीमा से अलग है। खाली का मतलब कोई सीमा नहीं।",
+  "Download at most (KB/s)": "अधिकतम डाउनलोड (KB/s)",
+  "Save speed limits": "गति सीमाएँ सहेजें",
+  "Torrent speed": "टोरेंट की गति",
+  "Type a speed in KB/s (for example 500), or leave a box empty for no limit.": "KB/s में गति लिखें (जैसे 500), या बिना सीमा के लिए खाना खाली छोड़ दें।",
+  "Upload at most (KB/s)": "अधिकतम अपलोड (KB/s)"
 }

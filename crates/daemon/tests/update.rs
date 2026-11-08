@@ -94,7 +94,15 @@ async fn a_newer_release_is_reported_and_nothing_else_is_asked() {
     else {
         panic!()
     };
-    assert!(repo.is_empty() && latest.is_none() && !newer);
+    assert_eq!(repo, "arifulalam/mohona");
+    assert!(latest.is_none() && !newer);
+    // Emptied, the check is off.
+    client
+        .call(Call::SetUpdateRepo {
+            repo: String::new(),
+        })
+        .await
+        .unwrap();
     assert!(matches!(
         client.call(Call::CheckUpdate).await.unwrap(),
         Response::Error { .. }

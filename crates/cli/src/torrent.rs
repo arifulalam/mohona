@@ -31,6 +31,18 @@ pub enum TorrentCommand {
         #[arg(long, conflicts_with_all = ["ratio", "minutes"])]
         off: bool,
     },
+    /// Show or set a speed limit for all torrents together, in KB/s. Without options: show.
+    Speed {
+        /// Download at most this many KB/s (0 for no limit)
+        #[arg(long)]
+        down: Option<u32>,
+        /// Upload at most this many KB/s (0 for no limit)
+        #[arg(long)]
+        up: Option<u32>,
+        /// No limit, either way
+        #[arg(long, conflicts_with_all = ["down", "up"])]
+        off: bool,
+    },
 }
 
 async fn run_inner(command: TorrentCommand, info: Option<PathBuf>) -> Result<(), String> {
@@ -102,6 +114,39 @@ async fn run_inner(command: TorrentCommand, info: Option<PathBuf>) -> Result<(),
                 Response::Error { message } => Err(message),
                 _ => Err("the daemon sent an unexpected answer".into()),
             }
+        }
+        TorrentCommand::Speed { down, up, off } => {
+            let ask = |call: Call| async {
+                match client.call(call).await.map_err(|e| e.to_string())? {
+                    Response::TorrentSpeed { down_kb, up_kb } => Ok((down_kb, up_kb)),
+                    Response::Error { message } => Err(message),
+                    _ => Err("the daemon sent an unexpected answer".to_string()),
+                }
+            };
+            let (now_down, now_up) = ask(Call::GetTorrentSpeed).await?;
+            let (down_kb, up_kb) = if off {
+                ask(Call::SetTorrentSpeed {
+                    down_kb: None,
+                    up_kb: None,
+                })
+                .await?
+            } else if down.is_some() || up.is_some() {
+                // What is not mentioned stays as it is.
+                ask(Call::SetTorrentSpeed {
+                    down_kb: down.map_or(now_down, |k| Some(k).filter(|k| *k > 0)),
+                    up_kb: up.map_or(now_up, |k| Some(k).filter(|k| *k > 0)),
+                })
+                .await?
+            } else {
+                (now_down, now_up)
+            };
+            let show = |kb: Option<u32>| kb.map_or("no limit".to_string(), |k| format!("{k} KB/s"));
+            println!(
+                "Torrents: download {}, upload {}.",
+                show(down_kb),
+                show(up_kb)
+            );
+            Ok(())
         }
         TorrentCommand::Add { url, files, folder } => {
             let call = Call::Add {

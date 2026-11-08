@@ -56,13 +56,18 @@ struct GrabJob {
     error: Option<String>,
 }
 
-async fn update_setting(manager: &Manager, found: Option<crate::update::Release>) -> Response {
-    let repo = manager
+/// The chosen repository: the default until one is saved, and nothing when it was emptied.
+async fn update_repo(manager: &Manager) -> String {
+    manager
         .setting(crate::update::REPO_SETTING)
         .await
         .ok()
         .flatten()
-        .unwrap_or_default();
+        .unwrap_or_else(|| crate::update::DEFAULT_REPO.to_string())
+}
+
+async fn update_setting(manager: &Manager, found: Option<crate::update::Release>) -> Response {
+    let repo = update_repo(manager).await;
     let current = env!("CARGO_PKG_VERSION").to_string();
     Response::Update {
         newer: found
@@ -787,6 +792,22 @@ fn done(result: Result<(), ManagerError>) -> Response {
     }
 }
 
+async fn torrent_speed(manager: &Manager) -> Response {
+    let read = |key: &'static str| async move {
+        manager
+            .setting(key)
+            .await
+            .ok()
+            .flatten()
+            .and_then(|v| v.trim().parse::<u32>().ok())
+            .filter(|v| *v > 0)
+    };
+    Response::TorrentSpeed {
+        down_kb: read(mohona_manager::TORRENT_DOWN_KB).await,
+        up_kb: read(mohona_manager::TORRENT_UP_KB).await,
+    }
+}
+
 async fn seeding(state: &State) -> Response {
     let read = |key: &'static str| async move {
         state
@@ -1193,6 +1214,28 @@ pub(crate) async fn handle(state: &State, call: Call) -> Response {
             }
             seeding(state).await
         }
+        Call::GetTorrentSpeed => torrent_speed(manager).await,
+        Call::SetTorrentSpeed { down_kb, up_kb } => {
+            // At most 4 million KB/s (about 4 GB/s) so that bytes per second fit in 32 bits.
+            if down_kb.is_some_and(|k| k > 4_000_000) || up_kb.is_some_and(|k| k > 4_000_000) {
+                return Response::Error {
+                    message: "a speed limit can be at most 4000000 KB/s".into(),
+                };
+            }
+            for (key, value) in [
+                (mohona_manager::TORRENT_DOWN_KB, down_kb),
+                (mohona_manager::TORRENT_UP_KB, up_kb),
+            ] {
+                let text = value
+                    .filter(|k| *k > 0)
+                    .map(|k| k.to_string())
+                    .unwrap_or_default();
+                if let Err(e) = manager.set_setting(key, &text).await {
+                    return error(e);
+                }
+            }
+            torrent_speed(manager).await
+        }
         Call::GetUpdate => update_setting(manager, None).await,
         Call::SetUpdateRepo { repo } => {
             let repo = repo.trim().to_string();
@@ -1210,12 +1253,7 @@ pub(crate) async fn handle(state: &State, call: Call) -> Response {
             }
         }
         Call::CheckUpdate => {
-            let repo = manager
-                .setting(crate::update::REPO_SETTING)
-                .await
-                .ok()
-                .flatten()
-                .unwrap_or_default();
+            let repo = update_repo(manager).await;
             if repo.is_empty() {
                 return Response::Error {
                     message: "no repository is set; give it as owner/name first".into(),

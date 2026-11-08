@@ -334,5 +334,11 @@
   "owner/name": "所有者/名前",
   "This is version {v}.": "これはバージョン {v} です。",
   "Updates": "更新",
-  "You have the newest version.": "最新バージョンです。"
+  "You have the newest version.": "最新バージョンです。",
+  "A limit for all torrents together. It is separate from the speed limit of ordinary downloads. Empty means no limit.": "すべてのトレントをまとめた制限です。通常のダウンロードの速度制限とは別です。空欄は制限なしです。",
+  "Download at most (KB/s)": "ダウンロードの上限 (KB/s)",
+  "Save speed limits": "速度制限を保存",
+  "Torrent speed": "トレントの速度",
+  "Type a speed in KB/s (for example 500), or leave a box empty for no limit.": "速度を KB/s で入力してください（例: 500）。制限しない場合は空欄にします。",
+  "Upload at most (KB/s)": "アップロードの上限 (KB/s)"
 }

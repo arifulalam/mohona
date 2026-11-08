@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { useT } from "./i18n";
-import { linksIn } from "./droptarget";
+import { linksIn } from "./dropprefs";
 import { linkIn } from "./clipboard";
 import type { Api } from "./types";
 

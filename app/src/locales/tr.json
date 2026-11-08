@@ -334,5 +334,11 @@
   "owner/name": "sahip/ad",
   "This is version {v}.": "Bu sürüm {v}.",
   "Updates": "Güncellemeler",
-  "You have the newest version.": "En yeni sürümü kullanıyorsunuz."
+  "You have the newest version.": "En yeni sürümü kullanıyorsunuz.",
+  "A limit for all torrents together. It is separate from the speed limit of ordinary downloads. Empty means no limit.": "Tüm torrentler için ortak bir sınır. Sıradan indirmelerin hız sınırından ayrıdır. Boş bırakmak sınırsız demektir.",
+  "Download at most (KB/s)": "En fazla indirme (KB/sn)",
+  "Save speed limits": "Hız sınırlarını kaydet",
+  "Torrent speed": "Torrent hızı",
+  "Type a speed in KB/s (for example 500), or leave a box empty for no limit.": "KB/sn cinsinden bir hız yazın (örneğin 500) veya sınır istemiyorsanız kutuyu boş bırakın.",
+  "Upload at most (KB/s)": "En fazla yükleme (KB/sn)"
 }

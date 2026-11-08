@@ -334,5 +334,11 @@
   "owner/name": "pemilik/nama",
   "This is version {v}.": "Ini adalah versi {v}.",
   "Updates": "Pembaruan",
-  "You have the newest version.": "Anda memakai versi terbaru."
+  "You have the newest version.": "Anda memakai versi terbaru.",
+  "A limit for all torrents together. It is separate from the speed limit of ordinary downloads. Empty means no limit.": "Batas untuk semua torrent sekaligus. Terpisah dari batas kecepatan unduhan biasa. Kosong berarti tanpa batas.",
+  "Download at most (KB/s)": "Unduh paling banyak (KB/s)",
+  "Save speed limits": "Simpan batas kecepatan",
+  "Torrent speed": "Kecepatan torrent",
+  "Type a speed in KB/s (for example 500), or leave a box empty for no limit.": "Ketik kecepatan dalam KB/s (misalnya 500), atau kosongkan kolom untuk tanpa batas.",
+  "Upload at most (KB/s)": "Unggah paling banyak (KB/s)"
 }

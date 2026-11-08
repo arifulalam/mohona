@@ -9,6 +9,7 @@
 //! [librqbit]: https://crates.io/crates/librqbit
 
 use std::net::SocketAddr;
+use std::num::NonZeroU32;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
@@ -111,6 +112,8 @@ pub struct Torrents {
     state_dir: PathBuf,
     session: OnceCell<Arc<Session>>,
     seeding: Mutex<(Option<Seeding>, CancelToken)>,
+    /// Speed limits in bytes per second: download, upload (`None`: no limit).
+    speed: Mutex<(Option<NonZeroU32>, Option<NonZeroU32>)>,
 }
 
 /// How long a finished torrent is shared: until it has sent `ratio` times its size, or after
@@ -134,6 +137,7 @@ impl Torrents {
             state_dir: state_dir.into(),
             session: OnceCell::new(),
             seeding: Mutex::new((None, CancelToken::new())),
+            speed: Mutex::new((None, None)),
         }
     }
 
@@ -147,6 +151,18 @@ impl Torrents {
             state.1 = CancelToken::new();
         }
         state.0 = policy;
+    }
+
+    /// Limits the speed of all torrents together, in bytes per second (`None` or 0: no limit).
+    /// It applies at once, also to torrents that are already running.
+    pub fn set_speed(&self, down: Option<u32>, up: Option<u32>) {
+        let down = down.and_then(NonZeroU32::new);
+        let up = up.and_then(NonZeroU32::new);
+        *self.speed.lock().unwrap_or_else(|e| e.into_inner()) = (down, up);
+        if let Some(session) = self.session.get() {
+            session.ratelimits.set_download_bps(down);
+            session.ratelimits.set_upload_bps(up);
+        }
     }
 
     /// How many torrents the session holds: those being downloaded and those being shared.
@@ -163,8 +179,14 @@ impl Torrents {
                 let _ = std::fs::create_dir_all(&self.state_dir);
                 // A computer without IPv6 cannot open the usual sockets: use IPv4 only then.
                 let mut last = None;
+                let (download_bps, upload_bps) =
+                    *self.speed.lock().unwrap_or_else(|e| e.into_inner());
                 for ipv4_only in [false, true] {
                     let options = SessionOptions {
+                        ratelimits: librqbit::limits::LimitsConfig {
+                            upload_bps,
+                            download_bps,
+                        },
                         listen: Some(librqbit::ListenerOptions {
                             ipv4_only,
                             ..librqbit::ListenerOptions::default()

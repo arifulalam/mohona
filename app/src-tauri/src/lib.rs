@@ -8,7 +8,7 @@ use std::time::Duration;
 use mohona_appcore::{
     AppError, Category, Config, ConfigChange, Engine, EngineStatus, ExtensionSettings, GrabAdded, GrabFile,
     GrabOptions, GrabState, Plan,
-    Details, PlanWindow, Queue, QueueChange, Row, Rule, SiteProfile, Seeding, SpeedTracker, ToolInfo, TorrentList, Watcher,
+    Details, PlanWindow, Queue, QueueChange, Row, Rule, SiteProfile, Seeding, SpeedTracker, TorrentSpeed, ToolInfo, TorrentList, Watcher,
 };
 use tauri::menu::{Menu, MenuItem};
 use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
@@ -234,6 +234,16 @@ async fn get_tools(app: State<'_, App>) -> Result<Vec<ToolInfo>> {
 #[tauri::command]
 async fn set_tool(app: State<'_, App>, name: String, path: Option<String>) -> Result<Vec<ToolInfo>> {
     app.engine.set_tool(name, path).await
+}
+
+#[tauri::command]
+async fn get_torrent_speed(app: State<'_, App>) -> Result<TorrentSpeed> {
+    app.engine.torrent_speed().await
+}
+
+#[tauri::command]
+async fn set_torrent_speed(app: State<'_, App>, down_kb: Option<u32>, up_kb: Option<u32>) -> Result<TorrentSpeed> {
+    app.engine.set_torrent_speed(TorrentSpeed { down_kb, up_kb }).await
 }
 
 #[tauri::command]
@@ -557,6 +567,8 @@ pub fn run() {
             get_tools,
             set_tool,
             open_tool_page,
+            get_torrent_speed,
+            set_torrent_speed,
             get_seeding,
             set_seeding,
             get_update,

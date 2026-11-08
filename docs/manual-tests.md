@@ -437,6 +437,12 @@ Needs yt-dlp (`winget install yt-dlp.yt-dlp`); ffmpeg for the best quality (`win
 - [ ] Offline: a message that GitHub could not be asked; nothing else breaks.
 - [ ] Command line: `mohona update --repo owner/name`.
 
+## Torrent speed
+
+- [ ] Settings → Torrents → Torrent speed: set "Download at most" to 200, Save speed limits. Start a well-seeded torrent: the speed stays near 200 KB/s. Empty the box and Save: it speeds up again at once, without restarting.
+- [ ] Set "Upload at most" to 50 while a finished torrent is shared (see Torrents above): the upload stays near 50 KB/s.
+- [ ] `mohona torrent speed`, `mohona torrent speed --down 300`, `mohona torrent speed --off`.
+
 ## Add new items here
 
 When a step adds something that can't be tested on this PC (FTP server, SFTP server, WebDAV, a custom CA, a mirror site, a browser, an Android phone), add it to this list in the same step.

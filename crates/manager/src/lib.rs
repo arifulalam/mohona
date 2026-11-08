@@ -41,6 +41,9 @@ pub const VIDEO_BROWSER: &str = "video.browser";
 
 /// Sharing finished torrents: stop at this upload ratio (settings; empty or 0: no limit) ...
 pub const TORRENT_RATIO: &str = "torrent.ratio";
+/// Speed limits of all torrents together, in KB/s (settings; empty or 0: no limit).
+pub const TORRENT_DOWN_KB: &str = "torrent.down_kb";
+pub const TORRENT_UP_KB: &str = "torrent.up_kb";
 /// ... or after this many minutes. With neither set, a finished torrent is not shared.
 pub const TORRENT_MINUTES: &str = "torrent.minutes";
 
@@ -1292,6 +1295,9 @@ impl Actor {
                 if key == TORRENT_RATIO || key == TORRENT_MINUTES {
                     self.apply_seeding();
                 }
+                if key == TORRENT_DOWN_KB || key == TORRENT_UP_KB {
+                    self.apply_torrent_speed();
+                }
             }
             Command::TorrentFiles(url, reply) => {
                 let torrents = self.torrents.clone();
@@ -1870,6 +1876,7 @@ impl Actor {
         self.set_status(row.id, Status::Probing, None);
         if mohona_torrent::is_torrent_address(&row.url) {
             self.apply_seeding();
+            self.apply_torrent_speed();
             let route = row
                 .auto_category
                 .then(|| self.store.categories().ok())
@@ -1970,6 +1977,21 @@ impl Actor {
             ratio: number(TORRENT_RATIO),
             minutes: number(TORRENT_MINUTES).map(|m| m as u64),
         });
+    }
+
+    /// Tells the torrent engine the speed limits (the two settings, in KB/s).
+    fn apply_torrent_speed(&self) {
+        let bps = |key: &str| {
+            self.store
+                .setting(key)
+                .ok()
+                .flatten()
+                .and_then(|v| v.trim().parse::<u32>().ok())
+                .filter(|v| *v > 0)
+                .map(|kb| kb.saturating_mul(1024))
+        };
+        self.torrents
+            .set_speed(bps(TORRENT_DOWN_KB), bps(TORRENT_UP_KB));
     }
 
     /// The ordinary download of an address.

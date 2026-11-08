@@ -1,4 +1,4 @@
-import type { Api, Category, Config, ConfigChange, EngineStatus, ExtensionSettings, Details, Plan, PlanWindow, Queue, Row, Rule, SiteProfile, TorrentList, ToolInfo, Seeding, GrabState, GrabFile, GrabAdded, ScanSetting, Startup, UpdateInfo } from "./types";
+import type { Api, Category, Config, ConfigChange, EngineStatus, ExtensionSettings, Details, Plan, PlanWindow, Queue, Row, Rule, SiteProfile, TorrentList, ToolInfo, Seeding, GrabState, GrabFile, GrabAdded, ScanSetting, Startup, UpdateInfo, TorrentSpeed } from "./types";
 
 /** True inside the Tauri window; false in a plain browser (development, tests). */
 export function insideTauri(): boolean {
@@ -28,6 +28,8 @@ function tauriApi(): Api {
     tools: () => call<ToolInfo[]>("get_tools"),
     setTool: (name, path) => call<ToolInfo[]>("set_tool", { name, path }),
     openToolPage: (url) => call<void>("open_tool_page", { url }),
+    torrentSpeed: () => call<TorrentSpeed>("get_torrent_speed"),
+    setTorrentSpeed: (s) => call<TorrentSpeed>("set_torrent_speed", { downKb: s.downKb, upKb: s.upKb }),
     seeding: () => call<Seeding>("get_seeding"),
     setSeeding: (s) => call<Seeding>("set_seeding", { ratio: s.ratio, minutes: s.minutes }),
     update: () => call<UpdateInfo>("get_update"),
@@ -112,6 +114,7 @@ const demoGrabFiles = (url: string): GrabFile[] => [
 let demoBrowser: string | null = null;
 let demoStartup: Startup = { available: false, enabled: false };
 let demoScan: ScanSetting = { mode: "off", command: "", defender: null };
+  let demoSpeed: TorrentSpeed = { downKb: null, upKb: null };
   let demoSeeding: Seeding = { ratio: null, minutes: null };
   let toolList: ToolInfo[] = [
     { name: "ffmpeg", purpose: "join separate video and audio, add subtitles to a video, convert files, and merge the best video and sound of a YouTube download", chosen: null, found: null, page: "https://ffmpeg.org/download.html", windowsPage: "https://www.gyan.dev/ffmpeg/builds/", winget: "winget install Gyan.FFmpeg" },
@@ -203,6 +206,8 @@ let demoScan: ScanSetting = { mode: "off", command: "", defender: null };
       return toolList.map((t) => ({ ...t }));
     },
     openToolPage: async (url) => void window.open(url, "_blank", "noopener"),
+    torrentSpeed: async () => (need(), { ...demoSpeed }),
+    setTorrentSpeed: async (s) => ((demoSpeed = { downKb: s.downKb || null, upKb: s.upKb || null }), { ...demoSpeed }),
     seeding: async () => (need(), { ...demoSeeding }),
     setSeeding: async (s) => ((demoSeeding = { ratio: s.ratio || null, minutes: s.minutes || null }), { ...demoSeeding }),
     update: async () => (need(), { repo: "", current: "0.0.1", latest: null, newer: false, url: null, notes: null }),

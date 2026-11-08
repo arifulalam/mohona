@@ -2,7 +2,7 @@ import { cleanup, render, screen, waitFor, within } from "@testing-library/react
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { App } from "../src/App";
-import type { Api, Category, Config, ConfigChange, EngineStatus, ExtensionSettings, Details, Plan, PlanWindow, Queue, Row, Rule, SiteProfile, ToolInfo, GrabOptions, GrabFile, GrabState, Startup, UpdateInfo } from "../src/types";
+import type { Api, Category, Config, ConfigChange, EngineStatus, ExtensionSettings, Details, Plan, PlanWindow, Queue, Row, Rule, SiteProfile, ToolInfo, GrabOptions, GrabFile, GrabState, Startup, UpdateInfo, TorrentSpeed } from "../src/types";
 
 const row = (id: number, name: string, status: string, extra: Partial<Row> = {}): Row => ({
   id, name, url: `https://x.test/${name}`, status, downloaded: 50, size: 100, percent: 50, speed: 0, eta: null,
@@ -34,6 +34,7 @@ function fake(initial: Row[], running = true) {
   let updating: UpdateInfo = { repo: "", current: "0.0.1", latest: null, newer: false, url: null, notes: null };
   let started: Startup = { available: true, enabled: false };
   let scanned: { mode: "off" | "defender" | "custom"; command: string; defender: string | null } = { mode: "off", command: "", defender: null };
+  let tspeed: TorrentSpeed = { downKb: null, upKb: null };
   let seeding: { ratio: number | null; minutes: number | null } = { ratio: null, minutes: null };
   let tools: ToolInfo[] = [
     { name: "ffmpeg", purpose: "join separate video and audio", chosen: null, found: null, page: "https://ffmpeg.org/download.html", windowsPage: "https://www.gyan.dev/ffmpeg/builds/", winget: "winget install Gyan.FFmpeg" },
@@ -69,6 +70,8 @@ function fake(initial: Row[], running = true) {
     }),
     grabStop: vi.fn(async () => undefined),
     grabDownload: vi.fn(async (files: GrabFile[], _f: string | null, _q: number | null) => ({ added: files.length, skipped: [] })),
+    torrentSpeed: vi.fn(async () => tspeed),
+    setTorrentSpeed: vi.fn(async (x: TorrentSpeed) => (tspeed = x)),
     seeding: vi.fn(async () => seeding),
     setSeeding: vi.fn(async (s: { ratio: number | null; minutes: number | null }) => (seeding = { ratio: s.ratio, minutes: s.minutes })),
     update: vi.fn(async () => updating),
@@ -240,6 +243,10 @@ describe("App", () => {
     expect(await within(dialog).findByRole("alert")).toBeTruthy();
     await userEvent.click(within(dialog).getByRole("button", { name: "Do not share" }));
     await waitFor(() => expect(api.setSeeding).toHaveBeenLastCalledWith({ ratio: null, minutes: null }));
+    // The speed limit of torrents is its own box and its own button.
+    await userEvent.type(within(dialog).getByLabelText("Download at most (KB/s)"), "500");
+    await userEvent.click(within(dialog).getByRole("button", { name: "Save speed limits" }));
+    await waitFor(() => expect(api.setTorrentSpeed).toHaveBeenCalledWith({ downKb: 500, upKb: null }));
   });
 
   it("shows the outside tools, how to get a missing one, and lets the person say where it is", async () => {

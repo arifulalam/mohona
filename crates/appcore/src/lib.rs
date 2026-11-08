@@ -232,6 +232,14 @@ impl From<mohona_daemon::rules::Rule> for Rule {
     }
 }
 
+/// The speed limits of torrents, in KB/s (none: no limit).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TorrentSpeed {
+    pub down_kb: Option<u32>,
+    pub up_kb: Option<u32>,
+}
+
 /// How finished torrents are shared, as the page shows it.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, serde::Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -936,6 +944,20 @@ impl Engine {
         self.seeding().await
     }
 
+    pub async fn torrent_speed(&self) -> Result<TorrentSpeed, AppError> {
+        torrent_speed_answer(self.call(Call::GetTorrentSpeed).await?)
+    }
+
+    pub async fn set_torrent_speed(&self, new: TorrentSpeed) -> Result<TorrentSpeed, AppError> {
+        torrent_speed_answer(
+            self.call(Call::SetTorrentSpeed {
+                down_kb: new.down_kb,
+                up_kb: new.up_kb,
+            })
+            .await?,
+        )
+    }
+
     /// The browser whose sign-in yt-dlp uses for video pages, if one is chosen.
     pub async fn video_browser(&self) -> Result<Option<String>, AppError> {
         match self.call(Call::GetVideoBrowser).await? {
@@ -1416,4 +1438,12 @@ pub fn is_release_page(url: &str, repo: &str) -> bool {
             "https://github.com/{}/",
             repo.to_ascii_lowercase()
         ))
+}
+
+fn torrent_speed_answer(answer: Response) -> Result<TorrentSpeed, AppError> {
+    match answer {
+        Response::TorrentSpeed { down_kb, up_kb } => Ok(TorrentSpeed { down_kb, up_kb }),
+        Response::Error { message } => Err(AppError::Engine(message)),
+        _ => Err(AppError::Engine("unexpected answer from the engine".into())),
+    }
 }

@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { I18n, LANGUAGES, loadLanguage, saveLanguage, translator, useT } from "./i18n";
 import { AddDialog, Modal } from "./AddDialog";
 import { GrabberDialog } from "./GrabberDialog";
-import { loadDropTarget } from "./droptarget";
+import { loadDropTarget } from "./dropprefs";
 import { loadClipboardWatch, saveClipboardWatch, useClipboardOffer } from "./clipboard";
 import { DetailsDialog } from "./DetailsDialog";
 import { categoryCounts, categoryOf, SORTS, sortRows, type SortKey } from "./organize";

@@ -334,5 +334,11 @@
   "owner/name": "владелец/имя",
   "This is version {v}.": "Это версия {v}.",
   "Updates": "Обновления",
-  "You have the newest version.": "У вас последняя версия."
+  "You have the newest version.": "У вас последняя версия.",
+  "A limit for all torrents together. It is separate from the speed limit of ordinary downloads. Empty means no limit.": "Общий предел для всех торрентов. Он отделён от ограничения скорости обычных загрузок. Пусто — без ограничения.",
+  "Download at most (KB/s)": "Загрузка не более (КБ/с)",
+  "Save speed limits": "Сохранить ограничения скорости",
+  "Torrent speed": "Скорость торрентов",
+  "Type a speed in KB/s (for example 500), or leave a box empty for no limit.": "Введите скорость в КБ/с (например, 500) или оставьте поле пустым, чтобы не ограничивать.",
+  "Upload at most (KB/s)": "Отдача не более (КБ/с)"
 }

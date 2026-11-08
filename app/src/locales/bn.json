@@ -334,5 +334,11 @@
   "owner/name": "মালিক/নাম",
   "This is version {v}.": "এটি সংস্করণ {v}।",
   "Updates": "আপডেট",
-  "You have the newest version.": "আপনার কাছে সর্বশেষ সংস্করণ আছে।"
+  "You have the newest version.": "আপনার কাছে সর্বশেষ সংস্করণ আছে।",
+  "A limit for all torrents together. It is separate from the speed limit of ordinary downloads. Empty means no limit.": "সব টরেন্টের জন্য একটি সম্মিলিত সীমা। এটি সাধারণ ডাউনলোডের গতিসীমা থেকে আলাদা। খালি মানে কোনো সীমা নেই।",
+  "Download at most (KB/s)": "সর্বোচ্চ ডাউনলোড (KB/s)",
+  "Save speed limits": "গতিসীমা সংরক্ষণ করুন",
+  "Torrent speed": "টরেন্টের গতি",
+  "Type a speed in KB/s (for example 500), or leave a box empty for no limit.": "KB/s-এ গতি লিখুন (যেমন 500), অথবা সীমা না চাইলে ঘরটি খালি রাখুন।",
+  "Upload at most (KB/s)": "সর্বোচ্চ আপলোড (KB/s)"
 }

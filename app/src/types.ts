@@ -247,6 +247,8 @@ export interface Api {
   /** Opens one of the tools' download pages in the browser. */
   openToolPage(url: string): Promise<void>;
   /** How long finished torrents are shared (ratio in hundredths; neither: not shared). */
+  torrentSpeed(): Promise<TorrentSpeed>;
+  setTorrentSpeed(speed: TorrentSpeed): Promise<TorrentSpeed>;
   seeding(): Promise<Seeding>;
   setSeeding(seeding: Seeding): Promise<Seeding>;
   /** The browser whose sign-in yt-dlp uses for video pages (null: none). */
@@ -321,4 +323,10 @@ export interface UpdateInfo {
   newer: boolean;
   url: string | null;
   notes: string | null;
+}
+
+/** The speed limits of all torrents together, in KB/s (null: no limit). */
+export interface TorrentSpeed {
+  downKb: number | null;
+  upKb: number | null;
 }

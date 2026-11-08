@@ -157,6 +157,13 @@ pub enum Call {
         ratio: Option<u32>,
         minutes: Option<u64>,
     },
+    /// The speed limits of torrents (answered as `TorrentSpeed`).
+    GetTorrentSpeed,
+    /// Limit all torrents together, in KB/s (empty or 0: no limit).
+    SetTorrentSpeed {
+        down_kb: Option<u32>,
+        up_kb: Option<u32>,
+    },
     /// The plugins found in the plugins folder.
     GetPlugins,
     /// Switch a plugin on or off (by its name).
@@ -580,6 +587,11 @@ pub enum Response {
         /// In hundredths (150 is a ratio of 1.5).
         ratio: Option<u32>,
         minutes: Option<u64>,
+    },
+    /// The speed limits of torrents, in KB/s (none: no limit).
+    TorrentSpeed {
+        down_kb: Option<u32>,
+        up_kb: Option<u32>,
     },
     /// The value of a setting, if there is one.
     Setting {

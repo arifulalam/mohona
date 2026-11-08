@@ -9,6 +9,8 @@ use mohona_net::HttpClient;
 
 /// The setting that holds `owner/repo`.
 pub const REPO_SETTING: &str = "update.repo";
+/// The repository Mohona is published in, used until the person chooses another (or empties it to turn the check off).
+pub const DEFAULT_REPO: &str = "arifulalam/mohona";
 /// Where the GitHub API is (changed in tests).
 pub const API: &str = "https://api.github.com";
 

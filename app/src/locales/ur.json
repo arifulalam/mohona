@@ -334,5 +334,11 @@
   "owner/name": "مالک/نام",
   "This is version {v}.": "یہ ورژن {v} ہے۔",
   "Updates": "اپ ڈیٹس",
-  "You have the newest version.": "آپ کے پاس تازہ ترین ورژن ہے۔"
+  "You have the newest version.": "آپ کے پاس تازہ ترین ورژن ہے۔",
+  "A limit for all torrents together. It is separate from the speed limit of ordinary downloads. Empty means no limit.": "تمام ٹورنٹس کے لیے مشترکہ حد۔ یہ عام ڈاؤن لوڈز کی رفتار کی حد سے الگ ہے۔ خالی کا مطلب کوئی حد نہیں۔",
+  "Download at most (KB/s)": "زیادہ سے زیادہ ڈاؤن لوڈ (KB/s)",
+  "Save speed limits": "رفتار کی حدیں محفوظ کریں",
+  "Torrent speed": "ٹورنٹ کی رفتار",
+  "Type a speed in KB/s (for example 500), or leave a box empty for no limit.": "KB/s میں رفتار لکھیں (مثلاً 500)، یا بغیر حد کے لیے خانہ خالی چھوڑ دیں۔",
+  "Upload at most (KB/s)": "زیادہ سے زیادہ اپ لوڈ (KB/s)"
 }
