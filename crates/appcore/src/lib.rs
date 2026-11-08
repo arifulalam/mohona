@@ -21,7 +21,7 @@ use serde::Serialize;
 pub use rows::{name_of, Row};
 pub use settings::{merge_extension, ExtensionSettings};
 pub use speed::SpeedTracker;
-pub use watch::{Notice, Watcher};
+pub use watch::{Notice, NoticeAction, Watcher};
 
 #[derive(Debug, thiserror::Error)]
 pub enum AppError {

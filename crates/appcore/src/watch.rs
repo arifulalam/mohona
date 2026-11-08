@@ -12,6 +12,41 @@ use crate::rows::Row;
 pub struct Notice {
     pub title: String,
     pub body: String,
+    /// The download this is about.
+    pub id: i64,
+    /// It finished (and so has a file to open); false for a failure.
+    pub finished: bool,
+}
+
+/// What a button on the message can do.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum NoticeAction {
+    /// Open the finished file.
+    Open,
+    /// Show the finished file in its folder.
+    Folder,
+}
+
+impl NoticeAction {
+    /// The text a button carries so that its click can be told apart later (`open:12`).
+    pub fn token(self, id: i64) -> String {
+        let word = match self {
+            NoticeAction::Open => "open",
+            NoticeAction::Folder => "folder",
+        };
+        format!("{word}:{id}")
+    }
+
+    /// Reads a token back. Anything else (also a click on the message itself) is `None`.
+    pub fn parse(token: &str) -> Option<(NoticeAction, i64)> {
+        let (word, id) = token.split_once(':')?;
+        let action = match word {
+            "open" => NoticeAction::Open,
+            "folder" => NoticeAction::Folder,
+            _ => return None,
+        };
+        Some((action, id.parse().ok()?))
+    }
 }
 
 /// Compares each list with the one before it.
@@ -49,8 +84,12 @@ impl Watcher {
                     "completed" => Some(Notice {
                         title: "Download finished".into(),
                         body: row.name.clone(),
+                        id: row.id,
+                        finished: true,
                     }),
                     "failed" => Some(Notice {
+                        id: row.id,
+                        finished: false,
                         title: "Download failed".into(),
                         body: format!(
                             "{}: {}",
@@ -72,6 +111,16 @@ impl Watcher {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_button_token_is_read_back_and_nothing_else_is() {
+        for action in [NoticeAction::Open, NoticeAction::Folder] {
+            assert_eq!(NoticeAction::parse(&action.token(42)), Some((action, 42)));
+        }
+        for bad in ["", "open", "open:", "open:x", "delete:3", "open:1:2", ":4"] {
+            assert_eq!(NoticeAction::parse(bad), None, "{bad}");
+        }
+    }
 
     fn row(id: i64, status: &str) -> Row {
         Row {

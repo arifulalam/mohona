@@ -457,6 +457,54 @@ fn build_tray(handle: &AppHandle) -> tauri::Result<()> {
     Ok(())
 }
 
+/// Does what a button on a finished-download message asks.
+fn run_notice_action(handle: AppHandle, action: mohona_appcore::NoticeAction, id: i64) {
+    tauri::async_runtime::spawn(async move {
+        let app = handle.state::<App>();
+        match action {
+            mohona_appcore::NoticeAction::Open => {
+                if let Ok(path) = app.engine.openable_file(id).await {
+                    let _ = handle.opener().open_path(path.to_string_lossy(), None::<&str>);
+                }
+            }
+            mohona_appcore::NoticeAction::Folder => {
+                if let Ok(path) = app.engine.finished_file(id).await {
+                    let _ = handle.opener().reveal_item_in_dir(path);
+                }
+            }
+        }
+    });
+}
+
+/// Windows: a message with "Open" and "Show in folder" buttons for a finished download.
+/// Returns false when Windows would not show it, so that the plain message is used instead.
+#[cfg(windows)]
+fn show_toast(handle: &AppHandle, notice: &mohona_appcore::Notice) -> bool {
+    use mohona_appcore::NoticeAction;
+    use tauri_winrt_notification::Toast;
+
+    // An installed program has its own identity; one run from the build folder borrows PowerShell's.
+    let app_id = if tauri::is_dev() {
+        Toast::POWERSHELL_APP_ID.to_string()
+    } else {
+        handle.config().identifier.clone()
+    };
+    let mut toast = Toast::new(&app_id).title(&notice.title).text1(&notice.body);
+    if notice.finished {
+        let handle = handle.clone();
+        toast = toast
+            .add_button("Open", &NoticeAction::Open.token(notice.id))
+            .add_button("Show in folder", &NoticeAction::Folder.token(notice.id))
+            .on_activated(move |token| {
+                if let Some((action, id)) = token.as_deref().and_then(NoticeAction::parse) {
+                    run_notice_action(handle.clone(), action, id);
+                }
+                Ok(())
+            });
+    }
+    toast.show().is_ok()
+}
+
 /// Looks at the list every two seconds and shows a message for each download
 /// that finished or failed (when the person has not switched messages off).
 fn watch_downloads(handle: AppHandle) {
@@ -479,6 +527,10 @@ fn watch_downloads(handle: AppHandle) {
                         .map_or(true, |config| config.notifications);
                     if wanted {
                         for notice in notices {
+                            #[cfg(windows)]
+                            if show_toast(&handle, &notice) {
+                                continue;
+                            }
                             let _ = handle
                                 .notification()
                                 .builder()

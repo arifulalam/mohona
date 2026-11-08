@@ -443,6 +443,15 @@ Needs yt-dlp (`winget install yt-dlp.yt-dlp`); ffmpeg for the best quality (`win
 - [ ] Set "Upload at most" to 50 while a finished torrent is shared (see Torrents above): the upload stays near 50 KB/s.
 - [ ] `mohona torrent speed`, `mohona torrent speed --down 300`, `mohona torrent speed --off`.
 
+## Buttons on the finish message (Windows)
+
+- [ ] With the installed program (not `tauri dev`): download a small file with Mohona's window minimised or in the tray. A Windows message "Download finished" appears with the buttons **Open** and **Show in folder**.
+- [ ] Open: the file opens in its program. Show in folder: Explorer opens with the file selected.
+- [ ] Click the message itself (not a button): nothing is opened (it is only dismissed).
+- [ ] A failed download: the message appears without buttons.
+- [ ] Settings → Downloads, messages off: no message at all.
+- [ ] In `tauri dev` the message appears under PowerShell's name (normal for a program that is not installed).
+
 ## Add new items here
 
 When a step adds something that can't be tested on this PC (FTP server, SFTP server, WebDAV, a custom CA, a mirror site, a browser, an Android phone), add it to this list in the same step.

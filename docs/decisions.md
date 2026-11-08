@@ -836,3 +836,11 @@ A `401` now becomes its own error (`NetError::Unauthorized`) that names the kind
 
 **Not included.** A version bump (all crates are still 0.0.1), and a separate README per crate (all use the repository's README).
 
+## ADR-0082: Buttons on Windows' finish message
+
+**What.** On Windows, when a download finishes, the system message ("Download finished", the file name) has two buttons: **Open** and **Show in folder**. A click does what the in-app message does (ADR-0074). A failure message has no buttons. Other systems and any case where Windows would not show the message keep the plain message of the notification plugin. The in-app message still appears when the window is open.
+
+**How.** ADR-0074 left this out because the notification plugin of Tauri is text only. The message is now made with `tauri-winrt-notification` (a Windows-only dependency, so other systems do not build it), which supports buttons and tells the program which one was clicked. Each button carries a small token (`open:12`, `folder:12`: what to do, for which download) that `NoticeAction` (in `mohona-appcore`, unit tested) writes and reads; nothing else a click delivers is acted on. The program asks the engine for the file at the moment of the click (the same calls as the buttons in the window), so a file that was moved or deleted gives nothing instead of opening a stale path. An installed program uses its own identity (`org.mohona.app`); a program run from the build folder (`tauri dev`) borrows PowerShell's so that Windows shows the message at all.
+
+**Not included.** Buttons on the failure message (Retry), translated button labels (the message text is English like the rest of the system message), and buttons on other systems. Only Windows itself can show whether the buttons appear and work (C44); this part of the app is not built on Linux, so it has only been checked against the library's documented interface. If it does not compile, the first error is all that is needed.
+
