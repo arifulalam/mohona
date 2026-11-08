@@ -99,8 +99,9 @@ function fake(initial: Row[], running = true) {
     })),
     add: vi.fn(async (url: string, _folder?: string | null, _queue?: number, _files?: number[]) => {
       if (url.includes("bad")) throw new Error("the address must start with http://");
-      rows = [...rows, row(99, "new.zip", "downloading")];
-      return 99;
+      const id = 99 + rows.filter((r) => r.id >= 99).length;
+      rows = [...rows, row(id, "new.zip", "downloading")];
+      return id;
     }),
     pause: vi.fn(async (id: number) => void (rows = rows.map((r) => (r.id === id ? { ...r, status: "paused" } : r)))),
     resume: vi.fn(async () => undefined),
