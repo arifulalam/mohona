@@ -212,7 +212,8 @@ head -c 700 /dev/zero > "$folder/A reel.mp4"
 echo "MOHONA_FILE $folder/A reel.mp4"
 "#,
     );
-    // A plain file server for the fallback.
+    // A plain file server for the fallback (on this computer, so local addresses must count here).
+    std::env::set_var("MOHONA_VIDEO_GUESS_LOCAL", "1");
     let listener = mohona_testserver::bind("127.0.0.1:0".parse().unwrap())
         .await
         .unwrap();

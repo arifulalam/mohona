@@ -76,6 +76,19 @@ pub fn could_be_page(address: &str) -> bool {
     {
         return false;
     }
+    // A server on this computer or this network (a router, a NAS, a test server) is not a
+    // video site, and asking yt-dlp first would only delay the download.
+    let local = match url.host() {
+        Some(url::Host::Ipv4(ip)) => {
+            ip.is_loopback() || ip.is_private() || ip.is_link_local() || ip.is_unspecified()
+        }
+        Some(url::Host::Ipv6(ip)) => ip.is_loopback() || ip.is_unspecified(),
+        _ => !host.contains('.') || host.ends_with(".local") || host.ends_with(".lan"),
+    };
+    // (A test that serves its pages from this computer asks for them to count.)
+    if local && std::env::var_os("MOHONA_VIDEO_GUESS_LOCAL").is_none() {
+        return false;
+    }
     let name = url.path().rsplit('/').next().unwrap_or("");
     match name.rsplit_once('.') {
         None => true,
@@ -339,6 +352,12 @@ mod tests {
             "ftp://example.com/page",
             "magnet:?xt=urn:btih:abc",
             "not a url",
+            "http://127.0.0.1:8080/file",
+            "http://localhost/data",
+            "http://192.168.1.1/page",
+            "http://[::1]/x",
+            "http://nas/share/video",
+            "http://printer.local/doc",
         ] {
             assert!(!could_be_page(no), "{no}");
         }

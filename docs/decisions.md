@@ -860,3 +860,5 @@ A `401` now becomes its own error (`NetError::Unauthorized`) that names the kind
 
 **Not included.** Installing Deno for the person, or passing `--js-runtimes` (an option older yt-dlp versions do not know).
 
+**Addendum (same day): not for servers on this computer or network.** With yt-dlp installed, the Windows test run (`cargo test --workspace`) failed six manager tests: the tests' own server (`http://127.0.0.1:…/file`) has no file ending, so every download was first handed to yt-dlp, started twice and took seconds longer. The tests were right to complain: it would be the same for a download from a router, a NAS or a development server. An address on this computer or network (loopback, private and link-local IP numbers, `localhost`, names without a dot, `.local`, `.lan`) is now never guessed to be a video page (a person can still ask for its video with the "video" option). One test sets `MOHONA_VIDEO_GUESS_LOCAL=1`, because its "ordinary page" is its own local server.
+
