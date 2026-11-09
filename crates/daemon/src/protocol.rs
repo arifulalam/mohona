@@ -161,6 +161,14 @@ pub enum Call {
     GetTorrentSpeed,
     /// The finished torrents that are being shared now (answered as `Sharing`).
     GetSharing,
+    /// The kind of file taken from video pages (answered as `VideoFormat`).
+    GetVideoFormat,
+    /// Choose it: quality (`best`, `2160` … `360`, `audio`), video format and audio format.
+    SetVideoFormat {
+        quality: String,
+        container: String,
+        audio: String,
+    },
     /// Stop sharing one of them (answered as `Sharing`, the list that is left).
     StopSharing {
         id: u64,
@@ -593,6 +601,12 @@ pub enum Response {
         /// In hundredths (150 is a ratio of 1.5).
         ratio: Option<u32>,
         minutes: Option<u64>,
+    },
+    /// The kind of file taken from video pages, and the choices there are.
+    VideoFormat {
+        quality: String,
+        container: String,
+        audio: String,
     },
     /// The torrents being shared now.
     Sharing {

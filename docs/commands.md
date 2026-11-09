@@ -641,6 +641,17 @@ Starts at one web page, lists the files it links to (pictures, videos, audio, do
 
 API: `POST /v1/grab` (write) with `{"url", "depth", "sameSite", "types", "maxPages", "robots"}` starts a run (one at a time), `GET /v1/grab` (read) tells how it is doing and, once over, lists the files, `DELETE /v1/grab` (write) stops it.
 
+## `video-format` — quality, format, or sound only for video pages
+
+```
+mohona video-format                                  # show
+mohona video-format --quality 720 --format mkv       # at most 720p, as MKV
+mohona video-format --quality audio --audio mp3      # sound only, as MP3
+mohona video-format --quality best --format mp4      # the default
+```
+
+Quality: `best`, `2160`, `1440`, `1080`, `720`, `480`, `360`, `audio`. Video format: `mp4`, `mkv`, `webm`, `mov`, `avi` (the last two are made by converting the finished video with ffmpeg: slow). Audio format (for `audio`): `mp3`, `m4a`, `opus`, `ogg`, `flac`, `wav`, `aac`. What is left out stays as it was. It applies to downloads from YouTube and other video pages (those that go through yt-dlp). Joining, converting and sound-only files need ffmpeg; without it the file keeps what the site serves whole (ADR-0086). The daemon must be running.
+
 ## `update` — is there a newer Mohona?
 
 ```

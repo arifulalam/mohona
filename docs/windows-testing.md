@@ -150,6 +150,7 @@ Numbers are the steps of the "Desktop app" section.
 - [ ] C32 Settings sync: the steps of "Settings sync" in `docs/manual-tests.md` (two computers or two user accounts, one synced folder)
 - [ ] C33 Plugins: the steps of "Plugins" in `docs/manual-tests.md` (the PowerShell example plugin)
 - [ ] C34 Torrent file selection: the steps of "Torrent file selection" in `docs/manual-tests.md` (also check that a torrent of several files gets its own folder)
+- [ ] C45 Video quality and format: "Video quality and format" in `docs/manual-tests.md`
 - [ ] C44 Buttons on the finish message: "Buttons on the finish message" in `docs/manual-tests.md` (also: the app must still compile, `.\scripts\build-windows.ps1`)
 - [ ] C43 Torrent speed limit: "Torrent speed" in `docs/manual-tests.md`
 - [ ] C42 Update check: "Update check" in `docs/manual-tests.md`

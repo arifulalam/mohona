@@ -8,7 +8,7 @@ Mohona is a free, open-source download manager. It splits each file across many 
 
 ## Goals
 
-- Everything a classic download manager does: segmented downloads, resume, queues, scheduler, speed limiter, browser capture, video grabber, Open / Show in folder buttons on Windows' finish message, a speed limit for torrents, an update check (GitHub Releases), a small drop target for links, starts with Windows (in the tray), virus scan after each download (Windows Defender or your own program, `mohona scan`), site grabber (`mohona grab`, the app's Site Grabber, the extension's "Files on this page")
+- Everything a classic download manager does: segmented downloads, resume, queues, scheduler, speed limiter, browser capture, video grabber (quality, MP4/MKV/WebM/MOV/AVI, or MP3/M4A/OGG/FLAC/WAV sound only), Open / Show in folder buttons on Windows' finish message, a speed limit for torrents, an update check (GitHub Releases), a small drop target for links, starts with Windows (in the tray), virus scan after each download (Windows Defender or your own program, `mohona scan`), site grabber (`mohona grab`, the app's Site Grabber, the extension's "Files on this page")
 - And more: HLS and DASH streams, SFTP and WebDAV, BitTorrent, cloud share links, a remote web companion, settings sync between computers, plugins, a scriptable CLI and local API, a rules engine, checksum verification, dark mode
 - Reliable: a crash, power cut or network switch never corrupts a download
 

@@ -345,5 +345,13 @@
   "No torrent is being shared.": "Es wird kein Torrent geteilt.",
   "Sent {sent} of {size}": "{sent} von {size} gesendet",
   "Stop sharing": "Teilen beenden",
-  "Stop sharing {name}": "Teilen von {name} beenden"
+  "Stop sharing {name}": "Teilen von {name} beenden",
+  "Audio format": "Audioformat",
+  "Best available": "Beste verfügbare",
+  "For YouTube and other video pages. Joining, converting and sound-only files need ffmpeg; without it only the files the site already serves whole can be taken.": "Für YouTube und andere Videoseiten. Zusammenfügen, Umwandeln und reine Tondateien brauchen ffmpeg; ohne es können nur Dateien genommen werden, die die Seite schon fertig anbietet.",
+  "MOV and AVI are made by converting the finished video, which takes a while.": "MOV und AVI entstehen durch Umwandeln des fertigen Videos, das dauert etwas.",
+  "Quality": "Qualität",
+  "Sound only": "Nur Ton",
+  "Video and audio from video pages": "Video und Audio von Videoseiten",
+  "Video format": "Videoformat"
 }

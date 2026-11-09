@@ -868,3 +868,13 @@ A `401` now becomes its own error (`NetError::Unauthorized`) that names the kind
 
 **Not included.** Closing the window program by itself (the person is asked), and asking before stopping the engine (it was already stopped without asking; its downloads continue the next time Mohona starts).
 
+## ADR-0086: The kind of file from a video page: quality, video format, sound only
+
+**What.** Settings → Tools → "Video and audio from video pages": **Quality** (best available, 2160p, 1440p, 1080p, 720p, 480p, 360p, or sound only) and, with it, the **video format** (MP4, MKV, WebM, MOV, AVI) or, for sound only, the **audio format** (MP3, M4A, Opus, OGG, FLAC, WAV, AAC). It applies to every download that goes through yt-dlp (YouTube, Facebook, X, Instagram and the rest), also those that start from the browser extension. `mohona video-format [--quality …] [--format …] [--audio …]` does the same. The default is what it was: the best quality, MP4.
+
+**How.** Three settings (`video.quality`, `video.container`, `video.audio`), read when each download starts, become yt-dlp options (`ytdlp::Choice`): a height limit is `-f bv*[height<=720]+ba/b[height<=720]`; MP4, MKV and WebM join the streams without re-encoding (`--merge-output-format`); MOV and AVI are not something the sites serve, so ffmpeg converts the finished video (`--recode-video`, slow); sound only is `-x --audio-format …` (OGG is Vorbis, which yt-dlp calls `vorbis`). The daemon accepts only values from the lists (nothing else ever reaches yt-dlp's command line), and an unknown value in the settings is read as the default.
+
+**Without ffmpeg** yt-dlp can only take what the site serves as one file: the height limit still applies, but there is no joining, no conversion (the file keeps the site's own format) and "sound only" gives the site's own audio (often WebM or M4A) instead of MP3. The page says so in a line. Mohona's own `convert` (ADR for ffmpeg presets) can convert such a file afterwards.
+
+**Not included.** A choice per download (the Add window and the extension's popup have none; the setting is for everything), MPEG as a video format (yt-dlp cannot make it; use `mohona convert`), a list of the exact formats of a video to pick one from (`yt-dlp -F` does that), subtitles and whole playlists (`--no-playlist` stays: one link is one video).
+

@@ -464,6 +464,16 @@ Needs yt-dlp (`winget install yt-dlp.yt-dlp`); ffmpeg for the best quality (`win
 - [ ] With the older Mohona installed, the browser open with the extension on, and Mohona's window closed: run the new installer. It does not stop on "mohona-host.exe is running", and finishes. The extension works again after the browser reconnects (open the popup).
 - [ ] Uninstall with the same setup: it finishes without leftovers in `%LOCALAPPDATA%\Mohona` (the folder of the programs; the downloads list stays unless you choose to remove app data).
 
+## Video quality and format
+
+- [ ] Settings → Tools → Video and audio: choose 480p, MP4. Download a YouTube video: the picture is 480 lines high at most (check in the player's properties).
+- [ ] Choose Sound only, MP3. Download a YouTube video: the file is an `.mp3` and plays as sound (needs ffmpeg).
+- [ ] Sound only, WAV, then OGG, FLAC: each file has that ending and plays.
+- [ ] Best available, MKV, then WebM: the finished video has that ending and plays.
+- [ ] MOV (or AVI): the download takes longer at the end (converting) and the file plays in a normal player.
+- [ ] With ffmpeg not found (set Settings → Tools → ffmpeg to a wrong folder): the sound-only file is the site's own audio (not MP3); no crash.
+- [ ] `mohona video-format --quality audio --audio mp3` and then `mohona video-format` shows it.
+
 ## Add new items here
 
 When a step adds something that can't be tested on this PC (FTP server, SFTP server, WebDAV, a custom CA, a mirror site, a browser, an Android phone), add it to this list in the same step.

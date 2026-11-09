@@ -990,6 +990,22 @@ impl Engine {
         self.startup()
     }
 
+    /// The kind of file taken from video pages.
+    pub async fn video_format(&self) -> Result<VideoFormat, AppError> {
+        video_format_answer(self.call(Call::GetVideoFormat).await?)
+    }
+
+    pub async fn set_video_format(&self, choice: VideoFormat) -> Result<VideoFormat, AppError> {
+        video_format_answer(
+            self.call(Call::SetVideoFormat {
+                quality: choice.quality,
+                container: choice.container,
+                audio: choice.audio,
+            })
+            .await?,
+        )
+    }
+
     /// The finished torrents that are being shared now.
     pub async fn sharing(&self) -> Result<Vec<SharedTorrent>, AppError> {
         sharing_answer(self.call(Call::GetSharing).await?)
@@ -1481,6 +1497,30 @@ fn sharing_answer(answer: Response) -> Result<Vec<SharedTorrent>, AppError> {
                 seconds: i.seconds,
             })
             .collect()),
+        Response::Error { message } => Err(AppError::Engine(message)),
+        _ => Err(AppError::Engine("unexpected answer from the engine".into())),
+    }
+}
+
+/// The kind of file taken from video pages: `quality` is `best`, a height such as `720`, or `audio`.
+#[derive(Debug, Clone, Serialize, serde::Deserialize)]
+pub struct VideoFormat {
+    pub quality: String,
+    pub container: String,
+    pub audio: String,
+}
+
+fn video_format_answer(answer: Response) -> Result<VideoFormat, AppError> {
+    match answer {
+        Response::VideoFormat {
+            quality,
+            container,
+            audio,
+        } => Ok(VideoFormat {
+            quality,
+            container,
+            audio,
+        }),
         Response::Error { message } => Err(AppError::Engine(message)),
         _ => Err(AppError::Engine("unexpected answer from the engine".into())),
     }

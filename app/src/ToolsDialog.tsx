@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { useT } from "./i18n";
 import { Modal } from "./AddDialog";
-import type { Api, ScanSetting, ToolInfo } from "./types";
+import type { Api, ScanSetting, ToolInfo, VideoFormat } from "./types";
 
 const BROWSERS: [string, string][] = [
   ["chrome", "Chrome"],
@@ -22,6 +22,7 @@ export function ToolsDialog({ api, onClose }: { api: Api; onClose(): void }) {
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [browser, setBrowser] = useState<string>("");
+  const [format, setFormat] = useState<VideoFormat | null>(null);
   const [scan, setScan] = useState<ScanSetting | null>(null);
   const [command, setCommand] = useState("");
 
@@ -65,6 +66,29 @@ export function ToolsDialog({ api, onClose }: { api: Api; onClose(): void }) {
       alive = false;
     };
   }, [api]);
+
+  useEffect(() => {
+    let alive = true;
+    api
+      .videoFormat()
+      .then((x) => alive && setFormat(x))
+      .catch(() => undefined);
+    return () => {
+      alive = false;
+    };
+  }, [api]);
+
+  async function chooseFormat(next: VideoFormat) {
+    setBusy(true);
+    try {
+      setFormat(await api.setVideoFormat(next));
+      setError(null);
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }
 
   async function chooseScan(mode: string, text: string) {
     setBusy(true);
@@ -190,6 +214,48 @@ export function ToolsDialog({ api, onClose }: { api: Api; onClose(): void }) {
         </label>
         <p className="my-1 text-xs text-[var(--muted)]">{t("Close that browser if a download says it cannot read the cookies.")}</p>
       </section>
+      {format && (
+        <section aria-label={t("Video and audio from video pages")} className="mt-3 rounded-lg border border-[var(--line)] p-3">
+          <strong>{t("Video and audio from video pages")}</strong>
+          <p className="my-1 text-sm text-[var(--muted)]">
+            {t("For YouTube and other video pages. Joining, converting and sound-only files need ffmpeg; without it only the files the site already serves whole can be taken.")}
+          </p>
+          <div className="flex flex-wrap items-center gap-3 text-sm">
+            <label className="flex items-center gap-2">
+              {t("Quality")}
+              <select className={field} value={format.quality} disabled={busy} onChange={(e) => void chooseFormat({ ...format, quality: e.target.value })}>
+                <option value="best">{t("Best available")}</option>
+                {["2160", "1440", "1080", "720", "480", "360"].map((h) => (
+                  <option key={h} value={h}>{`${h}p`}</option>
+                ))}
+                <option value="audio">{t("Sound only")}</option>
+              </select>
+            </label>
+            {format.quality === "audio" ? (
+              <label className="flex items-center gap-2">
+                {t("Audio format")}
+                <select className={field} value={format.audio} disabled={busy} onChange={(e) => void chooseFormat({ ...format, audio: e.target.value })}>
+                  {["mp3", "m4a", "opus", "ogg", "flac", "wav", "aac"].map((a) => (
+                    <option key={a} value={a}>{a.toUpperCase()}</option>
+                  ))}
+                </select>
+              </label>
+            ) : (
+              <label className="flex items-center gap-2">
+                {t("Video format")}
+                <select className={field} value={format.container} disabled={busy} onChange={(e) => void chooseFormat({ ...format, container: e.target.value })}>
+                  {["mp4", "mkv", "webm", "mov", "avi"].map((c) => (
+                    <option key={c} value={c}>{c.toUpperCase()}</option>
+                  ))}
+                </select>
+              </label>
+            )}
+          </div>
+          {!format.quality.match(/^audio$/) && (format.container === "mov" || format.container === "avi") && (
+            <p className="my-1 text-xs text-[var(--muted)]">{t("MOV and AVI are made by converting the finished video, which takes a while.")}</p>
+          )}
+        </section>
+      )}
       {scan && (
         <section aria-label={t("Virus scan")} className="mt-3 rounded-lg border border-[var(--line)] p-3">
           <strong>{t("Virus scan")}</strong>

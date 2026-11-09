@@ -345,5 +345,13 @@
   "No torrent is being shared.": "共有中のトレントはありません。",
   "Sent {sent} of {size}": "{size} のうち {sent} を送信",
   "Stop sharing": "共有を停止",
-  "Stop sharing {name}": "{name} の共有を停止"
+  "Stop sharing {name}": "{name} の共有を停止",
+  "Audio format": "音声形式",
+  "Best available": "利用可能な最高画質",
+  "For YouTube and other video pages. Joining, converting and sound-only files need ffmpeg; without it only the files the site already serves whole can be taken.": "YouTube などの動画ページ向けです。結合・変換・音声のみのファイルには ffmpeg が必要で、ない場合はサイトが最初から1つのファイルとして提供しているものだけ取得できます。",
+  "MOV and AVI are made by converting the finished video, which takes a while.": "MOV と AVI は完成した動画を変換して作るため、時間がかかります。",
+  "Quality": "画質",
+  "Sound only": "音声のみ",
+  "Video and audio from video pages": "動画ページの映像と音声",
+  "Video format": "動画形式"
 }

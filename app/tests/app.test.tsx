@@ -2,7 +2,7 @@ import { cleanup, render, screen, waitFor, within } from "@testing-library/react
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { App } from "../src/App";
-import type { Api, Category, Config, ConfigChange, EngineStatus, ExtensionSettings, Details, Plan, PlanWindow, Queue, Row, Rule, SiteProfile, ToolInfo, GrabOptions, GrabFile, GrabState, Startup, UpdateInfo, TorrentSpeed } from "../src/types";
+import type { Api, Category, Config, ConfigChange, EngineStatus, ExtensionSettings, Details, Plan, PlanWindow, Queue, Row, Rule, SiteProfile, ToolInfo, GrabOptions, GrabFile, GrabState, Startup, UpdateInfo, TorrentSpeed, VideoFormat } from "../src/types";
 
 const row = (id: number, name: string, status: string, extra: Partial<Row> = {}): Row => ({
   id, name, url: `https://x.test/${name}`, status, downloaded: 50, size: 100, percent: 50, speed: 0, eta: null,
@@ -33,6 +33,7 @@ function fake(initial: Row[], running = true) {
   let browser: string | null = null;
   let updating: UpdateInfo = { repo: "", current: "0.0.1", latest: null, newer: false, url: null, notes: null };
   let shared = [{ id: 7, name: "Album", total: 2_000_000, uploaded: 500_000, seconds: 60 }];
+  let vformat: VideoFormat = { quality: "best", container: "mp4", audio: "mp3" };
   let started: Startup = { available: true, enabled: false };
   let scanned: { mode: "off" | "defender" | "custom"; command: string; defender: string | null } = { mode: "off", command: "", defender: null };
   let tspeed: TorrentSpeed = { downKb: null, upKb: null };
@@ -71,6 +72,8 @@ function fake(initial: Row[], running = true) {
     }),
     grabStop: vi.fn(async () => undefined),
     grabDownload: vi.fn(async (files: GrabFile[], _f: string | null, _q: number | null) => ({ added: files.length, skipped: [] })),
+    videoFormat: vi.fn(async () => vformat),
+    setVideoFormat: vi.fn(async (c: VideoFormat) => (vformat = c)),
     sharing: vi.fn(async () => shared),
     stopSharing: vi.fn(async (id: number) => (shared = shared.filter((x) => x.id !== id))),
     torrentSpeed: vi.fn(async () => tspeed),
@@ -278,6 +281,14 @@ describe("App", () => {
     await waitFor(() => expect(api.setTool).toHaveBeenLastCalledWith("ffmpeg", null));
     await userEvent.selectOptions(within(dialog).getByLabelText("Use the sign-in of"), "edge");
     await waitFor(() => expect(api.setVideoBrowser).toHaveBeenCalledWith("edge"));
+    // Video quality and format, and sound only.
+    await userEvent.selectOptions(await within(dialog).findByLabelText("Quality"), "720");
+    await waitFor(() => expect(api.setVideoFormat).toHaveBeenLastCalledWith({ quality: "720", container: "mp4", audio: "mp3" }));
+    await userEvent.selectOptions(within(dialog).getByLabelText("Video format"), "mkv");
+    await waitFor(() => expect(api.setVideoFormat).toHaveBeenLastCalledWith({ quality: "720", container: "mkv", audio: "mp3" }));
+    await userEvent.selectOptions(within(dialog).getByLabelText("Quality"), "audio");
+    await userEvent.selectOptions(await within(dialog).findByLabelText("Audio format"), "wav");
+    await waitFor(() => expect(api.setVideoFormat).toHaveBeenLastCalledWith({ quality: "audio", container: "mkv", audio: "wav" }));
     await userEvent.selectOptions(within(dialog).getByLabelText("Scan finished downloads with"), "custom");
     await waitFor(() => expect(api.setScan).toHaveBeenCalledWith("custom", ""));
     await userEvent.type(await within(dialog).findByLabelText("Scanner command"), "scan.exe {{file}");

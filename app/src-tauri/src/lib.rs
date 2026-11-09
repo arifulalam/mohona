@@ -237,6 +237,27 @@ async fn set_tool(app: State<'_, App>, name: String, path: Option<String>) -> Re
 }
 
 #[tauri::command]
+async fn get_video_format(app: State<'_, App>) -> Result<mohona_appcore::VideoFormat> {
+    app.engine.video_format().await
+}
+
+#[tauri::command]
+async fn set_video_format(
+    app: State<'_, App>,
+    quality: String,
+    container: String,
+    audio: String,
+) -> Result<mohona_appcore::VideoFormat> {
+    app.engine
+        .set_video_format(mohona_appcore::VideoFormat {
+            quality,
+            container,
+            audio,
+        })
+        .await
+}
+
+#[tauri::command]
 async fn get_sharing(app: State<'_, App>) -> Result<Vec<mohona_appcore::SharedTorrent>> {
     app.engine.sharing().await
 }
@@ -629,6 +650,8 @@ pub fn run() {
             get_tools,
             set_tool,
             open_tool_page,
+            get_video_format,
+            set_video_format,
             get_sharing,
             stop_sharing,
             get_torrent_speed,

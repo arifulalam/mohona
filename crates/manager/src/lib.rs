@@ -41,6 +41,10 @@ const SAVE_INTERVAL: Duration = Duration::from_secs(1);
 
 /// The setting that names the browser whose sign-in yt-dlp uses (empty: none).
 pub const VIDEO_BROWSER: &str = "video.browser";
+/// The kind of file taken from video pages: quality, video format and audio format (settings).
+pub const VIDEO_QUALITY: &str = "video.quality";
+pub const VIDEO_CONTAINER: &str = "video.container";
+pub const VIDEO_AUDIO: &str = "video.audio";
 
 /// Sharing finished torrents: stop at this upload ratio (settings; empty or 0: no limit) ...
 pub const TORRENT_RATIO: &str = "torrent.ratio";
@@ -1964,7 +1968,14 @@ impl Actor {
                 .flatten()
                 .map(|b| b.trim().to_string())
                 .filter(|b| !b.is_empty());
+            let saved = |key: &str| self.store.setting(key).ok().flatten().unwrap_or_default();
+            let choice = mohona_media::ytdlp::Choice::from_settings(
+                &saved(VIDEO_QUALITY),
+                &saved(VIDEO_CONTAINER),
+                &saved(VIDEO_AUDIO),
+            );
             tokio::spawn(run_video(
+                choice,
                 ytdlp,
                 tool(mohona_media::tools::FFMPEG),
                 VideoJob {
@@ -2211,6 +2222,7 @@ struct VideoJob {
 /// A video page (YouTube and alike): yt-dlp does the work, and tells the same story through its output.
 #[allow(clippy::too_many_arguments)]
 async fn run_video(
+    choice: mohona_media::ytdlp::Choice,
     ytdlp: Option<PathBuf>,
     ffmpeg: Option<PathBuf>,
     job: VideoJob,
@@ -2276,6 +2288,7 @@ async fn run_video(
     let mut command = tokio::process::Command::new(&ytdlp);
     command
         .args(arguments(&Request {
+            choice,
             url: url.clone(),
             folder: dest.clone(),
             ffmpeg,

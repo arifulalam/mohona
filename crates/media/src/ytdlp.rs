@@ -138,9 +138,99 @@ pub const BROWSERS: &[&str] = &[
     "chrome", "edge", "firefox", "brave", "opera", "vivaldi", "chromium", "safari",
 ];
 
+/// The video qualities the person can choose: the tallest picture to take (`best`: no limit), or
+/// `audio` for the sound only.
+pub const QUALITIES: &[&str] = &["best", "2160", "1440", "1080", "720", "480", "360", "audio"];
+/// The video formats. `mp4`, `mkv` and `webm` join the streams without re-encoding; `mov` and
+/// `avi` make ffmpeg convert the finished video, which takes a while.
+pub const CONTAINERS: &[&str] = &["mp4", "mkv", "webm", "mov", "avi"];
+/// The audio formats. `ogg` is Vorbis in an Ogg file; `opus` and `m4a` are kept as they are when the
+/// site already has them. All of them need ffmpeg.
+pub const AUDIO: &[&str] = &["mp3", "m4a", "opus", "ogg", "flac", "wav", "aac"];
+
+/// What kind of file the person wants from a video page.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Choice {
+    /// One of [`QUALITIES`].
+    pub quality: String,
+    /// One of [`CONTAINERS`], for a video.
+    pub container: String,
+    /// One of [`AUDIO`], for `quality == "audio"`.
+    pub audio: String,
+}
+
+impl Default for Choice {
+    fn default() -> Self {
+        Self {
+            quality: "best".into(),
+            container: "mp4".into(),
+            audio: "mp3".into(),
+        }
+    }
+}
+
+impl Choice {
+    /// Reads three setting values; an empty or unknown one is the default (so a setting written by
+    /// a newer version never breaks a download).
+    pub fn from_settings(quality: &str, container: &str, audio: &str) -> Self {
+        let pick = |value: &str, allowed: &[&str], default: &str| {
+            let v = value.trim().to_ascii_lowercase();
+            if allowed.contains(&v.as_str()) {
+                v
+            } else {
+                default.to_string()
+            }
+        };
+        Self {
+            quality: pick(quality, QUALITIES, "best"),
+            container: pick(container, CONTAINERS, "mp4"),
+            audio: pick(audio, AUDIO, "mp3"),
+        }
+    }
+
+    /// The arguments for yt-dlp. Without ffmpeg only what the site serves as one file can be
+    /// taken: no joining, no conversion.
+    fn arguments(&self, ffmpeg: Option<&Path>) -> Vec<String> {
+        let mut args: Vec<String> = Vec::new();
+        let height: Option<u32> = self.quality.parse().ok();
+        let limit = |kind: &str| match height {
+            Some(h) => format!("{kind}[height<={h}]"),
+            None => kind.to_string(),
+        };
+        let audio_only = self.quality == "audio";
+        match (ffmpeg, audio_only) {
+            (Some(_), true) => {
+                args.extend(["-f".into(), "ba/b".into(), "-x".into()]);
+                // `ogg` is called vorbis by yt-dlp.
+                let format = if self.audio == "ogg" {
+                    "vorbis"
+                } else {
+                    &self.audio
+                };
+                args.extend(["--audio-format".into(), format.to_string()]);
+                args.extend(["--audio-quality".into(), "0".into()]);
+            }
+            (None, true) => args.extend(["-f".into(), "ba/b".into()]),
+            (Some(_), false) => {
+                args.extend(["-f".into(), format!("{}+ba/{}", limit("bv*"), limit("b"))]);
+                match self.container.as_str() {
+                    "mov" | "avi" => {
+                        args.extend(["--recode-video".into(), self.container.clone()]);
+                    }
+                    other => args.extend(["--merge-output-format".into(), other.to_string()]),
+                }
+            }
+            (None, false) => args.extend(["-f".into(), limit("b")]),
+        }
+        args
+    }
+}
+
 /// What to download and where.
 #[derive(Clone, Debug)]
 pub struct Request {
+    /// The kind of file wanted.
+    pub choice: Choice,
     pub url: String,
     pub folder: PathBuf,
     /// The ffmpeg program, if there is one: with it the best video and the best sound are joined;
@@ -190,14 +280,10 @@ pub fn arguments(request: &Request) -> Vec<String> {
     if let Some(file) = &request.cookie_file {
         args.extend(["--cookies".into(), file.display().to_string()]);
     }
-    match &request.ffmpeg {
-        Some(ffmpeg) => {
-            args.extend(["-f".into(), "bv*+ba/b".into()]);
-            args.extend(["--merge-output-format".into(), "mp4".into()]);
-            args.push("--ffmpeg-location".into());
-            args.push(ffmpeg.display().to_string());
-        }
-        None => args.extend(["-f".into(), "b".into()]),
+    args.extend(request.choice.arguments(request.ffmpeg.as_deref()));
+    if let Some(ffmpeg) = &request.ffmpeg {
+        args.push("--ffmpeg-location".into());
+        args.push(ffmpeg.display().to_string());
     }
     args.push("--".into());
     args.push(request.url.clone());
@@ -366,6 +452,7 @@ mod tests {
     #[test]
     fn browser_cookies_and_the_generic_reader_are_options() {
         let args = arguments(&Request {
+            choice: Choice::default(),
             url: "https://x.com/a/status/1".into(),
             folder: PathBuf::from("D:\\V"),
             ffmpeg: None,
@@ -383,6 +470,7 @@ mod tests {
             .windows(2)
             .any(|w| w == ["--use-extractors", "default,-generic"]));
         let none = arguments(&Request {
+            choice: Choice::default(),
             url: "https://x.com/a/status/1".into(),
             folder: PathBuf::from("D:\\V"),
             ffmpeg: None,
@@ -426,6 +514,7 @@ mod tests {
     #[test]
     fn the_address_comes_after_the_end_of_options() {
         let with = arguments(&Request {
+            choice: Choice::default(),
             url: "https://youtu.be/--exec=calc".into(),
             folder: PathBuf::from("D:\\Videos"),
             ffmpeg: Some(PathBuf::from("C:\\ff\\ffmpeg.exe")),
@@ -442,6 +531,7 @@ mod tests {
         assert!(with.windows(2).any(|w| w == ["-P", "D:\\Videos"]));
         assert!(with.contains(&"--no-playlist".to_string()));
         let without = arguments(&Request {
+            choice: Choice::default(),
             url: "https://youtu.be/x".into(),
             folder: PathBuf::from("."),
             ffmpeg: None,
@@ -505,6 +595,42 @@ mod tests {
                 .contains("signed-in browser")
         );
         assert!(failure_reason(&[], true).contains("without saying why"));
+    }
+
+    #[test]
+    fn the_chosen_quality_and_format_become_yt_dlp_options() {
+        let ff = Some(Path::new("ffmpeg"));
+        let has = |c: &Choice, f: Option<&Path>, pair: [&str; 2]| {
+            c.arguments(f).windows(2).any(|w| w == pair)
+        };
+        let d = Choice::default();
+        assert!(has(&d, ff, ["-f", "bv*+ba/b"]));
+        assert!(has(&d, ff, ["--merge-output-format", "mp4"]));
+        let hd = Choice::from_settings("720", "mkv", "");
+        assert!(has(&hd, ff, ["-f", "bv*[height<=720]+ba/b[height<=720]"]));
+        assert!(has(&hd, ff, ["--merge-output-format", "mkv"]));
+        // Formats that are made by converting.
+        let mov = Choice::from_settings("best", "mov", "");
+        assert!(has(&mov, ff, ["--recode-video", "mov"]));
+        assert!(!mov
+            .arguments(ff)
+            .contains(&"--merge-output-format".to_string()));
+        // Sound only, in the format chosen.
+        let mp3 = Choice::from_settings("audio", "mp4", "mp3");
+        assert!(mp3.arguments(ff).contains(&"-x".to_string()));
+        assert!(has(&mp3, ff, ["--audio-format", "mp3"]));
+        assert!(has(
+            &Choice::from_settings("audio", "", "ogg"),
+            ff,
+            ["--audio-format", "vorbis"]
+        ));
+        // Without ffmpeg: single files only, the limit still applies, nothing is converted.
+        assert!(has(&hd, None, ["-f", "b[height<=720]"]));
+        assert!(has(&mp3, None, ["-f", "ba/b"]));
+        assert!(!mp3.arguments(None).contains(&"-x".to_string()));
+        // Anything unknown, empty or hostile is the default.
+        let odd = Choice::from_settings("--exec=calc", "x y", "mp3; rm");
+        assert_eq!(odd, Choice::default());
     }
 
     #[test]

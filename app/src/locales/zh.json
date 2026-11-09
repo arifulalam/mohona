@@ -345,5 +345,13 @@
   "No torrent is being shared.": "没有正在共享的种子。",
   "Sent {sent} of {size}": "已发送 {sent}（共 {size}）",
   "Stop sharing": "停止共享",
-  "Stop sharing {name}": "停止共享 {name}"
+  "Stop sharing {name}": "停止共享 {name}",
+  "Audio format": "音频格式",
+  "Best available": "可用的最佳画质",
+  "For YouTube and other video pages. Joining, converting and sound-only files need ffmpeg; without it only the files the site already serves whole can be taken.": "适用于 YouTube 和其他视频页面。合并、转换和纯音频文件需要 ffmpeg；没有它时，只能获取网站本身就以完整文件提供的内容。",
+  "MOV and AVI are made by converting the finished video, which takes a while.": "MOV 和 AVI 通过转换已完成的视频生成，需要一些时间。",
+  "Quality": "画质",
+  "Sound only": "仅音频",
+  "Video and audio from video pages": "视频页面的视频和音频",
+  "Video format": "视频格式"
 }

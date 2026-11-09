@@ -247,6 +247,8 @@ export interface Api {
   /** Opens one of the tools' download pages in the browser. */
   openToolPage(url: string): Promise<void>;
   /** How long finished torrents are shared (ratio in hundredths; neither: not shared). */
+  videoFormat(): Promise<VideoFormat>;
+  setVideoFormat(choice: VideoFormat): Promise<VideoFormat>;
   sharing(): Promise<SharedTorrent[]>;
   stopSharing(id: number): Promise<SharedTorrent[]>;
   torrentSpeed(): Promise<TorrentSpeed>;
@@ -340,4 +342,11 @@ export interface SharedTorrent {
   total: number;
   uploaded: number;
   seconds: number;
+}
+
+/** The kind of file taken from video pages. `quality` is "best", a height such as "720", or "audio". */
+export interface VideoFormat {
+  quality: string;
+  container: string;
+  audio: string;
 }

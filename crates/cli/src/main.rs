@@ -28,6 +28,7 @@ mod toolcmd;
 mod tools;
 mod torrent;
 mod update;
+mod video_format;
 
 #[derive(Parser)]
 #[command(
@@ -85,6 +86,8 @@ enum Command {
     /// Site grabber: list (and download) the files a web page and the pages it links to offer
     /// (the daemon must be running)
     Grab(grab::GrabArgs),
+    /// Choose the kind of file taken from video pages: quality, video format, or sound only
+    VideoFormat(video_format::VideoFormatArgs),
     /// Look for a newer version on GitHub Releases (the daemon must be running)
     Update(update::UpdateArgs),
     /// Virus scan: show or set how finished downloads are scanned (the daemon must be running)
@@ -635,6 +638,7 @@ async fn main() -> ExitCode {
         Some(Command::Grab(args)) => grab::run(args).await,
         Some(Command::Scan(args)) => scan::run(args).await,
         Some(Command::Update(args)) => update::run(args).await,
+        Some(Command::VideoFormat(args)) => video_format::run(args).await,
         Some(Command::Plugins { command, info }) => plugins::run(command, info).await,
         Some(Command::Sync { command, info }) => sync::run(command, info).await,
         Some(Command::Remote { command, info }) => remote::run(command, info).await,

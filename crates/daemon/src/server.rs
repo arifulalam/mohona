@@ -792,6 +792,27 @@ fn done(result: Result<(), ManagerError>) -> Response {
     }
 }
 
+async fn video_format(manager: &Manager) -> Response {
+    let saved = |key: &'static str| async move {
+        manager
+            .setting(key)
+            .await
+            .ok()
+            .flatten()
+            .unwrap_or_default()
+    };
+    let choice = mohona_media::ytdlp::Choice::from_settings(
+        &saved(mohona_manager::VIDEO_QUALITY).await,
+        &saved(mohona_manager::VIDEO_CONTAINER).await,
+        &saved(mohona_manager::VIDEO_AUDIO).await,
+    );
+    Response::VideoFormat {
+        quality: choice.quality,
+        container: choice.container,
+        audio: choice.audio,
+    }
+}
+
 async fn sharing(manager: &Manager) -> Response {
     match manager.sharing().await {
         Ok(all) => Response::Sharing {
@@ -1231,6 +1252,38 @@ pub(crate) async fn handle(state: &State, call: Call) -> Response {
                 }
             }
             seeding(state).await
+        }
+        Call::GetVideoFormat => video_format(manager).await,
+        Call::SetVideoFormat {
+            quality,
+            container,
+            audio,
+        } => {
+            use mohona_media::ytdlp::{AUDIO, CONTAINERS, QUALITIES};
+            for (name, value, allowed) in [
+                ("quality", &quality, QUALITIES),
+                ("video format", &container, CONTAINERS),
+                ("audio format", &audio, AUDIO),
+            ] {
+                if !allowed.contains(&value.as_str()) {
+                    return Response::Error {
+                        message: format!(
+                            "\"{value}\" is not a {name} (one of: {})",
+                            allowed.join(", ")
+                        ),
+                    };
+                }
+            }
+            for (key, value) in [
+                (mohona_manager::VIDEO_QUALITY, &quality),
+                (mohona_manager::VIDEO_CONTAINER, &container),
+                (mohona_manager::VIDEO_AUDIO, &audio),
+            ] {
+                if let Err(e) = manager.set_setting(key, value).await {
+                    return error(e);
+                }
+            }
+            video_format(manager).await
         }
         Call::GetSharing => sharing(manager).await,
         Call::StopSharing { id } => {

@@ -354,3 +354,97 @@ async fn the_sharing_of_finished_torrents_is_kept_and_checked() {
     ));
     shutdown.notify_one();
 }
+
+#[cfg(unix)]
+#[tokio::test]
+async fn the_chosen_quality_and_format_reach_yt_dlp() {
+    let dir = tempfile::tempdir().unwrap();
+    let tool = dir.path().join("fake-yt-dlp");
+    script(
+        &tool,
+        r#"#!/bin/sh
+folder=""; prev=""
+for a in "$@"; do
+  if [ "$prev" = "-P" ]; then folder="$a"; fi
+  prev="$a"
+done
+echo "$@" > "$folder/args.txt"
+echo "MOHONA_NAME Song"
+head -c 800 /dev/zero > "$folder/Song.mp3"
+echo "MOHONA_FILE $folder/Song.mp3"
+"#,
+    );
+    let (client, shutdown) = start(dir.path()).await;
+    client
+        .call(Call::SetTool {
+            name: "yt-dlp".into(),
+            path: Some(tool.display().to_string()),
+        })
+        .await
+        .unwrap();
+    let read = |r: Response| match r {
+        Response::VideoFormat {
+            quality,
+            container,
+            audio,
+        } => (quality, container, audio),
+        other => panic!("{other:?}"),
+    };
+    // The default: the best, as mp4 (and mp3 for sound).
+    assert_eq!(
+        read(client.call(Call::GetVideoFormat).await.unwrap()),
+        ("best".to_string(), "mp4".to_string(), "mp3".to_string())
+    );
+    // Only what the program knows is accepted, and nothing is changed by a refusal.
+    for (quality, container, audio) in [
+        ("--exec=calc", "mp4", "mp3"),
+        ("720", "exe", "mp3"),
+        ("720", "mp4", "mp3 --x"),
+    ] {
+        assert!(matches!(
+            client
+                .call(Call::SetVideoFormat {
+                    quality: quality.into(),
+                    container: container.into(),
+                    audio: audio.into()
+                })
+                .await
+                .unwrap(),
+            Response::Error { .. }
+        ));
+    }
+    assert_eq!(
+        read(client.call(Call::GetVideoFormat).await.unwrap()).0,
+        "best"
+    );
+
+    let args_file = dir.path().join("dl").join("args.txt");
+    let set = |quality: &str, container: &str, audio: &str| Call::SetVideoFormat {
+        quality: quality.into(),
+        container: container.into(),
+        audio: audio.into(),
+    };
+    client.call(set("720", "mkv", "mp3")).await.unwrap();
+    let Response::Added { id } = add(&client, "https://www.youtube.com/watch?v=abc12345678").await
+    else {
+        panic!()
+    };
+    until(&client, id, "completed").await;
+    let args = std::fs::read_to_string(&args_file).unwrap();
+    // (No ffmpeg is found here, so only the height limit applies.)
+    assert!(
+        args.contains("-f b[height<=720]") || args.contains("bv*[height<=720]"),
+        "{args}"
+    );
+    assert!(!args.contains("--exec"), "{args}");
+
+    client.call(set("audio", "mp4", "mp3")).await.unwrap();
+    let Response::Added { id } = add(&client, "https://www.youtube.com/watch?v=abc12345679").await
+    else {
+        panic!()
+    };
+    until(&client, id, "completed").await;
+    let args = std::fs::read_to_string(&args_file).unwrap();
+    assert!(args.contains("-f ba/b"), "{args}");
+    shutdown.notify_one();
+}
