@@ -862,3 +862,9 @@ A `401` now becomes its own error (`NetError::Unauthorized`) that names the kind
 
 **Addendum (same day): not for servers on this computer or network.** With yt-dlp installed, the Windows test run (`cargo test --workspace`) failed six manager tests: the tests' own server (`http://127.0.0.1:…/file`) has no file ending, so every download was first handed to yt-dlp, started twice and took seconds longer. The tests were right to complain: it would be the same for a download from a router, a NAS or a development server. An address on this computer or network (loopback, private and link-local IP numbers, `localhost`, names without a dot, `.local`, `.lan`) is now never guessed to be a video page (a person can still ask for its video with the "video" option). One test sets `MOHONA_VIDEO_GUESS_LOCAL=1`, because its "ordinary page" is its own local server.
 
+## ADR-0085: The installer also stops the browser's copy of the host
+
+**What.** Installing over an older Mohona stopped on "mohona-host.exe is running": the browser starts the native host for the extension and keeps it running, and that locks the program file. The installer's steps (`installer-hooks.nsh`) now also stop `mohona-host.exe`, before installing and when uninstalling (after the host has been taken out of the browsers' lists), and wait 0.7 s for Windows to release the files. The browser starts the host again when the extension next needs it, so nothing is lost, and the downloads are in the engine, not in the host. The question "close Mohona before continuing?" at the start of an install or uninstall is Tauri's own, for the window program (`mohona-app.exe`); it is not changed.
+
+**Not included.** Closing the window program by itself (the person is asked), and asking before stopping the engine (it was already stopped without asking; its downloads continue the next time Mohona starts).
+

@@ -459,6 +459,11 @@ Needs yt-dlp (`winget install yt-dlp.yt-dlp`); ffmpeg for the best quality (`win
 - [ ] With ffmpeg found (Settings → Tools shows its path), a "format not available" failure does not mention ffmpeg.
 - [ ] A yt-dlp installed with winget, Scoop or Chocolatey is shown as found in Settings → Tools without editing the PATH.
 
+## Installing over an older version
+
+- [ ] With the older Mohona installed, the browser open with the extension on, and Mohona's window closed: run the new installer. It does not stop on "mohona-host.exe is running", and finishes. The extension works again after the browser reconnects (open the popup).
+- [ ] Uninstall with the same setup: it finishes without leftovers in `%LOCALAPPDATA%\Mohona` (the folder of the programs; the downloads list stays unless you choose to remove app data).
+
 ## Add new items here
 
 When a step adds something that can't be tested on this PC (FTP server, SFTP server, WebDAV, a custom CA, a mirror site, a browser, an Android phone), add it to this list in the same step.
