@@ -453,6 +453,12 @@ Needs yt-dlp (`winget install yt-dlp.yt-dlp`); ffmpeg for the best quality (`win
 - [ ] Settings → Downloads, messages off: no message at all.
 - [ ] In `tauri dev` the message appears under PowerShell's name (normal for a program that is not installed).
 
+## YouTube: when no format is found
+
+- [ ] With yt-dlp new but no Deno installed, a YouTube video fails with a message that names the JavaScript runtime and `winget install DenoLand.Deno`. After installing Deno (and restarting Mohona) the same link downloads.
+- [ ] With ffmpeg found (Settings → Tools shows its path), a "format not available" failure does not mention ffmpeg.
+- [ ] A yt-dlp installed with winget, Scoop or Chocolatey is shown as found in Settings → Tools without editing the PATH.
+
 ## Add new items here
 
 When a step adds something that can't be tested on this PC (FTP server, SFTP server, WebDAV, a custom CA, a mirror site, a browser, an Android phone), add it to this list in the same step.

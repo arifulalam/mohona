@@ -148,7 +148,6 @@ pub fn arguments(request: &Request) -> Vec<String> {
     let mut args: Vec<String> = [
         "--no-playlist",
         "--no-colors",
-        "--no-warnings",
         "--newline",
         "--progress",
         "--no-mtime",
@@ -235,7 +234,7 @@ pub fn is_unsupported(lines: &[String]) -> bool {
 }
 
 /// What a failed run says, in a form a person can read: the last `ERROR:` line, without the prefix.
-pub fn failure_reason(lines: &[String]) -> String {
+pub fn failure_reason(lines: &[String], has_ffmpeg: bool) -> String {
     let error = lines
         .iter()
         .rev()
@@ -250,7 +249,26 @@ pub fn failure_reason(lines: &[String]) -> String {
             } else if e.to_ascii_lowercase().contains("cookie") {
                 " (close the browser and try again, or choose another browser in Settings, Tools)"
             } else if e.contains("Requested format is not available") {
-                " (try installing ffmpeg, so the best video and sound can be joined)"
+                // Almost always one of three things; yt-dlp's own warnings say which.
+                let said = |words: &[&str]| {
+                    lines.iter().any(|l| {
+                        let l = l.to_ascii_lowercase();
+                        words.iter().any(|w| l.contains(w))
+                    })
+                };
+                if said(&[
+                    "javascript runtime",
+                    "js runtime",
+                    "challenge",
+                    "nsig",
+                    "signature solving",
+                ]) {
+                    " (YouTube needs a JavaScript runtime for yt-dlp: install Deno, in a terminal: winget install DenoLand.Deno, then restart Mohona)"
+                } else if !has_ffmpeg {
+                    " (ffmpeg was not found, so the best video and sound cannot be joined: see Settings, Tools)"
+                } else {
+                    " (this is usually an old yt-dlp, which YouTube outdates often: update it with  yt-dlp -U  or download the newest one)"
+                }
             } else {
                 ""
             };
@@ -382,7 +400,7 @@ mod tests {
     fn an_unknown_page_is_told_apart_from_other_failures() {
         let unsupported = vec!["ERROR: Unsupported URL: https://example.com/".to_string()];
         assert!(is_unsupported(&unsupported));
-        assert!(failure_reason(&unsupported).contains("no video on this page"));
+        assert!(failure_reason(&unsupported, true).contains("no video on this page"));
         assert!(!is_unsupported(&["ERROR: Video unavailable".to_string()]));
     }
 
@@ -460,13 +478,32 @@ mod tests {
             "ERROR: [youtube] x: Video unavailable".to_string(),
         ];
         assert_eq!(
-            failure_reason(&lines),
+            failure_reason(&lines, true),
             "yt-dlp: [youtube] x: Video unavailable"
         );
         assert!(
-            failure_reason(&["ERROR: Sign in to confirm you're not a bot".into()])
+            failure_reason(&["ERROR: Sign in to confirm you're not a bot".into()], true)
                 .contains("signed-in browser")
         );
-        assert!(failure_reason(&[]).contains("without saying why"));
+        assert!(failure_reason(&[], true).contains("without saying why"));
+    }
+
+    #[test]
+    fn an_unavailable_format_is_explained_by_what_is_really_missing() {
+        let error =
+            "ERROR: [youtube] x: Requested format is not available. Use --list-formats".to_string();
+        let plain = vec![error.clone()];
+        // ffmpeg was found: it is not blamed.
+        let with = failure_reason(&plain, true);
+        assert!(!with.contains("ffmpeg"), "{with}");
+        assert!(with.contains("yt-dlp -U"), "{with}");
+        assert!(failure_reason(&plain, false).contains("ffmpeg was not found"));
+        // yt-dlp's own warning about the JavaScript runtime wins.
+        let js = vec![
+            "WARNING: [youtube] x: No supported JavaScript runtime could be found.".to_string(),
+            error,
+        ];
+        assert!(failure_reason(&js, true).contains("Deno"));
+        assert!(failure_reason(&js, false).contains("Deno"));
     }
 }

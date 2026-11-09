@@ -109,15 +109,57 @@ impl Tool {
                 return Some(candidate);
             }
         }
-        std::env::split_paths(&std::env::var_os("PATH")?)
+        let on_path = std::env::var_os("PATH")
+            .map(|p| std::env::split_paths(&p).collect::<Vec<_>>())
+            .unwrap_or_default();
+        // Then the folders the usual installers put programs in, which a program started before
+        // the install (or by a shortcut) may not have on its PATH.
+        on_path
+            .into_iter()
+            .chain(usual_folders())
             .map(|dir| dir.join(self.file_name()))
             .find(|candidate| candidate.is_file())
     }
 }
 
+/// Where winget, Scoop and Chocolatey leave the programs they install (Windows; nothing elsewhere).
+pub fn usual_folders() -> Vec<PathBuf> {
+    let under = |variable: &str, rest: &[&str]| {
+        std::env::var_os(variable)
+            .filter(|v| !v.is_empty())
+            .map(|base| {
+                rest.iter()
+                    .fold(PathBuf::from(base), |p, part| p.join(part))
+            })
+    };
+    [
+        under("LOCALAPPDATA", &["Microsoft", "WinGet", "Links"]),
+        under("USERPROFILE", &["scoop", "shims"]),
+        under("ProgramData", &["chocolatey", "bin"]),
+    ]
+    .into_iter()
+    .flatten()
+    .collect()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn the_usual_install_folders_are_searched_after_the_path() {
+        let dir = std::env::temp_dir().join(format!("mohona-usual-{}", std::process::id()));
+        let links = dir.join("Microsoft").join("WinGet").join("Links");
+        std::fs::create_dir_all(&links).unwrap();
+        std::fs::write(links.join(YTDLP.file_name()), b"x").unwrap();
+        std::env::set_var("LOCALAPPDATA", &dir);
+        std::env::remove_var(YTDLP.variable);
+        assert!(usual_folders().contains(&links));
+        // Found only when it is not anywhere else; an installed copy on this computer may win.
+        let found = YTDLP.find(None).unwrap();
+        assert!(found.is_file());
+        std::fs::remove_dir_all(&dir).ok();
+    }
 
     #[test]
     fn the_message_says_why_and_where() {

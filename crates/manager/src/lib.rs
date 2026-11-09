@@ -2223,6 +2223,8 @@ async fn run_video(
     use mohona_media::ytdlp::{arguments, failure_reason, parse_line, Line, Request};
     use tokio::io::{AsyncBufReadExt, BufReader};
 
+    let has_ffmpeg = ffmpeg.is_some();
+
     let VideoJob {
         url,
         dest,
@@ -2411,7 +2413,7 @@ async fn run_video(
         (Ok(s), None) if s.success() => Err(CoreError::Stream(
             "yt-dlp finished but did not say which file it saved".into(),
         )),
-        _ => Err(CoreError::Stream(failure_reason(&tail))),
+        _ => Err(CoreError::Stream(failure_reason(&tail, has_ffmpeg))),
     };
     let mut category = None;
     let result = match (result, route) {

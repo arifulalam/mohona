@@ -852,3 +852,11 @@ A `401` now becomes its own error (`NetError::Unauthorized`) that names the kind
 
 **Not included.** A ratio or time of its own for one torrent (only the one rule for all), starting to share a torrent that was not shared, and sharing a torrent again after it was stopped (it ends its work like any finished torrent; start it again from the list if you want its files shared once more).
 
+## ADR-0084: Saying what is really wrong when yt-dlp finds no format
+
+**What.** A YouTube download failed with "Requested format is not available (try installing ffmpeg …)" although ffmpeg was installed and found. The advice was Mohona's own and wrong: that yt-dlp error has three common causes and Mohona named only one. Now: (1) if yt-dlp warned about a missing **JavaScript runtime** (recent yt-dlp needs one, such as Deno, to read YouTube), the message says so and how to install it (`winget install DenoLand.Deno`, then restart Mohona); (2) else if ffmpeg really was not found, it says that; (3) else it says the likely cause is an old yt-dlp and how to update it (`yt-dlp -U`). yt-dlp's warnings are no longer hidden (`--no-warnings` is gone) so that the cause is in the log and the message can use it.
+
+**Also.** The search for yt-dlp and ffmpeg now looks, after the `PATH` and the program's own folder, in the places winget (`%LOCALAPPDATA%\Microsoft\WinGet\Links`), Scoop (`%USERPROFILE%\scoop\shims`) and Chocolatey (`%ProgramData%\chocolatey\bin`) install to, because a program started before an install, or from a shortcut, does not have the new folders on its PATH. A path chosen in Settings → Tools is still used first and never second-guessed. A tool that another program keeps in its own folder (not installed for all) is still found only by choosing it in Settings → Tools.
+
+**Not included.** Installing Deno for the person, or passing `--js-runtimes` (an option older yt-dlp versions do not know).
+
