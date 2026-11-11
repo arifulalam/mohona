@@ -129,11 +129,19 @@ async fn open_download(handle: AppHandle, app: State<'_, App>, id: i64) -> Resul
 
 #[tauri::command]
 async fn show_download(handle: AppHandle, app: State<'_, App>, id: i64) -> Result<()> {
-    let path = app.engine.finished_file(id).await?;
-    handle
-        .opener()
-        .reveal_item_in_dir(path)
-        .map_err(|e| AppError::Engine(e.to_string()))
+    // The file, selected in its folder; when the file is gone, the folder it was in.
+    let (path, is_file) = app.engine.shown_path(id).await?;
+    if is_file {
+        handle
+            .opener()
+            .reveal_item_in_dir(path)
+            .map_err(|e| AppError::Engine(e.to_string()))
+    } else {
+        handle
+            .opener()
+            .open_path(path.to_string_lossy(), None::<&str>)
+            .map_err(|e| AppError::Engine(e.to_string()))
+    }
 }
 
 #[tauri::command]

@@ -670,7 +670,7 @@ async fn ask(state: &State, call: Call) -> Reply {
                 message,
             )
         }
-        Response::Skipped { reason } => failure(409, "duplicate", reason),
+        Response::Skipped { reason, .. } => failure(409, "duplicate", reason),
         Response::Done => reply(200, json!({ "ok": true })),
         other => {
             if let Value::Object(map) = &mut body {

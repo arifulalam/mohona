@@ -14,6 +14,8 @@ export interface AddDetails {
   name?: string;
   /** The address is a web page whose video is wanted: the engine asks yt-dlp, and no video is an error. */
   video?: boolean;
+  /** The link was downloaded before: replace that download (its file is gone, or wanted again). */
+  again?: boolean;
   /** For a video page: "best", a height such as "720", or "audio". */
   quality?: string;
   /** The video format: mp4, mkv, webm, mov or avi. */
@@ -63,7 +65,7 @@ export type Answer =
       engineVersion: string | null;
     }
   | { type: "added"; id: number }
-  | { type: "duplicate"; message: string }
+  | { type: "duplicate"; message: string; id?: number | null; status?: string | null; exists?: boolean }
   | { type: "streamStarted"; job: number; folder: string }
   | { type: "downloads"; downloads: DownloadRow[] }
   | { type: "refreshed"; id: number }
@@ -80,6 +82,6 @@ export type Answer =
 /** What the person sees. */
 export type Outcome =
   | { kind: "added"; id: number }
-  | { kind: "duplicate"; message: string }
+  | { kind: "duplicate"; message: string; id?: number; status?: string; exists?: boolean }
   | { kind: "streaming"; job: number; folder: string }
   | { kind: "error"; code: string; message: string };

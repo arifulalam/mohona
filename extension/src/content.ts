@@ -4,7 +4,9 @@
 import type { Reply, Request } from "./messages";
 import type { Media } from "./sniffer";
 import type { Colors, Look } from "./look";
+import type { VideoChoice } from "./videochoice";
 import { allowedOn, BUTTON, directSource, place, placeBeside, playersToMark, withHidden } from "./overlay";
+import { duplicateNote, savedChoice, videoPicker } from "./widgets";
 import { DEFAULTS, loadSettings, sanitize, type Settings } from "./settings";
 
 let settings: Settings = DEFAULTS;
@@ -61,7 +63,14 @@ const STYLE = `
   .x:hover { background: rgba(255,255,255,.32); }
   .body { padding: 6px 10px 8px; }
   .body p { margin: 8px 0; color: var(--muted); }
-  .item { display: flex; gap: 8px; align-items: center; padding: 7px 0; border-top: 1px solid var(--line); }
+  .item { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; padding: 7px 0; border-top: 1px solid var(--line); }
+  .pick { flex-basis: 100%; display: flex; gap: 6px; }
+  select { flex: 1; min-width: 0; font: inherit; color: var(--text); background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 3px 6px; }
+  .note { flex-basis: 100%; }
+  .note p { margin: 2px 0 6px; color: var(--text); }
+  .note .actions { display: flex; gap: 6px; flex-wrap: wrap; }
+  .note .actions button:not(.go) { padding: 5px 11px; border-radius: 14px; border: 1px solid var(--line); font-weight: 600; }
+  .note .problem { display: block; margin-top: 4px; color: var(--bad); }
   .item:first-child { border-top: 0; }
   .meta { flex: 1; min-width: 0; }
   .name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; }
@@ -220,10 +229,10 @@ class Button {
       this.text(t("Mohona is not available. Is it installed and running?"));
       return;
     }
-    this.show(reply.media);
+    this.show(reply.media, await savedChoice());
   }
 
-  private show(media: Media[]): void {
+  private show(media: Media[], start: VideoChoice): void {
     const body = this.frame();
     if (media.length === 0) {
       const p = document.createElement("p");
@@ -251,17 +260,54 @@ class Button {
       const go = document.createElement("button");
       go.className = "go";
       go.textContent = t("Download");
+      // A video page: how sharp, and in which format (or sound only).
+      const picker = item.video ? videoPicker(t, start) : null;
+      const send = async (again: boolean) => {
+        const media = picker ? { ...item, choice: picker.value() } : item;
+        const reply = await ask({ kind: "downloadMedia", media, ...(again ? { again: true } : {}) });
+        return reply?.kind === "outcome" ? reply.outcome : null;
+      };
+      const finish = (outcome: Awaited<ReturnType<typeof send>>): void => {
+        if (outcome?.kind === "duplicate") {
+          // Downloaded before: open it, or say the file is gone and offer to fetch it again.
+          const id = outcome.id;
+          const opened = async (reveal: boolean): Promise<string | null> => {
+            if (id === undefined) return null;
+            const answer = await ask({ kind: "openFile", id, reveal });
+            return answer?.kind === "opened" ? answer.error : null;
+          };
+          row.querySelector(".note")?.remove();
+          row.append(
+            duplicateNote(t, outcome, {
+              open: () => opened(false),
+              reveal: () => opened(true),
+              again: async () => {
+                const next = await send(true);
+                row.querySelector(".note")?.remove();
+                go.hidden = false;
+                finish(next);
+              },
+            }),
+          );
+          go.hidden = true;
+          return;
+        }
+        const sent = outcome !== null && outcome.kind !== "error";
+        go.hidden = false;
+        go.disabled = sent;
+        go.textContent = sent ? `${t("Sent")} ✓` : t("Failed");
+        go.classList.remove("ok", "bad");
+        go.classList.add(sent ? "ok" : "bad");
+        if (outcome?.kind === "error") go.title = outcome.message;
+      };
       go.addEventListener("click", async () => {
         go.disabled = true;
         go.textContent = t("Sending…");
-        const reply = await ask({ kind: "downloadMedia", media: item });
-        const outcome = reply?.kind === "outcome" ? reply.outcome : null;
-        const sent = outcome !== null && outcome.kind !== "error" && outcome.kind !== "duplicate";
-        go.textContent = sent ? `${t("Sent")} ✓` : t("Failed");
-        go.classList.add(sent ? "ok" : "bad");
-        if (outcome && (outcome.kind === "error" || outcome.kind === "duplicate")) go.title = outcome.message;
+        finish(await send(false));
+        if (!go.hidden && !go.classList.contains("ok")) go.disabled = false;
       });
       row.append(meta, go);
+      if (picker) row.append(picker.element);
       body.append(row);
     }
     const foot = document.createElement("div");

@@ -911,6 +911,9 @@ pub(crate) async fn handle(state: &State, call: Call) -> Response {
             video,
             choice,
         } => {
+            if let Some(folder) = crate::cloud::drive_folder(&url) {
+                return add_drive_folder(state, folder, dest_dir, queue, duplicates).await;
+            }
             let torrent_files = match files {
                 None => None,
                 Some(_) if !mohona_manager::is_torrent_address(&url) => {
@@ -930,9 +933,10 @@ pub(crate) async fn handle(state: &State, call: Call) -> Response {
                 None | Some("ask") => DuplicatePolicy::Ask,
                 Some("skip") => DuplicatePolicy::Skip,
                 Some("rename") => DuplicatePolicy::Rename,
+                Some("overwrite") => DuplicatePolicy::Overwrite,
                 Some(other) => {
                     return error(format!(
-                        "\"{other}\" is not a duplicate policy (use ask, skip or rename)"
+                        "\"{other}\" is not a duplicate policy (use ask, skip, rename or overwrite)"
                     ))
                 }
             };
@@ -1063,9 +1067,31 @@ pub(crate) async fn handle(state: &State, call: Call) -> Response {
                     }
                     Response::Added { id }
                 }
-                Ok(AddResult::Skipped(why)) => Response::Skipped {
-                    reason: why.to_string(),
-                },
+                Ok(AddResult::Skipped(why)) => {
+                    let (id, status, path, exists) = match &why {
+                        mohona_manager::Duplicate::SameAddress { id, status, path } => {
+                            let exists = path
+                                .as_deref()
+                                .is_some_and(|p| std::path::Path::new(p).exists());
+                            (
+                                Some(*id),
+                                Some(status.as_str().to_string()),
+                                path.clone(),
+                                exists,
+                            )
+                        }
+                        mohona_manager::Duplicate::FileExists { path } => {
+                            (None, None, Some(path.display().to_string()), true)
+                        }
+                    };
+                    Response::Skipped {
+                        reason: why.to_string(),
+                        id,
+                        status,
+                        path,
+                        exists,
+                    }
+                }
                 Err(e) => error(e),
             }
         }
@@ -1840,6 +1866,108 @@ async fn folder_or_default(state: &State, named: Option<String>) -> PathBuf {
     match state.manager.setting(FOLDER_KEY).await {
         Ok(Some(chosen)) if !chosen.is_empty() => PathBuf::from(chosen),
         _ => state.default_dir.clone(),
+    }
+}
+
+/// A shared Google Drive folder: lists it through Drive's embedded folder view and adds each file
+/// into a folder of the same name (and the folders inside it, a few levels down).
+async fn add_drive_folder(
+    state: &State,
+    id: String,
+    dest_dir: Option<String>,
+    queue: Option<i64>,
+    duplicates: Option<String>,
+) -> Response {
+    const MAX_FILES: usize = 500;
+    const MAX_DEPTH: usize = 4;
+    let client = match mohona_net::HttpClient::new(&mohona_net::ClientConfig::default()) {
+        Ok(c) => c,
+        Err(e) => return error(e),
+    };
+    let base = folder_or_default(state, dest_dir).await;
+    let mut work: Vec<(String, Option<PathBuf>, usize)> = vec![(id, None, 0)];
+    let (mut first, mut added, mut skipped, mut seen) = (None, 0usize, 0usize, 0usize);
+    let mut last_problem = None;
+    while let Some((folder, dir, depth)) = work.pop() {
+        let page = format!("https://drive.google.com/embeddedfolderview?id={folder}");
+        let mut body = match client.get(&page).await {
+            Ok(b) => b,
+            Err(e) => {
+                last_problem = Some(format!("could not read the folder: {e}"));
+                continue;
+            }
+        };
+        let mut data = Vec::new();
+        while let Ok(Some(chunk)) = body.chunk().await {
+            data.extend_from_slice(&chunk);
+            if data.len() > 8 << 20 {
+                break;
+            }
+        }
+        let html = String::from_utf8_lossy(&data).into_owned();
+        let dir = dir.unwrap_or_else(|| {
+            base.join(crate::cloud::safe_name(
+                &crate::cloud::parse_folder_title(&html).unwrap_or_default(),
+            ))
+        });
+        for entry in crate::cloud::parse_folder_listing(&html) {
+            if entry.is_folder {
+                if depth < MAX_DEPTH {
+                    let sub = dir.join(crate::cloud::safe_name(&entry.name));
+                    work.push((entry.id, Some(sub), depth + 1));
+                }
+                continue;
+            }
+            seen += 1;
+            if seen > MAX_FILES {
+                break;
+            }
+            let answer = Box::pin(handle(
+                state,
+                Call::Add {
+                    url: format!("https://drive.google.com/file/d/{}/view", entry.id),
+                    dest_dir: Some(dir.display().to_string()),
+                    cookies: None,
+                    referrer: None,
+                    user_agent: None,
+                    headers: vec![],
+                    sort: false,
+                    duplicates: Some(duplicates.clone().unwrap_or_else(|| "skip".into())),
+                    queue,
+                    files: None,
+                    video: false,
+                    choice: None,
+                },
+            ))
+            .await;
+            match answer {
+                Response::Added { id } => {
+                    added += 1;
+                    first.get_or_insert(id);
+                }
+                Response::Skipped { .. } => skipped += 1,
+                Response::Error { message } => last_problem = Some(message),
+                _ => {}
+            }
+        }
+    }
+    match (first, skipped) {
+        (Some(id), _) => Response::Added { id },
+        (None, n) if n > 0 => Response::Skipped {
+            reason: format!("all {n} files of the folder are already in the list"),
+            id: None,
+            status: None,
+            path: None,
+            exists: false,
+        },
+        _ => {
+            let _ = added;
+            Response::Error {
+                message: last_problem.unwrap_or_else(|| {
+                    "no files could be listed in this Google Drive folder (is it shared with anyone who has the link?)".into()
+                }),
+            }
+        }
     }
 }
 

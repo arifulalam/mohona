@@ -2227,6 +2227,44 @@ struct VideoJob {
 
 /// A video page (YouTube and alike): yt-dlp does the work, and tells the same story through its output.
 #[allow(clippy::too_many_arguments)]
+/// The path yt-dlp reported, made one that Open and Show in folder can use: whole (joined to the
+/// download folder when relative), with the system's own separators, and pointing at the file
+/// that is really there (a conversion can change the extension after the name was printed).
+fn settle_video_path(reported: PathBuf, dest: &std::path::Path) -> PathBuf {
+    let mut path = if cfg!(windows) {
+        PathBuf::from(reported.to_string_lossy().replace('/', "\\"))
+    } else {
+        reported
+    };
+    if path.is_relative() {
+        path = dest.join(path);
+    }
+    if path.is_file() {
+        return path;
+    }
+    // Same name, other extension: the newest such file in that folder.
+    let (Some(dir), Some(stem)) = (path.parent(), path.file_stem().map(|s| s.to_os_string()))
+    else {
+        return path;
+    };
+    let mut found: Option<(std::time::SystemTime, PathBuf)> = None;
+    if let Ok(entries) = std::fs::read_dir(dir) {
+        for entry in entries.flatten() {
+            let candidate = entry.path();
+            if candidate.file_stem() == Some(stem.as_os_str()) && candidate.is_file() {
+                let modified = entry
+                    .metadata()
+                    .and_then(|m| m.modified())
+                    .unwrap_or(std::time::UNIX_EPOCH);
+                if found.as_ref().is_none_or(|(t, _)| modified > *t) {
+                    found = Some((modified, candidate));
+                }
+            }
+        }
+    }
+    found.map_or(path, |(_, p)| p)
+}
+
 async fn run_video(
     choice: mohona_media::ytdlp::Choice,
     ytdlp: Option<PathBuf>,
@@ -2420,6 +2458,7 @@ async fn run_video(
     }
     let result = match (status, file) {
         (Ok(s), Some(path)) if s.success() => {
+            let path = settle_video_path(path, &dest);
             let bytes = std::fs::metadata(&path).map_or(latest, |m| m.len());
             Ok(Outcome {
                 path,
@@ -2605,5 +2644,30 @@ impl ProgressStore for DbProgress {
 
     fn clear(&self) {
         let _ = self.with(|s| s.clear_progress(self.id));
+    }
+}
+
+#[cfg(test)]
+mod video_path_tests {
+    use super::settle_video_path;
+
+    #[test]
+    fn a_reported_path_is_made_whole_and_follows_a_changed_extension() {
+        let dir = tempfile::tempdir().unwrap();
+        // Relative: joined to the download folder.
+        std::fs::write(dir.path().join("a [1].mp4"), b"x").unwrap();
+        assert_eq!(
+            settle_video_path("a [1].mp4".into(), dir.path()),
+            dir.path().join("a [1].mp4")
+        );
+        // Converted afterwards: the name printed had another extension.
+        std::fs::write(dir.path().join("song [2].mp3"), b"x").unwrap();
+        assert_eq!(
+            settle_video_path(dir.path().join("song [2].webm"), dir.path()),
+            dir.path().join("song [2].mp3")
+        );
+        // Nothing there: the reported path stays.
+        let missing = dir.path().join("none.mp4");
+        assert_eq!(settle_video_path(missing.clone(), dir.path()), missing);
     }
 }

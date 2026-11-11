@@ -200,7 +200,7 @@ async fn run_inner(command: TorrentCommand, info: Option<PathBuf>) -> Result<(),
                     println!("Added as download {id}.");
                     Ok(())
                 }
-                Response::Skipped { reason } => Err(format!("not added: {reason}")),
+                Response::Skipped { reason, .. } => Err(format!("not added: {reason}")),
                 Response::Error { message } => Err(message),
                 _ => Err("the daemon sent an unexpected answer".into()),
             }

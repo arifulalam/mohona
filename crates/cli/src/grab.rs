@@ -139,7 +139,7 @@ async fn run_inner(args: GrabArgs) -> Result<(), String> {
             };
             match client.call(call).await.map_err(|e| e.to_string())? {
                 Response::Added { .. } => added += 1,
-                Response::Skipped { reason } => eprintln!("{}: not added: {reason}", f.name),
+                Response::Skipped { reason, .. } => eprintln!("{}: not added: {reason}", f.name),
                 Response::Error { message } => eprintln!("{}: {message}", f.name),
                 _ => {}
             }

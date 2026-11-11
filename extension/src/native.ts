@@ -111,7 +111,13 @@ export async function addDownload(client: NativeClient, details: AddDetails): Pr
       case "added":
         return { kind: "added", id: answer.id };
       case "duplicate":
-        return { kind: "duplicate", message: answer.message };
+        return {
+          kind: "duplicate",
+          message: answer.message,
+          ...(typeof answer.id === "number" ? { id: answer.id } : {}),
+          ...(typeof answer.status === "string" ? { status: answer.status } : {}),
+          exists: answer.exists === true,
+        };
       case "error":
         return failure(answer.code, answer.message);
       default:

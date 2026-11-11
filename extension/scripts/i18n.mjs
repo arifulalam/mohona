@@ -12,6 +12,7 @@ export function popupTexts() {
   const found = new Set();
   const ts = readFileSync(join(root, "src", "popup.ts"), "utf8");
   for (const m of ts.matchAll(/\bt\(\s*"((?:[^"\\]|\\.)*)"/g)) found.add(JSON.parse(`"${m[1]}"`));
+  for (const m of readFileSync(join(root, "src", "widgets.ts"), "utf8").matchAll(/\bt\(\s*"((?:[^"\\]|\\.)*)"/g)) found.add(JSON.parse(`"${m[1]}"`));
   const html = readFileSync(join(root, "static", "popup.html"), "utf8");
   for (const m of html.matchAll(/data-t(?:-label|-placeholder)?="([^"]+)"/g)) found.add(m[1]);
   for (const m of readFileSync(join(root, "src", "pagelinks.ts"), "utf8").matchAll(/\["\w+", "([^"]+)"\]/g)) found.add(m[1]);

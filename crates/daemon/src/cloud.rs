@@ -39,6 +39,99 @@ fn parts(url: &str) -> Option<(String, Vec<&str>, &str)> {
     ))
 }
 
+/// The identifier of a shared Google Drive folder (`/drive/folders/ID`, `/drive/u/0/folders/ID`).
+pub fn drive_folder(url: &str) -> Option<String> {
+    let (host, path, _) = parts(url)?;
+    if host != "drive.google.com" {
+        return None;
+    }
+    let id = match path.as_slice() {
+        ["drive", "folders", id, ..] | ["drive", "u", _, "folders", id, ..] => *id,
+        _ => return None,
+    };
+    id_ok(id).then(|| id.to_string())
+}
+
+/// One entry of a Drive folder.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct FolderEntry {
+    pub id: String,
+    pub name: String,
+    pub is_folder: bool,
+}
+
+fn unescape(text: &str) -> String {
+    text.replace("&amp;", "&")
+        .replace("&lt;", "<")
+        .replace("&gt;", ">")
+        .replace("&quot;", "\"")
+        .replace("&#39;", "'")
+        .replace("&#x27;", "'")
+}
+
+/// A folder name that is safe to make on disk: no separators or characters Windows refuses.
+pub fn safe_name(name: &str) -> String {
+    let cleaned: String = name
+        .chars()
+        .map(|c| {
+            if c.is_control() || "<>:\"/\\|?*".contains(c) {
+                '_'
+            } else {
+                c
+            }
+        })
+        .collect();
+    let cleaned = cleaned.trim().trim_end_matches('.').trim();
+    let cut: String = cleaned.chars().take(80).collect();
+    if cut.is_empty() || cut == ".." {
+        "Google Drive folder".into()
+    } else {
+        cut
+    }
+}
+
+/// The entries of Drive's embedded folder view (`/embeddedfolderview?id=ID`): the page lists every
+/// entry as a `flip-entry` with its link and its title.
+pub fn parse_folder_listing(html: &str) -> Vec<FolderEntry> {
+    let mut found = Vec::new();
+    for chunk in html.split("class=\"flip-entry\"").skip(1) {
+        let Some(id) = chunk
+            .split("id=\"entry-")
+            .nth(1)
+            .and_then(|r| r.split('"').next())
+        else {
+            continue;
+        };
+        if !id_ok(id) {
+            continue;
+        }
+        let name = chunk
+            .split("flip-entry-title\">")
+            .nth(1)
+            .and_then(|r| r.split('<').next())
+            .map(|n| unescape(n.trim()))
+            .unwrap_or_default();
+        let is_folder = chunk
+            .split("href=\"")
+            .nth(1)
+            .and_then(|r| r.split('"').next())
+            .is_some_and(|h| h.contains("/folders/"));
+        found.push(FolderEntry {
+            id: id.to_string(),
+            name,
+            is_folder,
+        });
+    }
+    found
+}
+
+/// The name of the folder from the page's `<title>`.
+pub fn parse_folder_title(html: &str) -> Option<String> {
+    let title = html.split("<title>").nth(1)?.split("</title>").next()?;
+    let title = unescape(title.trim());
+    (!title.is_empty()).then_some(title)
+}
+
 /// An identifier as these services write them.
 fn id_ok(id: &str) -> bool {
     (10..=200).contains(&id.len())
@@ -201,6 +294,37 @@ mod tests {
         ] {
             assert_eq!(url(&text), None, "{text}");
         }
+    }
+
+    #[test]
+    fn a_drive_folder_is_listed_not_downloaded() {
+        assert_eq!(
+            drive_folder(&format!(
+                "https://drive.google.com/drive/folders/{ID}?usp=sharing"
+            )),
+            Some(ID.to_string())
+        );
+        assert_eq!(
+            drive_folder(&format!("https://drive.google.com/drive/u/0/folders/{ID}")),
+            Some(ID.to_string())
+        );
+        assert_eq!(
+            drive_folder(&format!("https://drive.google.com/file/d/{ID}/view")),
+            None
+        );
+        let html = format!(
+            r#"<html><head><title>My &amp; files</title></head><body>
+<div class="flip-entry" id="entry-{ID}"><a href="https://drive.google.com/file/d/{ID}/view?usp=drive_web"><div class="flip-entry-title">Report &#39;1&#39;.pdf</div></a></div>
+<div class="flip-entry" id="entry-{ID}x"><a href="https://drive.google.com/drive/folders/{ID}x"><div class="flip-entry-title">Photos</div></a></div>
+</body></html>"#
+        );
+        let entries = parse_folder_listing(&html);
+        assert_eq!(entries.len(), 2);
+        assert_eq!(entries[0].name, "Report '1'.pdf");
+        assert!(!entries[0].is_folder && entries[1].is_folder);
+        assert_eq!(parse_folder_title(&html).unwrap(), "My & files");
+        assert_eq!(safe_name("a/b:c?"), "a_b_c_");
+        assert_eq!(safe_name(".."), "Google Drive folder");
     }
 
     #[test]

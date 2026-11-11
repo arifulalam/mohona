@@ -108,7 +108,13 @@ describe("addDownload", () => {
   it("passes duplicates and errors on, and survives a missing host", async () => {
     expect(
       await addDownload(fake(() => ({ type: "duplicate", message: "already" })).client, { url: "u" }),
-    ).toEqual({ kind: "duplicate", message: "already" });
+    ).toEqual({ kind: "duplicate", message: "already", exists: false });
+    expect(
+      await addDownload(
+        fake(() => ({ type: "duplicate", message: "already", id: 7, status: "completed", exists: true })).client,
+        { url: "u" },
+      ),
+    ).toEqual({ kind: "duplicate", message: "already", id: 7, status: "completed", exists: true });
     expect(
       await addDownload(fake(() => ({ type: "error", code: "bad_url", message: "x" })).client, { url: "u" }),
     ).toEqual({ kind: "error", code: "bad_url", message: "x" });

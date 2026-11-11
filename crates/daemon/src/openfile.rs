@@ -28,6 +28,26 @@ pub fn is_risky(path: &std::path::Path) -> bool {
     }
 }
 
+/// Windows only understands backslashes in the paths given to Explorer.
+fn native(path: &Path) -> std::path::PathBuf {
+    if cfg!(windows) {
+        std::path::PathBuf::from(path.to_string_lossy().replace('/', "\\"))
+    } else {
+        path.to_path_buf()
+    }
+}
+
+/// What to show for a finished download whose file may be gone: the file itself, else the folder
+/// it was in, else nothing.
+pub fn folder_to_show(path: &Path) -> Option<std::path::PathBuf> {
+    if path.exists() {
+        return Some(path.to_path_buf());
+    }
+    path.parent()
+        .filter(|p| !p.as_os_str().is_empty() && p.is_dir())
+        .map(Path::to_path_buf)
+}
+
 fn spawn(mut command: std::process::Command) -> Result<(), String> {
     #[cfg(windows)]
     {
@@ -44,6 +64,8 @@ fn spawn(mut command: std::process::Command) -> Result<(), String> {
 
 /// Opens a file with the program the system has chosen for its type.
 pub fn open(path: &Path) -> Result<(), String> {
+    let path = native(path);
+    let path = path.as_path();
     #[cfg(windows)]
     let command = {
         let mut c = std::process::Command::new("explorer.exe");
@@ -67,23 +89,44 @@ pub fn open(path: &Path) -> Result<(), String> {
 
 /// Shows a file in its folder, selected where the system can do that.
 pub fn reveal(path: &Path) -> Result<(), String> {
+    let path = native(path);
+    let path = path.as_path();
+    // A folder (or a missing file): open the folder itself.
+    let path = &if path.is_dir() {
+        path.to_path_buf()
+    } else {
+        folder_to_show(path).unwrap_or_else(|| path.to_path_buf())
+    };
+    #[allow(unused_variables)]
+    let is_folder = path.is_dir();
     #[cfg(windows)]
     let command = {
         use std::os::windows::process::CommandExt;
         let mut c = std::process::Command::new("explorer.exe");
-        c.raw_arg(format!("/select,\"{}\"", path.display()));
+        if is_folder {
+            c.arg(path);
+        } else {
+            c.raw_arg(format!("/select,\"{}\"", path.display()));
+        }
         c
     };
     #[cfg(target_os = "macos")]
     let command = {
         let mut c = std::process::Command::new("open");
-        c.arg("-R").arg(path);
+        if !is_folder {
+            c.arg("-R");
+        }
+        c.arg(path);
         c
     };
     #[cfg(all(not(windows), not(target_os = "macos")))]
     let command = {
         let mut c = std::process::Command::new("xdg-open");
-        c.arg(path.parent().unwrap_or(path));
+        c.arg(if is_folder {
+            path
+        } else {
+            path.parent().unwrap_or(path)
+        });
         c
     };
     spawn(command)

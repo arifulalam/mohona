@@ -640,7 +640,7 @@ impl Engine {
                 .await
             {
                 Ok(Response::Added { .. }) => added += 1,
-                Ok(Response::Skipped { reason }) => {
+                Ok(Response::Skipped { reason, .. }) => {
                     skipped.push(format!("{}: {reason}", file.name))
                 }
                 Ok(_) => {}
@@ -704,7 +704,7 @@ impl Engine {
             .await?
         {
             Response::Added { id } => Ok(id),
-            Response::Skipped { reason } => Err(AppError::Input(reason)),
+            Response::Skipped { reason, .. } => Err(AppError::Input(reason)),
             _ => Err(AppError::Engine("unexpected answer from the engine".into())),
         }
     }
@@ -1178,6 +1178,30 @@ impl Engine {
             )));
         }
         Ok(path)
+    }
+
+    /// What "Show in folder" should show for a finished download: its file, or, when the file is
+    /// gone, the folder it was in. The flag says which one the path is.
+    pub async fn shown_path(&self, id: i64) -> Result<(PathBuf, bool), AppError> {
+        match self.finished_file(id).await {
+            Ok(path) => Ok((path, true)),
+            Err(first) => {
+                let mut tracker = SpeedTracker::new();
+                let rows = self.list(&mut tracker).await?;
+                let path = rows
+                    .into_iter()
+                    .find(|r| r.id == id && r.status == "completed")
+                    .and_then(|r| r.path)
+                    .map(PathBuf::from);
+                match path
+                    .as_deref()
+                    .and_then(mohona_daemon::openfile::folder_to_show)
+                {
+                    Some(folder) if folder.is_dir() => Ok((folder, false)),
+                    _ => Err(first),
+                }
+            }
+        }
     }
 
     /// Like [`Engine::finished_file`], but refuses programs and scripts: a

@@ -188,7 +188,7 @@ chrome.webRequest.onHeadersReceived.addListener(
 
 chrome.tabs.onRemoved.addListener((tabId) => void chrome.storage.session.remove(key(tabId)));
 
-async function downloadMedia(media: Media) {
+async function downloadMedia(media: Media, again = false) {
   const cookies = await cookieHeader(media.url).catch(() => "");
   const details = {
     url: media.url,
@@ -198,7 +198,7 @@ async function downloadMedia(media: Media) {
     name: media.name,
   };
   return media.kind === "file"
-    ? addDownload(client, { ...details, name: undefined, video: media.video, ...(media.video ? media.choice : undefined) })
+    ? addDownload(client, { ...details, name: undefined, video: media.video, ...(media.video ? media.choice : undefined), ...(again ? { again: true } : {}) })
     : startStream(client, details);
 }
 
@@ -343,7 +343,7 @@ async function handle(request: Request, sender: chrome.runtime.MessageSender): P
       return { kind: "media", media: found };
     }
     case "downloadMedia": {
-      const outcome = await downloadMedia(request.media);
+      const outcome = await downloadMedia(request.media, request.again === true);
       last = outcome.kind === "error" ? `Not sent: ${outcome.message}` : `Sent to Mohona: ${request.media.url}`;
       return { kind: "outcome", outcome };
     }

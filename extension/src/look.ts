@@ -42,6 +42,18 @@ export const BUTTON_TEXTS = [
   "Hide on {site}",
   "Close",
   "file",
+  "Quality",
+  "Format",
+  "Best available",
+  "Sound only",
+  "Already downloaded.",
+  "Open",
+  "Show in folder",
+  "Download again",
+  "Downloaded before, but the file is no longer in its folder. Download it again?",
+  "Already in the list, but it did not finish. Download it again?",
+  "Already in the list, still in progress.",
+  "Could not open it: {message}",
 ];
 
 const LIGHT: Colors = {

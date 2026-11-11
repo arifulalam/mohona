@@ -181,3 +181,8 @@ Passing tests need no report; a short "A and B all passed, C1 to C7 passed" is e
 2. Choose 720p and MKV, press Download: the file is a 720p-or-lower `.mkv`.
 3. Choose "Sound only" and MP3: an `.mp3` arrives. Reopen the popup: the choice is remembered.
 4. If a download fails with `[Errno 22] Invalid argument`, send the line of the download's log with the full path.
+
+### C47 Again, open and Drive folders
+1. Download a video from the floating button, then press the button again: it says "Already downloaded." with Open and Show in folder, both working.
+2. Delete the file, press again: the warning with Download again; the button fetches it anew.
+3. In the app press Add, paste a public Google Drive folder link: a folder with that name appears in the download folder, with the files in it (subfolders too).

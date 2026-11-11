@@ -12,7 +12,7 @@ export type Request =
   | { kind: "startEngine" }
   | { kind: "add"; url: string }
   | { kind: "media"; tabId: number }
-  | { kind: "downloadMedia"; media: Media }
+  | { kind: "downloadMedia"; media: Media; again?: boolean }
   | { kind: "saveLocal"; url: string; tabId: number }
   | { kind: "pageMedia"; direct?: string; page?: string }
   | { kind: "expired" }

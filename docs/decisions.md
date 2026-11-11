@@ -888,3 +888,11 @@ The extension's "Video on this page" item now has two lists: quality (best, 2160
 Fixed on the way: a request context holding only `video`, `connections`, `torrent_files` or `video_choice` counted as empty and was not saved.
 
 yt-dlp file names are now limited to 100 bytes of title (was 150), and `[Errno 22] Invalid argument` gets a hint about the file name or folder.
+
+## ADR-0088: The button on videos gets the choice, and "already downloaded" gets answers
+
+The floating button on a video page now shows the same quality and format lists as the popup (shared code in `extension/src/widgets.ts`). When the link was downloaded before, the engine's answer carries the old download's id, status and whether its file still exists; both the button and the popup then show, instead of a bare "Failed":
+- file there: "Already downloaded." with Open and Show in folder;
+- file gone: "Downloaded before, but the file is no longer in its folder. Download it again?" with Download again (the add is repeated with `duplicates: overwrite`);
+- failed or cancelled: the same offer; still running: plain words.
+Show in folder on a file that is gone opens the folder it was in. A pasted Google Drive folder link is listed (Drive's embedded folder view) and its files go into a folder of the same name, instead of one file named after the last part of the address.

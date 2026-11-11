@@ -73,6 +73,15 @@ fn finished_path(
         "the engine does not know where the file is".to_string(),
     ))?;
     if !path.is_file() {
+        // Showing is kinder than refusing: the folder is still worth opening.
+        if reveal {
+            if let Some(shown) = mohona_daemon::openfile::folder_to_show(&path) {
+                return Ok(shown);
+            }
+        }
+        if path.is_dir() {
+            return Ok(path);
+        }
         return Err((
             "not_found",
             format!("the file is no longer there: {}", path.display()),
@@ -287,6 +296,10 @@ impl Host {
             .get("video")
             .and_then(Value::as_bool)
             .unwrap_or(false);
+        let again = message
+            .get("again")
+            .and_then(Value::as_bool)
+            .unwrap_or(false);
         let text = |key: &str| message.get(key).and_then(Value::as_str).map(str::to_owned);
         let choice = {
             let (q, c, a) = (text("quality"), text("container"), text("audio"));
@@ -308,7 +321,8 @@ impl Host {
             user_agent: d.user_agent,
             headers: d.headers,
             sort: true,
-            duplicates: Some("skip".into()),
+            // "Download again" replaces the earlier download (whose file is gone, or wanted again).
+            duplicates: Some(if again { "overwrite" } else { "skip" }.into()),
             queue: None,
             files: None,
             video,
@@ -316,7 +330,19 @@ impl Host {
         });
         match answer {
             Ok(Response::Added { id }) => json!({"type": "added", "id": id}),
-            Ok(Response::Skipped { reason }) => json!({"type": "duplicate", "message": reason}),
+            Ok(Response::Skipped {
+                reason,
+                id,
+                status,
+                exists,
+                ..
+            }) => json!({
+                "type": "duplicate",
+                "message": reason,
+                "id": id,
+                "status": status,
+                "exists": exists,
+            }),
             Ok(Response::Error { message }) => error("engine", message),
             Ok(_) => error("engine", "the engine gave an unexpected answer"),
             Err(e) => e,
@@ -632,7 +658,9 @@ mod open_tests {
             finished_path(&rows, 2, false).unwrap_err().0,
             "not_finished"
         );
-        assert_eq!(finished_path(&rows, 3, true).unwrap_err().0, "not_found");
+        assert_eq!(finished_path(&rows, 3, false).unwrap_err().0, "not_found");
+        // Showing a file that is gone opens the folder it was in.
+        assert_eq!(finished_path(&rows, 3, true).unwrap(), dir.path());
         assert_eq!(finished_path(&rows, 9, true).unwrap_err().0, "not_found");
         assert_eq!(finished_path(&rows, 5, true).unwrap_err().0, "not_found");
         // A program is shown in its folder, never opened.

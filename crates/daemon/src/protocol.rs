@@ -484,6 +484,18 @@ pub enum Response {
     /// Not added because of a duplicate (`duplicates: "skip"`).
     Skipped {
         reason: String,
+        /// The earlier download, when the address is already in the list.
+        #[serde(default)]
+        id: Option<i64>,
+        /// Its state (`completed`, `downloading`, ...).
+        #[serde(default)]
+        status: Option<String>,
+        /// Where its file is (or was).
+        #[serde(default)]
+        path: Option<String>,
+        /// The file is still there.
+        #[serde(default)]
+        exists: bool,
     },
     Downloads {
         downloads: Vec<DownloadInfo>,
