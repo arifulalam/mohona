@@ -36,7 +36,7 @@ export function isVideoPage(address: string | undefined | null): boolean {
 export function pageVideo(address: string | undefined | null, title: string | undefined | null): Media | null {
   if (!address || !isVideoPage(address)) return null;
   const name = (title ?? "").replace(/\s*[-–|]\s*(YouTube|Vimeo|Dailymotion)\s*$/i, "").replace(/^\(\d+\)\s*/, "").trim();
-  return { url: address, kind: "file", name: name || "This video", referrer: address };
+  return { url: address, kind: "file", name: name || "This video", referrer: address, video: true };
 }
 
 /** File endings that say an address is a file, not a web page. */

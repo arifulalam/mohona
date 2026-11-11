@@ -28,7 +28,7 @@ describe("video pages", () => {
 
   it("offers the page as a download, named after its title", () => {
     const media = pageVideo("https://www.youtube.com/watch?v=abc", "(3) A fine talk - YouTube");
-    expect(media).toEqual({ url: "https://www.youtube.com/watch?v=abc", kind: "file", name: "A fine talk", referrer: "https://www.youtube.com/watch?v=abc" });
+    expect(media).toEqual({ url: "https://www.youtube.com/watch?v=abc", kind: "file", name: "A fine talk", referrer: "https://www.youtube.com/watch?v=abc", video: true });
     expect(pageVideo("https://www.youtube.com/", "x")).toBeNull();
     expect(pageVideo("https://vimeo.com/123", "")?.name).toBe("This video");
   });
