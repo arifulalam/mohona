@@ -880,3 +880,11 @@ A `401` now becomes its own error (`NetError::Unauthorized`) that names the kind
 
 **Addendum to ADR-0085 (same day): moving a running program aside.** Stopping `mohona-host.exe` was not enough: the extension reconnects as soon as its host disappears, so the browser started a new copy within the 0.7 seconds the installer waited, and Windows refused to overwrite it ("Error opening file for writing"). A program file in use cannot be overwritten or deleted but can be **renamed**, so the installer now stops the host, then renames `mohona-host.exe` to `mohona-host.old` (and `mohona.exe` to `mohona.old`) before it writes the new files, and deletes the `.old` files at the end (one that is still running is deleted by the next install; a second name, `.old2`, is used if a stuck `.old` is in the way). The uninstaller moves the host aside the same way. The old copy keeps running until the browser closes it, which is harmless. This is NSIS code that cannot be run here (C35 on Windows is the test: install over a version while the browser with the extension is open).
 
+
+## ADR-0087: A video choice for one download, from the browser extension
+
+The extension's "Video on this page" item now has two lists: quality (best, 2160p … 360p, sound only) and format (mp4, mkv, webm, mov, avi; for sound only: mp3, m4a, opus, ogg, flac, wav, aac). The last choice is remembered in the popup. It travels as optional `quality`, `container` and `audio` fields of the host's `add` message, then as `choice` in the daemon's `Add` call, and is saved with the download's request context (`video_choice`). Without it the global setting (ADR-0086) applies. Unknown values fall back to the defaults, never reach yt-dlp's command line.
+
+Fixed on the way: a request context holding only `video`, `connections`, `torrent_files` or `video_choice` counted as empty and was not saved.
+
+yt-dlp file names are now limited to 100 bytes of title (was 150), and `[Errno 22] Invalid argument` gets a hint about the file name or folder.

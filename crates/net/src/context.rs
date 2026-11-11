@@ -117,6 +117,19 @@ pub struct RequestContext {
     /// is an error (not saved as a web page).
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub video: bool,
+    /// For a video page: the kind of file wanted for this download. Without it the engine's own
+    /// setting (quality, video format, audio format) applies.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub video_choice: Option<VideoChoice>,
+}
+
+/// The kind of file wanted from a video page: `quality` is `best`, a height such as `720`, or
+/// `audio`; `container` is the video format; `audio` the sound format.
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct VideoChoice {
+    pub quality: String,
+    pub container: String,
+    pub audio: String,
 }
 
 /// SSH settings for one download. A key's passphrase is not part of this: it
@@ -197,6 +210,10 @@ impl RequestContext {
             && self.checksum.is_none()
             && !self.find_checksum
             && self.mirrors.is_empty()
+            && self.connections.is_none()
+            && self.torrent_files.is_none()
+            && !self.video
+            && self.video_choice.is_none()
     }
 
     /// Parse `Name: value` (the way `curl -H` takes it) and add it.

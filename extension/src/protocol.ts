@@ -14,6 +14,12 @@ export interface AddDetails {
   name?: string;
   /** The address is a web page whose video is wanted: the engine asks yt-dlp, and no video is an error. */
   video?: boolean;
+  /** For a video page: "best", a height such as "720", or "audio". */
+  quality?: string;
+  /** The video format: mp4, mkv, webm, mov or avi. */
+  container?: string;
+  /** The sound format, when `quality` is "audio": mp3, m4a, opus, ogg, flac, wav or aac. */
+  audio?: string;
 }
 
 /** A download in Mohona's list. */

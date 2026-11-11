@@ -175,3 +175,9 @@ For each failure:
 5. Browser and version for extension problems.
 
 Passing tests need no report; a short "A and B all passed, C1 to C7 passed" is enough.
+
+### C46 Video choice from the extension
+1. On a YouTube page, open the Mohona popup: the "Video on this page" row has two lists.
+2. Choose 720p and MKV, press Download: the file is a 720p-or-lower `.mkv`.
+3. Choose "Sound only" and MP3: an `.mp3` arrives. Reopen the popup: the choice is remembered.
+4. If a download fails with `[Errno 22] Invalid argument`, send the line of the download's log with the full path.

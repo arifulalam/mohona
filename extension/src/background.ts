@@ -198,7 +198,7 @@ async function downloadMedia(media: Media) {
     name: media.name,
   };
   return media.kind === "file"
-    ? addDownload(client, { ...details, name: undefined, video: media.video })
+    ? addDownload(client, { ...details, name: undefined, video: media.video, ...(media.video ? media.choice : undefined) })
     : startStream(client, details);
 }
 

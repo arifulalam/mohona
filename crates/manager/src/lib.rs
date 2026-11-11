@@ -1969,11 +1969,17 @@ impl Actor {
                 .map(|b| b.trim().to_string())
                 .filter(|b| !b.is_empty());
             let saved = |key: &str| self.store.setting(key).ok().flatten().unwrap_or_default();
-            let choice = mohona_media::ytdlp::Choice::from_settings(
-                &saved(VIDEO_QUALITY),
-                &saved(VIDEO_CONTAINER),
-                &saved(VIDEO_AUDIO),
-            );
+            // A choice made for this one download beats the saved settings.
+            let choice = match &context.video_choice {
+                Some(c) => {
+                    mohona_media::ytdlp::Choice::from_settings(&c.quality, &c.container, &c.audio)
+                }
+                None => mohona_media::ytdlp::Choice::from_settings(
+                    &saved(VIDEO_QUALITY),
+                    &saved(VIDEO_CONTAINER),
+                    &saved(VIDEO_AUDIO),
+                ),
+            };
             tokio::spawn(run_video(
                 choice,
                 ytdlp,

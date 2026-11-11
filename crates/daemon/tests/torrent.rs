@@ -108,6 +108,7 @@ fn add(url: String) -> Call {
         queue: None,
         files: None,
         video: false,
+        choice: None,
     }
 }
 

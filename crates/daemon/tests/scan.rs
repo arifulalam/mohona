@@ -83,6 +83,7 @@ async fn add(client: &Client, url: String) -> i64 {
             queue: None,
             files: None,
             video: false,
+            choice: None,
         })
         .await
         .unwrap()

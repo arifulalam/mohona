@@ -135,6 +135,7 @@ async fn run_inner(args: GrabArgs) -> Result<(), String> {
                 queue: None,
                 files: None,
                 video: false,
+                choice: None,
             };
             match client.call(call).await.map_err(|e| e.to_string())? {
                 Response::Added { .. } => added += 1,

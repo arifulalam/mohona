@@ -287,6 +287,19 @@ impl Host {
             .get("video")
             .and_then(Value::as_bool)
             .unwrap_or(false);
+        let text = |key: &str| message.get(key).and_then(Value::as_str).map(str::to_owned);
+        let choice = {
+            let (q, c, a) = (text("quality"), text("container"), text("audio"));
+            if q.is_some() || c.is_some() || a.is_some() {
+                Some(mohona_net::VideoChoice {
+                    quality: q.unwrap_or_default(),
+                    container: c.unwrap_or_default(),
+                    audio: a.unwrap_or_default(),
+                })
+            } else {
+                None
+            }
+        };
         let answer = self.call(Call::Add {
             url: d.url,
             dest_dir: None,
@@ -299,6 +312,7 @@ impl Host {
             queue: None,
             files: None,
             video,
+            choice,
         });
         match answer {
             Ok(Response::Added { id }) => json!({"type": "added", "id": id}),

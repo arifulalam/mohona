@@ -1,3 +1,4 @@
+import { cleanChoice, formatsFor, QUALITIES, type VideoChoice } from "./videochoice";
 import type { Reply, Request } from "./messages";
 import type { Outcome } from "./protocol";
 import type { Settings } from "./settings";
@@ -164,16 +165,80 @@ async function showMedia(): Promise<void> {
       .join(" ");
     const button = document.createElement("button");
     button.textContent = t("Download");
+    // A video page: the person says how sharp and in which format (or sound only).
+    const choice = media.video ? videoPicker() : null;
     button.addEventListener("click", async () => {
       button.disabled = true;
-      const answer = await ask({ kind: "downloadMedia", media });
+      const answer = await ask({ kind: "downloadMedia", media: choice ? { ...media, choice: choice.value() } : media });
       if (answer.kind === "outcome") setResult(describe(answer.outcome));
       button.disabled = false;
       await refresh();
     });
     row.append(label, info, button);
+    if (choice) row.append(choice.element);
     list.append(row);
   }
+}
+
+const CHOICE_KEY = "mohona.videoChoice";
+
+function savedChoice(): VideoChoice {
+  try {
+    return cleanChoice(JSON.parse(localStorage.getItem(CHOICE_KEY) ?? "null") as Partial<VideoChoice> | null);
+  } catch {
+    return cleanChoice(null);
+  }
+}
+
+/** Two lists, quality and format, that remember the last choice. */
+function videoPicker(): { element: HTMLElement; value: () => VideoChoice } {
+  const current = savedChoice();
+  const element = document.createElement("div");
+  element.className = "pick";
+  const quality = document.createElement("select");
+  quality.setAttribute("aria-label", t("Quality"));
+  for (const q of QUALITIES) {
+    const option = document.createElement("option");
+    option.value = q;
+    option.textContent = q === "best" ? t("Best available") : q === "audio" ? t("Sound only") : `${q}p`;
+    quality.append(option);
+  }
+  quality.value = current.quality;
+  const format = document.createElement("select");
+  format.setAttribute("aria-label", t("Format"));
+  const fill = (): void => {
+    format.replaceChildren();
+    for (const f of formatsFor(quality.value)) {
+      const option = document.createElement("option");
+      option.value = f;
+      option.textContent = f.toUpperCase();
+      format.append(option);
+    }
+    format.value = quality.value === "audio" ? current.audio : current.container;
+  };
+  const value = (): VideoChoice => {
+    const audio = quality.value === "audio";
+    const next = cleanChoice({
+      quality: quality.value,
+      container: audio ? current.container : format.value,
+      audio: audio ? format.value : current.audio,
+    });
+    Object.assign(current, next);
+    try {
+      localStorage.setItem(CHOICE_KEY, JSON.stringify(next));
+    } catch {
+      /* not kept: it is only a convenience */
+    }
+    return next;
+  };
+  quality.addEventListener("change", () => {
+    value();
+    fill();
+  });
+  format.addEventListener("change", value);
+  fill();
+  element.append(quality, format);
+  return { element, value };
 }
 
 function bar(percent: number | null, kind: string): HTMLElement {

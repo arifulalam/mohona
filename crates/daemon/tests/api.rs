@@ -825,6 +825,7 @@ async fn rules_sort_route_and_block_downloads_from_every_door() {
         queue: None,
         files: None,
         video: false,
+        choice: None,
     };
     assert!(matches!(
         client

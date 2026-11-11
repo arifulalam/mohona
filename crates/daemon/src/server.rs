@@ -909,6 +909,7 @@ pub(crate) async fn handle(state: &State, call: Call) -> Response {
             queue,
             files,
             video,
+            choice,
         } => {
             let torrent_files = match files {
                 None => None,
@@ -1041,6 +1042,7 @@ pub(crate) async fn handle(state: &State, call: Call) -> Response {
                 }
                 connections = p.connections;
             }
+            let video_choice = choice;
             request.context = RequestContext {
                 cookies,
                 referrer,
@@ -1049,6 +1051,7 @@ pub(crate) async fn handle(state: &State, call: Call) -> Response {
                 connections,
                 torrent_files,
                 video,
+                video_choice,
                 ..RequestContext::default()
             };
             match manager.add_checked(request).await {

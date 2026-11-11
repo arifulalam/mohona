@@ -16,7 +16,7 @@ mod tlsconfig;
 
 pub use auth::{split_userinfo, Credentials};
 pub use checksum::{hash_file, Algorithm, Checksum};
-pub use context::{ProxyChoice, RequestContext, SshOptions, TlsOptions};
+pub use context::{ProxyChoice, RequestContext, SshOptions, TlsOptions, VideoChoice};
 pub use disposition::filename_from_content_disposition;
 pub use error::{Failure, NetError};
 pub use http::{Body, ClientConfig, HttpClient, Probe};

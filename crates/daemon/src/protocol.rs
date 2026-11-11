@@ -243,6 +243,10 @@ pub enum Call {
         /// The link is a web page whose video is wanted (taken by yt-dlp; no video is an error).
         #[serde(default)]
         video: bool,
+        /// For a video page: quality, format and sound format for this download only
+        /// (default: the saved settings).
+        #[serde(default)]
+        choice: Option<mohona_net::VideoChoice>,
     },
     /// Start the site grabber on a web page (one run at a time; follow it with `GrabStatus`).
     GrabStart {

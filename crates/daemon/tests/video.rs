@@ -61,6 +61,7 @@ async fn add(client: &Client, url: &str) -> Response {
             queue: None,
             files: None,
             video: false,
+            choice: None,
         })
         .await
         .unwrap()
@@ -286,6 +287,7 @@ echo "MOHONA_FILE $folder/A reel.mp4"
             queue: None,
             files: None,
             video: true,
+            choice: None,
         })
         .await
         .unwrap()
@@ -446,5 +448,34 @@ echo "MOHONA_FILE $folder/Song.mp3"
     until(&client, id, "completed").await;
     let args = std::fs::read_to_string(&args_file).unwrap();
     assert!(args.contains("-f ba/b"), "{args}");
+
+    // A choice made for one download beats the saved one (which is still "sound only").
+    let Response::Added { id } = client
+        .call(Call::Add {
+            url: "https://www.youtube.com/watch?v=abc12345680".into(),
+            dest_dir: None,
+            cookies: None,
+            referrer: None,
+            user_agent: None,
+            headers: vec![],
+            sort: false,
+            duplicates: None,
+            queue: None,
+            files: None,
+            video: false,
+            choice: Some(mohona_net::VideoChoice {
+                quality: "480".into(),
+                container: "mp4".into(),
+                audio: "mp3".into(),
+            }),
+        })
+        .await
+        .unwrap()
+    else {
+        panic!()
+    };
+    until(&client, id, "completed").await;
+    let args = std::fs::read_to_string(&args_file).unwrap();
+    assert!(args.contains("height<=480"), "{args}");
     shutdown.notify_one();
 }

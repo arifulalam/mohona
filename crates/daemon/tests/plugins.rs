@@ -78,6 +78,7 @@ async fn add(client: &Client, url: &str) -> Response {
             queue: None,
             files: None,
             video: false,
+            choice: None,
         })
         .await
         .unwrap()

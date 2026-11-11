@@ -264,7 +264,7 @@ pub fn arguments(request: &Request) -> Vec<String> {
         "after_move:MOHONA_FILE %(filepath)s",
         "--no-quiet",
         "-o",
-        "%(title).150B [%(id)s].%(ext)s",
+        "%(title).100B [%(id)s].%(ext)s",
     ]
     .iter()
     .map(|s| (*s).to_string())
@@ -345,6 +345,8 @@ pub fn failure_reason(lines: &[String], has_ffmpeg: bool) -> String {
                 " (there is no video on this page that yt-dlp knows)"
             } else if e.contains("Sign in") || e.contains("confirm you") || e.contains("login") {
                 " (the site wants a signed-in browser: choose your browser in Settings, Tools, so yt-dlp can use its sign-in)"
+            } else if e.contains("Errno 22") || e.contains("Invalid argument") {
+                " (Windows refused the file name or folder: use a shorter, plain download folder, for example C:\\Downloads, and check that it exists)"
             } else if e.to_ascii_lowercase().contains("cookie") {
                 " (close the browser and try again, or choose another browser in Settings, Tools)"
             } else if e.contains("Requested format is not available") {
@@ -595,6 +597,11 @@ mod tests {
                 .contains("signed-in browser")
         );
         assert!(failure_reason(&[], true).contains("without saying why"));
+        assert!(failure_reason(
+            &["ERROR: Unable to download video: [Errno 22] Invalid argument".into()],
+            true
+        )
+        .contains("file name or folder"));
     }
 
     #[test]

@@ -635,6 +635,7 @@ impl Engine {
                     queue,
                     files: None,
                     video: false,
+                    choice: None,
                 })
                 .await
             {
@@ -698,6 +699,7 @@ impl Engine {
                 queue,
                 files,
                 video: false,
+                choice: None,
             })
             .await?
         {

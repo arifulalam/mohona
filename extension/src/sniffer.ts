@@ -13,6 +13,8 @@ export interface Media {
   referrer?: string;
   /** A web page whose video is wanted (the engine asks yt-dlp); there may be none. */
   video?: boolean;
+  /** For a video page: the quality, video format and sound format wanted (see `videochoice.ts`). */
+  choice?: { quality: string; container: string; audio: string };
 }
 
 /** The longest list kept for one tab. */
