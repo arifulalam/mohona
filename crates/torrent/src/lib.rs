@@ -232,8 +232,10 @@ impl Torrents {
                 let mut last = None;
                 let (download_bps, upload_bps) =
                     *self.speed.lock().unwrap_or_else(|e| e.into_inner());
-                for ipv4_only in [false, true] {
-                    let options = SessionOptions {
+                // The DHT has a fixed port: when another program (or another copy of Mohona)
+                // holds it, torrents still work through trackers and peers without it.
+                for (ipv4_only, with_dht) in [(false, true), (true, true), (true, false)] {
+                    let mut options = SessionOptions {
                         ratelimits: librqbit::limits::LimitsConfig {
                             upload_bps,
                             download_bps,
@@ -245,12 +247,15 @@ impl Torrents {
                         ipv4_only,
                         ..SessionOptions::default()
                     };
+                    if !with_dht {
+                        options.dht = None;
+                    }
                     match Session::new_with_opts(self.state_dir.clone(), options).await {
                         Ok(session) => return Ok(session),
                         Err(error) => last = Some(error),
                     }
                 }
-                Err(failed(last.expect("two tries were made")))
+                Err(failed(last.expect("three tries were made")))
             })
             .await
     }
