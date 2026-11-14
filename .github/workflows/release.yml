@@ -55,7 +55,7 @@ jobs:
         run: ./scripts/build-windows.ps1
       - name: Build (Linux and macOS)
         if: runner.os != 'Windows'
-        run: ./scripts/build-unix.sh
+        run: bash ./scripts/build-unix.sh
       - name: Collect the files and write their checksums
         shell: bash
         run: |
