@@ -2,6 +2,19 @@
 
 Build the upload files: `cd extension && npm install && npm run package`. This writes `extension/dist/store/mohona-chromium-<version>.zip` (Chrome Web Store and Edge Add-ons) and `mohona-firefox-<version>.zip` (Firefox Add-ons). The Chromium file has no `key` (the store gives the extension its own id); see "The extension id" below.
 
+## Step by step
+
+**Before any store:** the repository is public, `docs/privacy.md` is reachable on the main branch, and a release exists (the stores' reviewers install the desktop program to test). The release workflow already attaches the upload files: `mohona-chromium-<version>.zip` and `mohona-firefox-<version>.zip` (or build them: `cd extension && npm ci && npm run package`). Store screenshots (1280×800) are in `docs/assets/store/`.
+
+1. **Chrome Web Store.** Register at <https://chrome.google.com/webstore/devconsole> (one-time fee). *New item* → upload the Chromium zip → fill the listing from "Store listing text" below, the permission reasons from "Why each permission", and the privacy tab (single purpose; declare Web history and Website content as handled locally, nothing sold or shared) → add `docs/privacy.md`'s address → submit for review (a few days; broad host access gets a longer review, so keep the permission table accurate).
+2. **Edge Add-ons.** Register at <https://partner.microsoft.com/dashboard/microsoftedge> (free). *Create new extension* → the same Chromium zip and the same text → submit.
+3. **Firefox Add-ons.** Sign in at <https://addons.mozilla.org/developers/> → *Submit a New Add-on* → *On this site* → upload the Firefox zip → when asked for source code, upload `git archive` of the repository and say: *Node 22, `cd extension && npm ci && npm run package`* → submit. Firefox keeps the fixed id from `identity.json`; set an address you own there **before** the first upload.
+4. **Register the store's extension id with the host.** Chrome and Edge each assign an id the first time you upload. Add both to `STORE_IDS` in `crates/host/src/register.rs` (the host then accepts the unpacked test id and the store versions), release a new version, and tell users (or run `mohona-host install --extension-id <id1>,<id2>` yourself) to run `mohona-host install --browser all` (the installer does it). Until then the stores' version cannot talk to Mohona. This is the step people forget; do it while the review runs.
+5. **Link the listings.** When each store is live, put its address in `site/index.html` (the "Browser extension" buttons say *coming soon*) and in the guide, section 3.
+6. **Every new version:** raise `version` in `extension/manifest.base.json`, build the zips, upload them to each store (they refuse the same version twice).
+
+Chrome and Edge also let you **sideload** without a store: *Load unpacked* with the folder from Mohona's Settings → Browsers (the pinned test id is registered by default).
+
 ## The extension id (read before the first upload)
 
 The host only accepts the extension with the id it was registered for (`CHROMIUM_ID` in `crates/host/src/register.rs`, `identity.json`). A store assigns **its own** id to the listing, and it will differ from the test id used while developing. After the first upload:

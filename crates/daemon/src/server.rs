@@ -56,6 +56,62 @@ struct GrabJob {
     error: Option<String>,
 }
 
+/// "Install now": the installer of the newest release, checked, then started.
+async fn install_update(manager: &Manager) -> Response {
+    let repo = update_repo(manager).await;
+    if repo.is_empty() {
+        return error("no repository is set; give it as owner/name first");
+    }
+    let client = match mohona_net::HttpClient::new(&mohona_net::ClientConfig::default()) {
+        Ok(c) => c,
+        Err(e) => return error(e),
+    };
+    let api = std::env::var("MOHONA_UPDATE_API").unwrap_or_else(|_| crate::update::API.into());
+    let release = match crate::update::latest(&client, &api, &repo).await {
+        Ok(r) => r,
+        Err(message) => return Response::Error { message },
+    };
+    if !crate::update::is_newer(env!("CARGO_PKG_VERSION"), &release.version) {
+        return error("this is already the newest version");
+    }
+    let Some((installer, sum)) =
+        crate::update::installer_for(&release.assets, std::env::consts::OS)
+    else {
+        return error(
+            "this release has no installer for this computer; open the release page instead",
+        );
+    };
+    let Some(sum) = sum else {
+        return error("the release has no checksum file for its installer, so it is not installed");
+    };
+    let expected = match crate::update::fetch_text(&client, &sum.url).await {
+        Ok(text) => crate::update::parse_checksum(&text, &installer.name),
+        Err(e) => return error(format!("could not read the checksum: {e}")),
+    };
+    let Some(expected) = expected else {
+        return error("the checksum file could not be read, so the installer is not run");
+    };
+    let folder = std::env::temp_dir().join(format!("mohona-update-{}", release.version));
+    let path = match crate::update::download_verified(
+        &client,
+        &installer.url,
+        &folder,
+        &installer.name,
+        &expected,
+    )
+    .await
+    {
+        Ok(p) => p,
+        Err(e) => return error(e),
+    };
+    match crate::update::launch_installer(&path) {
+        Ok(()) => Response::Installing {
+            version: release.version,
+        },
+        Err(e) => error(e),
+    }
+}
+
 /// The chosen repository: the default until one is saved, and nothing when it was emptied.
 async fn update_repo(manager: &Manager) -> String {
     manager
@@ -1383,6 +1439,7 @@ pub(crate) async fn handle(state: &State, call: Call) -> Response {
                 Err(message) => Response::Error { message },
             }
         }
+        Call::InstallUpdate => install_update(manager).await,
         Call::GetScan => scan_setting(manager).await,
         Call::SetScan { mode, command } => {
             let mode = mode.trim().to_ascii_lowercase();

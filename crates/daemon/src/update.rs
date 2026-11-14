@@ -1,9 +1,11 @@
 //! Looking for a newer Mohona on GitHub Releases.
 //!
-//! Mohona only *looks*: it asks GitHub for the latest release of one
-//! repository (the person's setting, `owner/repo`), compares version numbers,
-//! and gives the release page's address. Installing is the person's step, from
-//! that page; nothing is downloaded or run by this.
+//! Mohona asks GitHub for the latest release of one repository (the person's
+//! setting, `owner/repo`), compares version numbers, and gives the release
+//! page's address. Installing is a separate step the person starts ("Install
+//! now"): the installer of the release is downloaded, checked against the
+//! checksum file published beside it (no checksum, no install), and only then
+//! run. Only files of that repository's own releases are ever downloaded.
 
 use mohona_net::HttpClient;
 
@@ -23,6 +25,16 @@ pub struct Release {
     pub url: String,
     /// The release notes (cut to a sensible length).
     pub notes: String,
+    /// The files attached to the release (only those that live in the repository's own releases).
+    pub assets: Vec<Asset>,
+}
+
+/// A file attached to a release.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Asset {
+    pub name: String,
+    pub url: String,
+    pub size: u64,
 }
 
 /// `owner/repo` as GitHub names things: letters, digits, `.`, `_`, `-`, one slash.
@@ -92,11 +104,159 @@ pub fn parse_release(json: &str, repo: &str) -> Result<Release, String> {
             str::to_string,
         );
     let notes = value.get("body").and_then(|v| v.as_str()).unwrap_or("");
+    let download_prefix =
+        format!("https://github.com/{repo}/releases/download/").to_ascii_lowercase();
+    let assets = value
+        .get("assets")
+        .and_then(|v| v.as_array())
+        .map(|list| {
+            list.iter()
+                .filter_map(|a| {
+                    let name = a.get("name")?.as_str()?.to_string();
+                    let url = a.get("browser_download_url")?.as_str()?.to_string();
+                    let plain_name = !name.is_empty()
+                        && !name.contains(['/', '\\', ':'])
+                        && name != "."
+                        && name != "..";
+                    (plain_name && url.to_ascii_lowercase().starts_with(&download_prefix)).then(
+                        || Asset {
+                            name,
+                            url,
+                            size: a.get("size").and_then(|v| v.as_u64()).unwrap_or(0),
+                        },
+                    )
+                })
+                .collect()
+        })
+        .unwrap_or_default();
     Ok(Release {
         version: tag.trim().trim_start_matches(['v', 'V']).to_string(),
         url,
         notes: notes.chars().take(2000).collect(),
+        assets,
     })
+}
+
+/// The installer for this computer, and its checksum file, if the release has them.
+/// Only Windows installs by itself (the NSIS "setup" program); other systems get `None`.
+pub fn installer_for<'a>(assets: &'a [Asset], os: &str) -> Option<(&'a Asset, Option<&'a Asset>)> {
+    let installer = match os {
+        "windows" => assets.iter().find(|a| {
+            let n = a.name.to_ascii_lowercase();
+            n.ends_with(".exe") && n.contains("setup")
+        }),
+        _ => None,
+    }?;
+    let wanted = format!("{}.sha256", installer.name.to_ascii_lowercase());
+    let sum = assets
+        .iter()
+        .find(|a| a.name.to_ascii_lowercase() == wanted);
+    Some((installer, sum))
+}
+
+/// The hash for `file` from a checksum file: `hash  name`, `hash *name`, or just the hash.
+/// Lower-case hex of 64 characters, or `None`.
+pub fn parse_checksum(text: &str, file: &str) -> Option<String> {
+    let valid = |h: &str| h.len() == 64 && h.chars().all(|c| c.is_ascii_hexdigit());
+    let mut only = None;
+    for line in text.lines().map(str::trim).filter(|l| !l.is_empty()) {
+        let mut parts = line.splitn(2, char::is_whitespace);
+        let hash = parts.next()?;
+        if !valid(hash) {
+            continue;
+        }
+        match parts.next().map(|n| n.trim().trim_start_matches('*')) {
+            Some(name) if name.eq_ignore_ascii_case(file) => {
+                return Some(hash.to_ascii_lowercase())
+            }
+            Some(_) => {}
+            None => only = Some(hash.to_ascii_lowercase()),
+        }
+    }
+    only
+}
+
+/// Reads a small text file (a checksum) from the web.
+pub async fn fetch_text(client: &HttpClient, url: &str) -> Result<String, String> {
+    let mut body = client.get(url).await.map_err(|e| e.to_string())?;
+    let mut data = Vec::new();
+    while let Some(chunk) = body.chunk().await.map_err(|e| e.to_string())? {
+        data.extend_from_slice(&chunk);
+        if data.len() > 1 << 16 {
+            return Err("the checksum file is too big".into());
+        }
+    }
+    Ok(String::from_utf8_lossy(&data).into_owned())
+}
+
+/// Downloads `url` into `folder/name` and checks its SHA-256 against `expected` (lower-case hex).
+/// A file that does not match is deleted. Returns the file's path.
+pub async fn download_verified(
+    client: &HttpClient,
+    url: &str,
+    folder: &std::path::Path,
+    name: &str,
+    expected: &str,
+) -> Result<std::path::PathBuf, String> {
+    use sha2::{Digest, Sha256};
+    use std::io::Write;
+    std::fs::create_dir_all(folder).map_err(|e| e.to_string())?;
+    let path = folder.join(name);
+    let mut file = std::fs::File::create(&path).map_err(|e| e.to_string())?;
+    let mut body = client.get(url).await.map_err(|e| e.to_string())?;
+    let mut hasher = Sha256::new();
+    let mut total = 0u64;
+    let result: Result<(), String> = async {
+        while let Some(chunk) = body.chunk().await.map_err(|e| e.to_string())? {
+            total += chunk.len() as u64;
+            if total > 1 << 30 {
+                return Err("the installer is bigger than 1 GiB".to_string());
+            }
+            hasher.update(&chunk);
+            file.write_all(&chunk).map_err(|e| e.to_string())?;
+        }
+        file.flush().map_err(|e| e.to_string())
+    }
+    .await;
+    drop(file);
+    if let Err(e) = result {
+        let _ = std::fs::remove_file(&path);
+        return Err(e);
+    }
+    let got: String = hasher
+        .finalize()
+        .iter()
+        .map(|b| format!("{b:02x}"))
+        .collect();
+    if got != expected.to_ascii_lowercase() {
+        let _ = std::fs::remove_file(&path);
+        return Err(
+            "the downloaded installer does not match its checksum, so it was deleted".into(),
+        );
+    }
+    Ok(path)
+}
+
+/// Starts the installer in the background so that it can replace this program. Windows only.
+/// The flags are the ones the installer understands: passive (small progress window), update
+/// (keep the settings) and relaunch (start Mohona again when done).
+pub fn launch_installer(path: &std::path::Path) -> Result<(), String> {
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+        const DETACHED: u32 = 0x0000_0008 | 0x0000_0200;
+        std::process::Command::new(path)
+            .args(["/P", "/R", "/UPDATE"])
+            .creation_flags(DETACHED)
+            .spawn()
+            .map(|_| ())
+            .map_err(|e| format!("could not start the installer: {e}"))
+    }
+    #[cfg(not(windows))]
+    {
+        let _ = path;
+        Err("installing by itself only works on Windows; open the release page instead".into())
+    }
 }
 
 /// Asks `api` (GitHub) for the latest release of `repo`.
@@ -172,5 +332,38 @@ mod tests {
         assert!(parse_release(r#"{"message":"Not Found"}"#, "o/r").is_err());
         assert!(parse_release(r#"{"tag_name":"nightly"}"#, "o/r").is_err());
         assert!(parse_release("<html>", "o/r").is_err());
+    }
+
+    #[test]
+    fn only_the_repositorys_own_release_files_are_offered() {
+        let json = r#"{"tag_name":"v1.4.0","assets":[
+          {"name":"Mohona_1.4.0_x64-setup.exe","browser_download_url":"https://github.com/o/r/releases/download/v1.4.0/Mohona_1.4.0_x64-setup.exe","size":9},
+          {"name":"Mohona_1.4.0_x64-setup.exe.sha256","browser_download_url":"https://github.com/o/r/releases/download/v1.4.0/Mohona_1.4.0_x64-setup.exe.sha256","size":90},
+          {"name":"evil.exe","browser_download_url":"https://evil.test/evil-setup.exe","size":1},
+          {"name":"..\\x-setup.exe","browser_download_url":"https://github.com/o/r/releases/download/v1.4.0/x","size":1},
+          {"name":"other.exe","browser_download_url":"https://github.com/p/q/releases/download/v1/other.exe","size":1}]}"#;
+        let r = parse_release(json, "o/r").unwrap();
+        assert_eq!(r.assets.len(), 2);
+        let (installer, sum) = installer_for(&r.assets, "windows").unwrap();
+        assert_eq!(installer.name, "Mohona_1.4.0_x64-setup.exe");
+        assert_eq!(sum.unwrap().name, "Mohona_1.4.0_x64-setup.exe.sha256");
+        assert!(installer_for(&r.assets, "linux").is_none());
+    }
+
+    #[test]
+    fn a_checksum_is_read_in_the_usual_layouts() {
+        let h = "ab".repeat(32);
+        assert_eq!(
+            parse_checksum(&format!("{h}  a.exe\n"), "a.exe"),
+            Some(h.clone())
+        );
+        assert_eq!(
+            parse_checksum(&format!("{h} *A.EXE"), "a.exe"),
+            Some(h.clone())
+        );
+        assert_eq!(parse_checksum(&h, "a.exe"), Some(h.clone()));
+        assert_eq!(parse_checksum(&format!("{h}  other.exe"), "a.exe"), None);
+        assert_eq!(parse_checksum("not a hash  a.exe", "a.exe"), None);
+        assert_eq!(parse_checksum(&"AB".repeat(32), "a.exe"), Some(h));
     }
 }

@@ -896,3 +896,17 @@ The floating button on a video page now shows the same quality and format lists 
 - file gone: "Downloaded before, but the file is no longer in its folder. Download it again?" with Download again (the add is repeated with `duplicates: overwrite`);
 - failed or cancelled: the same offer; still running: plain words.
 Show in folder on a file that is gone opens the folder it was in. A pasted Google Drive folder link is listed (Drive's embedded folder view) and its files go into a folder of the same name, instead of one file named after the last part of the address.
+
+## ADR-0089: Version 0.1.0, a new icon, and the extension inside the installer
+
+- Every number moved from 0.0.1 to 0.1.0 (workspace, internal dependencies, app, extension, lock files).
+- The icon (`docs/assets/mohona-icon.svg`, `app/src-tauri/icons/`, `extension/static/icons/`, `site/`): the person's own design, a white download arrow dropping into layered teal waves on deep blue, rendered to every size. "Mohona" means the mouth of a river, where many streams meet the sea; the waves say that, the arrow says download.
+- `scripts/build-windows.ps1` now also builds the extension and the installer carries it in `extension\chromium` and `extension\firefox` next to `mohona.exe`. Browsers do not allow an installer to switch an extension on by itself (only a store listing can do that), so Settings → Browsers has two buttons that open the folder; the person loads it once with Developer mode → Load unpacked. A store listing is the way to remove that step later.
+
+## ADR-0090: Releases for every desktop system, a guide, a README
+
+- `.github/workflows/release.yml` (replaces `installer.yml`) builds on a tag `v*`: Windows (NSIS setup), Linux (`.deb`, `.AppImage`), macOS Apple silicon and Intel (`.dmg`), plus the extension store zips, writes `<file>.sha256` for each (the format "Install now" reads, ADR-0085) and a combined `SHA256SUMS.txt`, and makes a **draft** release for a person to check and publish.
+- `scripts/build-unix.sh` and `tauri.bundle.{linux,macos}.conf.json`: the engine and host are Tauri sidecars (`externalBin`), so they sit next to the app program, where `find_program` looks. The Windows path is unchanged.
+- "Install now" stays Windows only; macOS and Linux open the release page. Reason: the Windows installer is silent and per user; the other formats need a password or a signature the project does not have.
+- iOS and Android: not built. The app starts the engine as a program and talks to browsers through native messaging; neither exists there. The web companion is the phone story.
+- `docs/GUIDE.md` (install, window, extension, command line, video, updates, trouble), `docs/BUILDING.md`, a new `README.md`; store steps added to `docs/store.md`; store screenshots in `docs/assets/store/`. The screenshots of the window come from the app's own interface running in its demo mode (the title bar says so).

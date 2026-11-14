@@ -69,3 +69,5 @@ desktop.ini
 
 # Programs copied in for the installer (scripts/build-windows.ps1)
 app/src-tauri/resources/*.exe
+app/src-tauri/resources/extension/
+app/src-tauri/binaries/

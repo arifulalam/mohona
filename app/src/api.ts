@@ -39,7 +39,9 @@ function tauriApi(): Api {
     update: () => call<UpdateInfo>("get_update"),
     setUpdateRepo: (repo) => call<UpdateInfo>("set_update_repo", { repo }),
     checkUpdate: () => call<UpdateInfo>("check_update"),
+    installUpdate: () => call<string>("install_update"),
     openReleasePage: (url) => call<void>("open_release_page", { url }),
+    openExtensionFolder: (browser) => call<void>("open_extension_folder", { browser }),
     setDropTarget: (on) => call<void>("set_drop_target", { on }),
     showMain: () => call<void>("show_main"),
     startup: () => call<Startup>("get_startup"),
@@ -82,11 +84,16 @@ function tauriApi(): Api {
 /** A pretend engine, so the window can be tried in a browser. */
 export function demoApi(tick = 1000): Api {
   let running = false;
-  let next = 4;
+  let next = 9;
   let rows: Row[] = [
     demoRow(1, "ubuntu-24.04-desktop-amd64.iso", "downloading", 3_100_000_000, 6_200_000_000, 8_400_000),
     demoRow(2, "lecture-07.mp4", "paused", 120_000_000, 480_000_000, 0),
     demoRow(3, "dataset.zip", "completed", 52_000_000, 52_000_000, 0),
+    demoRow(4, "Folk Tune - Audio Jukebox [x7Qe2.mp4]", "downloading", 88_000_000, 210_000_000, 3_600_000),
+    demoRow(5, "design-handbook.pdf", "completed", 18_400_000, 18_400_000, 0),
+    demoRow(6, "Big.Buck.Bunny.1080p.torrent", "downloading", 410_000_000, 1_100_000_000, 12_800_000),
+    demoRow(7, "setup-visual-studio-code.exe", "completed", 96_000_000, 96_000_000, 0),
+    demoRow(8, "podcast-episode-42.mp3", "queued", 0, 64_000_000, 0),
   ];
   setInterval(() => {
     if (!running) return;
@@ -103,6 +110,10 @@ export function demoApi(tick = 1000): Api {
   let cats: Category[] = [
     { id: 1, name: "Compressed", extensions: ["zip", "rar", "7z"], folder: null },
     { id: 2, name: "Video", extensions: ["mp4", "mkv", "webm"], folder: null },
+    { id: 3, name: "Music", extensions: ["mp3", "flac", "m4a"], folder: null },
+    { id: 4, name: "Documents", extensions: ["pdf", "docx", "txt"], folder: null },
+    { id: 5, name: "Programs", extensions: ["exe", "msi", "iso"], folder: null },
+    { id: 6, name: "Torrents", extensions: ["torrent"], folder: null },
   ];
   let nextCat = 10;
   let queueList: Queue[] = [{ id: 1, name: "Main", maxActive: 4, speedLimit: null, windows: [], openNow: true }];
@@ -218,10 +229,12 @@ let demoScan: ScanSetting = { mode: "off", command: "", defender: null };
     setTorrentSpeed: async (s) => ((demoSpeed = { downKb: s.downKb || null, upKb: s.upKb || null }), { ...demoSpeed }),
     seeding: async () => (need(), { ...demoSeeding }),
     setSeeding: async (s) => ((demoSeeding = { ratio: s.ratio || null, minutes: s.minutes || null }), { ...demoSeeding }),
-    update: async () => (need(), { repo: "", current: "0.0.1", latest: null, newer: false, url: null, notes: null }),
-    setUpdateRepo: async (repo) => ({ repo, current: "0.0.1", latest: null, newer: false, url: null, notes: null }),
+    update: async () => (need(), { repo: "", current: "0.1.0", latest: null, newer: false, url: null, notes: null, installable: false }),
+    setUpdateRepo: async (repo) => ({ repo, current: "0.1.0", latest: null, newer: false, url: null, notes: null, installable: false }),
     checkUpdate: async () => { throw new Error("The demo cannot look for updates."); },
+    installUpdate: async () => "0.2.0",
     openReleasePage: async () => undefined,
+    openExtensionFolder: async () => undefined,
     setDropTarget: async () => undefined,
     showMain: async () => undefined,
     startup: async () => (need(), demoStartup),

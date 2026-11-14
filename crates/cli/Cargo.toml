@@ -18,12 +18,12 @@ path = "src/main.rs"
 [dependencies]
 chrono = { version = "0.4", default-features = false, features = ["clock", "std"] }
 clap.workspace = true
-mohona-core = { version = "0.0.1", path = "../core" }
-mohona-daemon = { version = "0.0.1", path = "../daemon" }
-mohona-manager = { version = "0.0.1", path = "../manager" }
-mohona-media = { version = "0.0.1", path = "../media" }
-mohona-net = { version = "0.0.1", path = "../net" }
-mohona-store = { version = "0.0.1", path = "../store" }
+mohona-core = { version = "0.1.0", path = "../core" }
+mohona-daemon = { version = "0.1.0", path = "../daemon" }
+mohona-manager = { version = "0.1.0", path = "../manager" }
+mohona-media = { version = "0.1.0", path = "../media" }
+mohona-net = { version = "0.1.0", path = "../net" }
+mohona-store = { version = "0.1.0", path = "../store" }
 tokio.workspace = true
 url = "2"
 

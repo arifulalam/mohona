@@ -165,3 +165,61 @@ async fn a_newer_release_is_reported_and_nothing_else_is_asked() {
     }
     shutdown.notify_one();
 }
+
+#[tokio::test]
+async fn an_installer_is_kept_only_when_it_matches_its_checksum() {
+    use mohona_daemon::update::{download_verified, parse_checksum};
+    use sha2::{Digest, Sha256};
+    let content = b"pretend this is an installer".to_vec();
+    let server = TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let addr = server.local_addr().unwrap();
+    let served = content.clone();
+    tokio::spawn(async move {
+        loop {
+            let (mut socket, _) = server.accept().await.unwrap();
+            let served = served.clone();
+            tokio::spawn(async move {
+                let mut buffer = vec![0u8; 4096];
+                let _ = socket.read(&mut buffer).await;
+                let head = format!(
+                    "HTTP/1.1 200 OK\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
+                    served.len()
+                );
+                let _ = socket.write_all(head.as_bytes()).await;
+                let _ = socket.write_all(&served).await;
+                let _ = socket.shutdown().await;
+            });
+        }
+    });
+    let client = HttpClient::new(&ClientConfig {
+        use_system_proxy: false,
+        ..ClientConfig::default()
+    })
+    .unwrap();
+    let dir = tempfile::tempdir().unwrap();
+    let url = format!("http://{addr}/setup.exe");
+    let good: String = Sha256::digest(&content)
+        .iter()
+        .map(|b| format!("{b:02x}"))
+        .collect();
+    let listed = parse_checksum(
+        &format!("{}  setup.exe\n", good.to_uppercase()),
+        "setup.exe",
+    )
+    .unwrap();
+
+    let path = download_verified(&client, &url, dir.path(), "setup.exe", &listed)
+        .await
+        .unwrap();
+    assert_eq!(std::fs::read(&path).unwrap(), content);
+
+    let bad = "0".repeat(64);
+    let error = download_verified(&client, &url, dir.path(), "setup2.exe", &bad)
+        .await
+        .unwrap_err();
+    assert!(error.contains("does not match"), "{error}");
+    assert!(
+        !dir.path().join("setup2.exe").exists(),
+        "a file that does not match is deleted"
+    );
+}

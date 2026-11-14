@@ -186,3 +186,14 @@ Passing tests need no report; a short "A and B all passed, C1 to C7 passed" is e
 1. Download a video from the floating button, then press the button again: it says "Already downloaded." with Open and Show in folder, both working.
 2. Delete the file, press again: the warning with Download again; the button fetches it anew.
 3. In the app press Add, paste a public Google Drive folder link: a folder with that name appears in the download folder, with the files in it (subfolders too).
+
+### C48 Extension inside the installer, new icon
+1. After installing, Settings → Browsers → "Folder for Chrome, Edge, Brave" opens `…\extension\chromium`. Load it with Developer mode → Load unpacked; the popup and the button on videos work.
+2. The new icon shows in the installer, the taskbar, the tray, the window and the extension's toolbar button.
+3. Settings shows version 0.1.0 under Check for updates.
+
+### C49 Release workflow (on GitHub)
+1. Push a tag `v0.1.0`. In Actions → Release: five jobs (Windows, Linux, macOS ×2, extension) and "Publish the release" go green.
+2. The draft release has the setup `.exe`, `.deb`, `.AppImage`, two `.dmg`, two store zips, a `.sha256` for each and `SHA256SUMS.txt`.
+3. Publish it; the landing page's Download section lists the files; on an older install, *Check for updates* finds it and *Install now* installs it.
+4. If a Linux or macOS job fails, open its log: the first run on a new system usually needs a small fix (a package name, a path).

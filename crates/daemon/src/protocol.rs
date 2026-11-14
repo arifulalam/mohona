@@ -132,6 +132,9 @@ pub enum Call {
     },
     /// Ask GitHub whether a newer version exists (answered as `Update`).
     CheckUpdate,
+    /// Download the newer version's installer, check it against the release's checksum and start
+    /// it (answered as `Installing`; Windows only). The app should close itself afterwards.
+    InstallUpdate,
     /// How finished downloads are scanned for viruses (answered as `Scan`).
     GetScan,
     /// Choose it: `mode` is `off`, `defender` (Windows Defender) or `custom` (the program and
@@ -546,6 +549,10 @@ pub enum Response {
         newer: bool,
         url: Option<String>,
         notes: Option<String>,
+    },
+    /// The installer of version `version` was checked and started.
+    Installing {
+        version: String,
     },
     /// The virus scan setting.
     Scan {

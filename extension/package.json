@@ -1,6 +1,6 @@
 {
   "name": "mohona-extension",
-  "version": "0.0.1",
+  "version": "0.1.0",
   "private": true,
   "description": "Browser extension for the Mohona download manager",
   "license": "MIT OR Apache-2.0",

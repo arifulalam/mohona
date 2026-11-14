@@ -259,7 +259,11 @@ export interface Api {
   update(): Promise<UpdateInfo>;
   setUpdateRepo(repo: string): Promise<UpdateInfo>;
   checkUpdate(): Promise<UpdateInfo>;
+  /** Downloads, checks and starts the installer of the newest version (Windows); the app then closes. */
+  installUpdate(): Promise<string>;
   openReleasePage(url: string): Promise<void>;
+  /** Opens the folder of the extension that came with the installer. */
+  openExtensionFolder(browser: "chromium" | "firefox"): Promise<void>;
   /** Shows or hides the small drop target window. */
   setDropTarget(on: boolean): Promise<void>;
   /** Brings the main window to the front. */
@@ -327,6 +331,8 @@ export interface UpdateInfo {
   newer: boolean;
   url: string | null;
   notes: string | null;
+  /** Can this computer install the new version by itself (Windows), or only open its page? */
+  installable: boolean;
 }
 
 /** The speed limits of all torrents together, in KB/s (null: no limit). */

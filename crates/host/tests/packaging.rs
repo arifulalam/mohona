@@ -17,7 +17,10 @@ fn the_installer_ships_what_the_build_script_copies_and_the_hooks_call_real_comm
         serde_json::from_str(&text("app/src-tauri/tauri.bundle.conf.json")).unwrap();
     let resources = bundle["bundle"]["resources"].as_object().unwrap();
     let script = text("scripts/build-windows.ps1");
-    for (from, to) in resources {
+    // The browser extension travels as a folder; the script builds and copies both browsers' folders.
+    assert_eq!(resources["resources/extension/"], "extension/");
+    assert!(script.contains("dist\\chromium") && script.contains("dist\\firefox"));
+    for (from, to) in resources.iter().filter(|(from, _)| from.ends_with(".exe")) {
         let to = to.as_str().unwrap();
         assert!(
             from.starts_with("resources/") && from.ends_with(".exe"),
@@ -31,6 +34,7 @@ fn the_installer_ships_what_the_build_script_copies_and_the_hooks_call_real_comm
         );
     }
     let names: Vec<&str> = resources.values().filter_map(|v| v.as_str()).collect();
+    assert!(names.contains(&"extension/"));
     assert!(names.contains(&"mohona.exe") && names.contains(&"mohona-host.exe"));
     assert_eq!(
         bundle["bundle"]["windows"]["nsis"]["installMode"],

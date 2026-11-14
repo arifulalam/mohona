@@ -136,6 +136,20 @@ export function SettingsDialog({ api, onClose, clipboard, onClipboard }: { api: 
           <fieldset className="m-0 flex flex-col gap-3 border-0 p-0">
             <legend className="mb-1 font-semibold">{t("Browsers")}</legend>
             <small className="muted">{t("Shared with the Mohona extension in every browser.")}</small>
+            <div className="flex flex-col gap-2 rounded-lg border p-3" style={{ borderColor: "var(--line)" }}>
+              <strong>{t("Add the extension to your browser")}</strong>
+              <small className="muted">
+                {t("Open its folder, then on the browser's extensions page turn on Developer mode, choose Load unpacked and pick that folder.")}
+              </small>
+              <div className="flex flex-wrap gap-2">
+                <button type="button" onClick={() => void api.openExtensionFolder("chromium").catch((e: Error) => setError(e.message))}>
+                  {t("Folder for Chrome, Edge, Brave")}
+                </button>
+                <button type="button" onClick={() => void api.openExtensionFolder("firefox").catch((e: Error) => setError(e.message))}>
+                  {t("Folder for Firefox")}
+                </button>
+              </div>
+            </div>
             <Check label={t("Take over downloads from the browser")} value={ext.intercept} onChange={(v) => setExt({ ...ext, intercept: v })} />
             <Check label={t("Show a download button on videos")} value={ext.videoButton} onChange={(v) => setExt({ ...ext, videoButton: v })} />
             <Check label={t("Renew expired download links by themselves")} value={ext.autoRefresh} onChange={(v) => setExt({ ...ext, autoRefresh: v })} />

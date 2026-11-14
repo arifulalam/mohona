@@ -2265,6 +2265,7 @@ fn settle_video_path(reported: PathBuf, dest: &std::path::Path) -> PathBuf {
     found.map_or(path, |(_, p)| p)
 }
 
+#[allow(clippy::too_many_arguments)]
 async fn run_video(
     choice: mohona_media::ytdlp::Choice,
     ytdlp: Option<PathBuf>,

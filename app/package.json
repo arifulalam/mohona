@@ -1,6 +1,6 @@
 {
   "name": "mohona-app",
-  "version": "0.0.1",
+  "version": "0.1.0",
   "private": true,
   "description": "The Mohona desktop app",
   "license": "MIT OR Apache-2.0",

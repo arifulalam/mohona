@@ -31,7 +31,7 @@ function fake(initial: Row[], running = true) {
   let polls = 0;
   let grab: GrabState = { state: "idle", pages: 0, found: 0, current: "", files: [], skippedByRobots: 0, failedPages: 0, note: null, error: null };
   let browser: string | null = null;
-  let updating: UpdateInfo = { repo: "", current: "0.0.1", latest: null, newer: false, url: null, notes: null };
+  let updating: UpdateInfo = { repo: "", current: "0.1.0", latest: null, newer: false, url: null, notes: null, installable: false };
   let shared = [{ id: 7, name: "Album", total: 2_000_000, uploaded: 500_000, seconds: 60 }];
   let vformat: VideoFormat = { quality: "best", container: "mp4", audio: "mp3" };
   let started: Startup = { available: true, enabled: false };
@@ -82,8 +82,10 @@ function fake(initial: Row[], running = true) {
     setSeeding: vi.fn(async (s: { ratio: number | null; minutes: number | null }) => (seeding = { ratio: s.ratio, minutes: s.minutes })),
     update: vi.fn(async () => updating),
     setUpdateRepo: vi.fn(async (repo: string) => (updating = { ...updating, repo, latest: null, newer: false, url: null })),
-    checkUpdate: vi.fn(async () => (updating = { ...updating, latest: "0.2.0", newer: true, url: "https://github.com/o/r/releases/tag/v0.2.0" })),
+    checkUpdate: vi.fn(async () => (updating = { ...updating, latest: "0.2.0", newer: true, url: "https://github.com/o/r/releases/tag/v0.2.0", installable: true })),
+    installUpdate: vi.fn(async () => "0.2.0"),
     openReleasePage: vi.fn(async () => undefined),
+    openExtensionFolder: vi.fn(async () => undefined),
     setDropTarget: vi.fn(async () => undefined),
     showMain: vi.fn(async () => undefined),
     startup: vi.fn(async () => started),
@@ -300,13 +302,16 @@ describe("App", () => {
     const api = fake([]);
     render(<App api={api} every={50} />);
     const dialog = await openGroup("General");
-    expect(await within(dialog).findByText("This is version 0.0.1.")).toBeTruthy();
+    expect(await within(dialog).findByText("This is version 0.1.0.")).toBeTruthy();
     expect((within(dialog).getByRole("button", { name: "Check for updates" }) as HTMLButtonElement).disabled).toBe(true);
     await userEvent.type(within(dialog).getByLabelText("GitHub repository"), "o/r");
     await userEvent.click(within(dialog).getByRole("button", { name: "Save" }));
     await waitFor(() => expect(api.setUpdateRepo).toHaveBeenCalledWith("o/r"));
     await userEvent.click(await within(dialog).findByRole("button", { name: "Check for updates" }));
     expect(await within(dialog).findByText("A newer version is out: 0.2.0")).toBeTruthy();
+    await userEvent.click(within(dialog).getByRole("button", { name: "Install now" }));
+    await waitFor(() => expect(api.installUpdate).toHaveBeenCalled());
+    expect(await within(dialog).findByText(/Installing 0\.2\.0/)).toBeTruthy();
     await userEvent.click(within(dialog).getByRole("button", { name: "Open the release page" }));
     expect(api.openReleasePage).toHaveBeenCalledWith("https://github.com/o/r/releases/tag/v0.2.0");
   });

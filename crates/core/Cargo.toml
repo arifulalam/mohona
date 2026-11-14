@@ -14,8 +14,8 @@ rust-version.workspace = true
 [dependencies]
 aes = "0.8"
 cbc = { version = "0.1", features = ["alloc"] }
-mohona-media = { version = "0.0.1", path = "../media" }
-mohona-net = { version = "0.0.1", path = "../net" }
+mohona-media = { version = "0.1.0", path = "../media" }
+mohona-net = { version = "0.1.0", path = "../net" }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 thiserror = "2.0.21"

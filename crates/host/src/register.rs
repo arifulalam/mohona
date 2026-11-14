@@ -19,6 +19,11 @@ pub const HOST_NAME: &str = "org.mohona.host";
 /// in the extension checks that the two agree.
 pub const CHROMIUM_ID: &str = "iflnmaneimjgoibmpcmlkllhjccebbhj";
 
+/// The ids the Chrome Web Store and Edge Add-ons gave the published extension (they differ from
+/// the test id above). Fill in after the first upload (docs/store.md, step 4); the host then
+/// accepts the store versions as well as the unpacked one.
+pub const STORE_IDS: &[&str] = &[];
+
 /// The Firefox add-on id the extension will carry (Firefox identifies
 /// extensions by this id, Chromium browsers by a key-derived one).
 pub const FIREFOX_ID: &str = "mohona@mohona.local";

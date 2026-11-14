@@ -1,0 +1,9 @@
+{
+  "bundle": {
+    "targets": ["deb", "appimage"],
+    "externalBin": ["binaries/mohona", "binaries/mohona-host"],
+    "resources": {
+      "resources/extension/": "extension/"
+    }
+  }
+}

@@ -4,12 +4,13 @@ import type { Api, UpdateInfo } from "./types";
 
 const field = "rounded-md border border-[var(--line)] bg-[var(--bg)] px-2 py-1";
 
-/** Looking for a newer Mohona on GitHub Releases. Mohona only looks; the person installs from the page. */
+/** Looking for a newer Mohona on GitHub Releases; on Windows it can also install it (checked against the release's checksum). */
 export function UpdateSection({ api }: { api: Api }) {
   const t = useT();
   const [info, setInfo] = useState<UpdateInfo | null>(null);
   const [repo, setRepo] = useState("");
   const [busy, setBusy] = useState(false);
+  const [started, setStarted] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -46,7 +47,7 @@ export function UpdateSection({ api }: { api: Api }) {
     <section aria-label={t("Updates")} className="rounded-lg border border-[var(--line)] p-3">
       <strong>{t("Updates")}</strong>
       <p className="my-1 text-sm text-[var(--muted)]">
-        {t("Mohona can look on GitHub for a newer version. It only looks: you install it yourself from the release page.")}
+        {t("Mohona looks on GitHub for a newer version. On Windows it can install it for you; elsewhere it opens the release page.")}
       </p>
       <p className="my-1 text-sm">{t("This is version {v}.", { v: info.current })}</p>
       <div className="flex flex-wrap items-center gap-2">
@@ -77,13 +78,31 @@ export function UpdateSection({ api }: { api: Api }) {
       {info.latest && info.newer && (
         <div role="status" className="my-1 text-sm">
           <strong>{t("A newer version is out: {v}", { v: info.latest })}</strong>
-          {info.url && (
-            <div className="mt-1">
+          <div className="mt-1 flex flex-wrap gap-2">
+            {info.installable && (
+              <button
+                type="button"
+                disabled={busy}
+                onClick={() => {
+                  setBusy(true);
+                  setError(null);
+                  api
+                    .installUpdate()
+                    .then((v) => setStarted(v))
+                    .catch((e: Error) => setError(e.message))
+                    .finally(() => setBusy(false));
+                }}
+              >
+                {t("Install now")}
+              </button>
+            )}
+            {info.url && (
               <button type="button" onClick={() => void api.openReleasePage(info.url!).catch((e: Error) => setError(e.message))}>
                 {t("Open the release page")}
               </button>
-            </div>
-          )}
+            )}
+          </div>
+          {started && <p className="my-1">{t("Installing {v}. Mohona will close and start again by itself.", { v: started })}</p>}
         </div>
       )}
     </section>

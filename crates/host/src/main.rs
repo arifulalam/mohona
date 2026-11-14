@@ -49,22 +49,36 @@ fn manage(command: &str, args: &[String]) -> Result<(), String> {
     match command {
         "install" => {
             let host = std::env::current_exe().map_err(|e| e.to_string())?;
-            let chromium_id = option(args, "--extension-id")
+            // `--extension-id a,b` (or MOHONA_EXTENSION_ID) replaces the built-in ids.
+            let given = option(args, "--extension-id")
                 .and_then(|p| p.to_str().map(str::to_string))
-                .or_else(|| std::env::var("MOHONA_EXTENSION_ID").ok())
-                .unwrap_or_else(|| register::CHROMIUM_ID.to_string());
-            if !register::valid_chromium_id(&chromium_id) {
+                .or_else(|| std::env::var("MOHONA_EXTENSION_ID").ok());
+            let chromium_ids: Vec<String> = match given {
+                Some(list) => list
+                    .split(',')
+                    .map(|id| id.trim().to_string())
+                    .filter(|id| !id.is_empty())
+                    .collect(),
+                None => std::iter::once(register::CHROMIUM_ID)
+                    .chain(register::STORE_IDS.iter().copied())
+                    .map(str::to_string)
+                    .collect(),
+            };
+            if let Some(bad) = chromium_ids
+                .iter()
+                .find(|id| !register::valid_chromium_id(id))
+            {
                 return Err(format!(
-                    "\"{chromium_id}\" is not an extension id (32 letters, a to p; see chrome://extensions)"
+                    "\"{bad}\" is not an extension id (32 letters, a to p; see chrome://extensions)"
                 ));
             }
             for browser in browsers {
-                let allowed = if browser == Browser::Firefox {
-                    register::FIREFOX_ID.to_string()
+                let allowed: Vec<String> = if browser == Browser::Firefox {
+                    vec![register::FIREFOX_ID.to_string()]
                 } else {
-                    chromium_id.clone()
+                    chromium_ids.clone()
                 };
-                let done = register::install(&places, browser, &host, &[allowed])
+                let done = register::install(&places, browser, &host, &allowed)
                     .map_err(|e| format!("{}: {e}", browser.name()))?;
                 println!(
                     "{}: registered ({})",

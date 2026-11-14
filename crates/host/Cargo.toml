@@ -16,13 +16,13 @@ name = "mohona-host"
 path = "src/main.rs"
 
 [dependencies]
-mohona-daemon = { version = "0.0.1", path = "../daemon" }
-mohona-net = { version = "0.0.1", path = "../net" }
+mohona-daemon = { version = "0.1.0", path = "../daemon" }
+mohona-net = { version = "0.1.0", path = "../net" }
 serde_json = "1"
 tokio.workspace = true
 
 [dev-dependencies]
-mohona-manager = { version = "0.0.1", path = "../manager" }
-mohona-store = { version = "0.0.1", path = "../store" }
+mohona-manager = { version = "0.1.0", path = "../manager" }
+mohona-store = { version = "0.1.0", path = "../store" }
 mohona-testserver = { path = "../../tools/testserver" }
 tempfile = "3"

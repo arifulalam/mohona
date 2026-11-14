@@ -1033,6 +1033,17 @@ impl Engine {
         update_answer(self.call(Call::CheckUpdate).await?)
     }
 
+    /// "Install now": downloads the newest version's installer, checks it against the checksum
+    /// published with it and starts it. Returns the version being installed; the app should close
+    /// itself so the installer can replace it. Windows only.
+    pub async fn install_update(&self) -> Result<String, AppError> {
+        match self.call(Call::InstallUpdate).await? {
+            Response::Installing { version } => Ok(version),
+            Response::Error { message } => Err(AppError::Engine(message)),
+            _ => Err(AppError::Engine("unexpected answer from the engine".into())),
+        }
+    }
+
     /// How finished downloads are scanned for viruses.
     pub async fn scan(&self) -> Result<ScanSetting, AppError> {
         scan_answer(self.call(Call::GetScan).await?)
@@ -1459,6 +1470,8 @@ pub struct UpdateInfo {
     pub newer: bool,
     pub url: Option<String>,
     pub notes: Option<String>,
+    /// Can this computer install the new version by itself (Windows), or only open the page?
+    pub installable: bool,
 }
 
 fn update_answer(answer: Response) -> Result<UpdateInfo, AppError> {
@@ -1477,6 +1490,7 @@ fn update_answer(answer: Response) -> Result<UpdateInfo, AppError> {
             newer,
             url,
             notes,
+            installable: cfg!(windows),
         }),
         Response::Error { message } => Err(AppError::Engine(message)),
         _ => Err(AppError::Engine("unexpected answer from the engine".into())),

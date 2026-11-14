@@ -311,6 +311,19 @@ async fn check_update(app: State<'_, App>) -> Result<mohona_appcore::UpdateInfo>
     app.engine.check_update().await
 }
 
+/// "Install now": the engine downloads and checks the installer and starts it; then this app
+/// closes so the installer can replace it (and starts it again when it is done).
+#[tauri::command]
+async fn install_update(app: State<'_, App>, handle: AppHandle) -> Result<String> {
+    let version = app.engine.install_update().await?;
+    let closing = handle.clone();
+    tauri::async_runtime::spawn(async move {
+        tokio::time::sleep(std::time::Duration::from_millis(1500)).await;
+        closing.exit(0);
+    });
+    Ok(version)
+}
+
 /// Opens a page of the chosen repository in the browser; no other address is ever opened.
 #[tauri::command]
 async fn open_release_page(app: State<'_, App>, handle: AppHandle, url: String) -> Result<()> {
@@ -321,6 +334,31 @@ async fn open_release_page(app: State<'_, App>, handle: AppHandle, url: String) 
     handle
         .opener()
         .open_url(url, None::<&str>)
+        .map_err(|e| AppError::Engine(e.to_string()))
+}
+
+/// Opens the folder holding the browser extension that came with the installer ("chromium" for
+/// Chrome, Edge, Brave and Opera; "firefox" for Firefox). No other folder can be named.
+#[tauri::command]
+fn open_extension_folder(handle: AppHandle, browser: String) -> Result<()> {
+    let name = match browser.as_str() {
+        "chromium" | "firefox" => browser.as_str(),
+        _ => return Err(AppError::Input("unknown browser".into())),
+    };
+    let folder = handle
+        .path()
+        .resource_dir()
+        .map_err(|e| AppError::Engine(e.to_string()))?
+        .join("extension")
+        .join(name);
+    if !folder.is_dir() {
+        return Err(AppError::Input(
+            "this copy of Mohona came without the browser extension".into(),
+        ));
+    }
+    handle
+        .opener()
+        .open_path(folder.to_string_lossy(), None::<&str>)
         .map_err(|e| AppError::Engine(e.to_string()))
 }
 
@@ -635,6 +673,8 @@ pub fn run() {
         })
         .invoke_handler(tauri::generate_handler![
             engine_status,
+            install_update,
+            open_extension_folder,
             start_engine,
             list_downloads,
             add_download,
