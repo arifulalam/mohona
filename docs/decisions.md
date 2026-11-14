@@ -910,3 +910,12 @@ Show in folder on a file that is gone opens the folder it was in. A pasted Googl
 - "Install now" stays Windows only; macOS and Linux open the release page. Reason: the Windows installer is silent and per user; the other formats need a password or a signature the project does not have.
 - iOS and Android: not built. The app starts the engine as a program and talks to browsers through native messaging; neither exists there. The web companion is the phone story.
 - `docs/GUIDE.md` (install, window, extension, command line, video, updates, trouble), `docs/BUILDING.md`, a new `README.md`; store steps added to `docs/store.md`; store screenshots in `docs/assets/store/`. The screenshots of the window come from the app's own interface running in its demo mode (the title bar says so).
+
+## ADR-0091 Landing page: 14 languages, location default, tide footer
+
+- `site/i18n/<lang>.json` (150 keys each; ar bn de en es fr hi id ja pt ru tr ur zh). `data-i18n` attributes in `index.html`; `app.js` swaps text, sets `lang`/`dir` (RTL for ar, ur) and the page title and description. English is loaded first as the base, so a missing key falls back to English.
+- Language choice, in order: saved choice (picker) > `?lang=xx` > time zone (an `ZONES` table, e.g. Asia/Dhaka → bn, Asia/Tokyo → ja) > browser language > English. No network lookup and no IP address: privacy first, and it works offline.
+- The name is shown in the reader's own script (`_native`: মোহনা, मोहना, موہنا, موهونا, 莫霍纳, モホナ, Мохона; Latin "Mohona" elsewhere) with a "Say it" line, so anyone can pronounce it.
+- Hero: animated stream canvas (lines flowing into a river mouth, like the icon), drifting glows and three moving wave layers. Respects `prefers-reduced-motion`.
+- Footer: looping tide/beach video (`tide.webm`, `tide.mp4`, poster `tide-poster.jpg`, about 0.6 MB in all), muted, plays inline; the poster shows when motion is reduced. Credit bar: "Prompted and planned by Ariful Alam" (syncmachine.com) and "crafted by Claude" (claude.ai).
+- Claude is credited in README and by a `Co-authored-by: Claude <noreply@anthropic.com>` commit trailer. It is not a GitHub collaborator or a crates.io owner (both need a human account), and not in `authors`.

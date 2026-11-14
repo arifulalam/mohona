@@ -26,3 +26,7 @@ The crate names `mohona` and the `mohona-*` ones must be yours on crates.io; `mo
 ## After a mistake
 
 `cargo yank --version 0.1.0 mohona` stops new projects from picking that version; fix, raise the version and publish again.
+
+## Crediting Claude
+
+GitHub lists a co-author when a commit message ends with a blank line and `Co-authored-by: Claude <noreply@anthropic.com>`. Claude cannot be added as a repository collaborator, and crates.io owners must be real accounts, so on crates.io credit Claude in the README only; keep `authors` as you.

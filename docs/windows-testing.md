@@ -197,3 +197,6 @@ Passing tests need no report; a short "A and B all passed, C1 to C7 passed" is e
 2. The draft release has the setup `.exe`, `.deb`, `.AppImage`, two `.dmg`, two store zips, a `.sha256` for each and `SHA256SUMS.txt`.
 3. Publish it; the landing page's Download section lists the files; on an older install, *Check for updates* finds it and *Install now* installs it.
 4. If a Linux or macOS job fails, open its log: the first run on a new system usually needs a small fix (a package name, a path).
+
+### C50 Landing page languages (any browser)
+Open `site/index.html` through a local server (`python -m http.server` in `site`). 1. The language picker shows your location's language, or English if there is none. 2. Pick each language: text changes, the name shows in that script, Arabic and Urdu flip right to left. 3. `?lang=bn` works and the choice is kept after reload. 4. The hero streams and waves move; the footer tide video plays; both credit links open.

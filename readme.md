@@ -90,6 +90,10 @@ You need [Rust](https://rustup.rs) and Node.js 22. `cargo test --workspace` test
 
 Issues and pull requests are welcome. Before a pull request: `cargo fmt --all`, `cargo clippy --workspace --all-targets -- -D warnings`, `cargo test --workspace`, and in `app/` and `extension/` `npm test`. Translations: [docs/translating.md](docs/translating.md).
 
+## Credits
+
+Prompted and planned by [Ariful Alam](https://syncmachine.com), crafted with [Claude](https://claude.ai) (Anthropic). Commits made with Claude carry a `Co-authored-by: Claude <noreply@anthropic.com>` trailer.
+
 ## Licence
 
 MIT or Apache-2.0, at your option.

@@ -3,8 +3,8 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Mohona — the free, open-source download manager</title>
-<meta name="description" content="Mohona (মোহনা) is a free, open-source download manager: many connections per file, resume after anything, browser extension, video and audio from YouTube and more, torrents, queues, 13 languages and 11 themes.">
+<title data-i18n="meta_title">Mohona — the free, open-source download manager</title>
+<meta name="description" id="meta-desc" content="Mohona is a free, open-source download manager: many connections per file, resume after anything, browser extension, video and audio from YouTube and more, torrents, queues, 13 languages and 11 themes.">
 <link rel="icon" type="image/png" href="favicon.png">
 <meta property="og:title" content="Mohona — an estuary for your downloads">
 <meta property="og:description" content="Free, open-source download manager with a browser extension, video grabber, torrents and a command line.">
@@ -18,165 +18,180 @@
   <div class="wrap bar">
     <a class="brand" href="#top"><img src="icon.svg" alt="" width="32" height="32"> Mohona</a>
     <nav class="links" aria-label="Main">
-      <a class="hide-s" href="#name">The name</a>
-      <a class="hide-s" href="#features">Features</a>
-      <a class="hide-s" href="#why">Why Mohona</a>
-      <a class="hide-s" href="#screens">Screenshots</a>
-      <a href="#download">Download</a>
-      <a class="hide-s" href="https://github.com/arifulalam/mohona/blob/main/docs/GUIDE.md">Guide</a>
+      <a class="hide-s" href="#name" data-i18n="nav_name">The name</a>
+      <a class="hide-s" href="#features" data-i18n="nav_features">Features</a>
+      <a class="hide-s" href="#why" data-i18n="nav_why">Why Mohona</a>
+      <a class="hide-s" href="#screens" data-i18n="nav_screens">Screenshots</a>
+      <a href="#download" data-i18n="nav_download">Download</a>
+      <a class="hide-s" href="https://github.com/arifulalam/mohona/blob/main/docs/GUIDE.md" data-i18n="nav_guide">Guide</a>
+      <select id="lang" class="theme-pick" aria-label="Language"></select>
       <select id="theme" class="theme-pick" aria-label="Colour theme"></select>
-      <a href="https://github.com/arifulalam/mohona" aria-label="Mohona on GitHub">GitHub</a>
+      <a href="https://github.com/arifulalam/mohona" aria-label="Mohona on GitHub" data-i18n="ft_gh">GitHub</a>
     </nav>
   </div>
 </header>
 
 <main id="top">
 <div class="hero">
+  <canvas id="streams" aria-hidden="true"></canvas>
+  <div class="glow g1"></div><div class="glow g2"></div>
   <div class="wrap grid">
     <div>
-      <h1>Mohona<small>মোহনা — an estuary for your downloads</small></h1>
-      <p>Every stream — files, videos, torrents, browser downloads — flows into one fast, friendly place. Free and open source, for Windows, macOS and Linux.</p>
+      <h1>Mohona<small><span class="native">মোহনা</span> — <span data-i18n="tagline">an estuary for your downloads</span></small></h1>
+      <p data-i18n="hero_p">Every stream — files, videos, torrents, browser downloads — flows into one fast, friendly place. Free and open source, for Windows, macOS and Linux.</p>
       <div class="cta">
-        <a id="hero-dl" class="btn primary" href="https://github.com/arifulalam/mohona/releases/latest">⬇ Download Mohona</a>
-        <a class="btn ghost" href="https://github.com/arifulalam/mohona">★ View on GitHub</a>
+        <a id="hero-dl" class="btn primary" href="https://github.com/arifulalam/mohona/releases/latest" data-i18n="hero_dl">⬇ Download Mohona</a>
+        <a class="btn ghost" href="https://github.com/arifulalam/mohona" data-i18n="hero_gh">★ View on GitHub</a>
       </div>
-      <div class="note" id="hero-note">Free forever · no account · no ads · no tracking</div>
+      <div class="note" id="hero-note" data-i18n="hero_note">Free forever · no account · no ads · no tracking</div>
     </div>
     <div class="frame shot reveal">
       <div class="chrome"><i></i><i></i><i></i></div>
       <img id="hero-shot" src="shots/main-river.webp" width="1280" height="800" alt="Mohona's download list">
     </div>
   </div>
-  <svg class="waves" viewBox="0 0 1440 90" preserveAspectRatio="none" aria-hidden="true"><path d="M0 50 C240 10 420 90 720 50 S1200 10 1440 52 V90 H0Z" fill="var(--bg)" opacity=".5"/><path d="M0 66 C260 30 460 96 760 64 S1220 36 1440 70 V90 H0Z" fill="var(--bg)"/></svg>
+  <svg class="waves" viewBox="0 0 1440 160" preserveAspectRatio="none" aria-hidden="true">
+    <g class="w w1"><path d="M0 70 C240 20 480 120 720 70 S1200 20 1440 70 S1920 120 2160 70 S2640 20 2880 70 V160 H0Z" fill="#1796AB" opacity=".55"/></g>
+    <g class="w w2"><path d="M0 90 C240 50 480 130 720 90 S1200 50 1440 90 S1920 130 2160 90 S2640 50 2880 90 V160 H0Z" fill="#2FB8BE" opacity=".6"/></g>
+    <g class="w w3"><path d="M0 112 C240 82 480 142 720 112 S1200 82 1440 112 S1920 142 2160 112 S2640 82 2880 112 V160 H0Z" fill="var(--bg)"/></g>
+  </svg>
   <div class="hero-pad"></div>
 </div>
 
 <section class="strip"><div class="wrap">
-  <div class="stat"><b>32</b><span>connections per file</span></div>
-  <div class="stat"><b>13</b><span>languages</span></div>
-  <div class="stat"><b>11</b><span>colour themes</span></div>
-  <div class="stat"><b>0</b><span>ads, accounts, tracking</span></div>
+  <div class="stat"><b>32</b><span data-i18n="stat1">connections per file</span></div>
+  <div class="stat"><b>13</b><span data-i18n="stat2">languages</span></div>
+  <div class="stat"><b>11</b><span data-i18n="stat3">colour themes</span></div>
+  <div class="stat"><b>0</b><span data-i18n="stat4">ads, accounts, tracking</span></div>
 </div></section>
 
 <section id="name" class="name"><div class="wrap grid">
   <div class="reveal">
-    <div class="eyebrow">The name</div>
-    <div class="bn" lang="bn">মোহনা</div>
-    <h2 style="margin:6px 0 14px">Where many streams meet the sea</h2>
-    <p class="lead">In Bengali, <em>mohona</em> is the mouth of a river — the estuary where tributaries gather and flow out together. A download manager does the same thing.</p>
+    <div class="eyebrow" data-i18n="nav_name">The name</div>
+    <div class="bn native">মোহনা</div>
+    <div class="say"><span data-i18n="say">Say it: mo-ho-na</span> · <span class="orig" lang="bn" title="Bengali">মোহনা</span></div>
+    <h2 style="margin:6px 0 14px" data-i18n="name_h">Where many streams meet the sea</h2>
+    <p class="lead" data-i18n="name_lead">In Bengali, <em>mohona</em> is the mouth of a river — the estuary where tributaries gather and flow out together. A download manager does the same thing.</p>
     <ul>
-      <li><b>Many streams, one file.</b> Mohona opens several connections to a server and joins the pieces, like tributaries into one river.</li>
-      <li><b>One place for everything.</b> Browser downloads, videos, torrents, cloud links and streams all arrive in the same list.</li>
-      <li><b>Always moving on.</b> A river never stops at an obstacle. Interrupted downloads resume, expired links renew, failed parts retry.</li>
-      <li><b>Easy to say, anywhere.</b> Four letters in Latin script, three in Bengali: mo-ho-na.</li>
+      <li data-i18n="name_b1"><b>Many streams, one file.</b> Mohona opens several connections to a server and joins the pieces, like tributaries into one river.</li>
+      <li data-i18n="name_b2"><b>One place for everything.</b> Browser downloads, videos, torrents, cloud links and streams all arrive in the same list.</li>
+      <li data-i18n="name_b3"><b>Always moving on.</b> A river never stops at an obstacle. Interrupted downloads resume, expired links renew, failed parts retry.</li>
+      <li data-i18n="name_b4"><b>Easy to say, anywhere.</b> Four letters in Latin script, three in Bengali: mo-ho-na.</li>
     </ul>
   </div>
   <div class="iconbox reveal"><img src="icon.svg" alt="The Mohona icon: a download arrow dropping into flowing water" width="320" height="320"></div>
 </div></section>
 
 <section id="features"><div class="wrap">
-  <div class="eyebrow">Features</div>
-  <h2>Everything a classic download manager does — and more</h2>
-  <p class="lead">Built from scratch in Rust for speed and safety, with a clean desktop app, a browser extension and a full command line.</p>
+  <div class="eyebrow" data-i18n="nav_features">Features</div>
+  <h2 data-i18n="feat_h">Everything a classic download manager does — and more</h2>
+  <p class="lead" data-i18n="feat_lead">Built from scratch in Rust for speed and safety, with a clean desktop app, a browser extension and a full command line.</p>
   <div class="cards">
-    <div class="card reveal"><div class="ic">⚡</div><h3>Faster downloads</h3><p>Splits each file over up to 32 connections, measures the server, and keeps only the connections that really help.</p></div>
-    <div class="card reveal"><div class="ic">🔁</div><h3>Resume after anything</h3><p>Crash, power cut, dropped Wi-Fi: run it again and it continues. A download is never corrupted, and expired links are renewed from their page.</p></div>
-    <div class="card reveal"><div class="ic">🧩</div><h3>Browser extension</h3><p>Takes over downloads in Chrome, Edge, Brave and Firefox, adds a button on videos, and saves files only your browser holds.</p></div>
-    <div class="card reveal"><div class="ic">🎬</div><h3>Video and audio from the web</h3><p>YouTube, Vimeo and a thousand more sites. Choose quality, MP4/MKV/WebM/MOV/AVI — or sound only as MP3, M4A, OGG, FLAC or WAV.</p></div>
-    <div class="card reveal"><div class="ic">🧲</div><h3>Torrents and magnets</h3><p>Look inside first, download only the files you want, set speed limits, and decide how long to keep sharing.</p></div>
-    <div class="card reveal"><div class="ic">☁️</div><h3>Cloud links and folders</h3><p>Google Drive, Dropbox, OneDrive and GitHub share links become real downloads — Drive folders arrive as folders.</p></div>
-    <div class="card reveal"><div class="ic">🕸️</div><h3>Site Grabber</h3><p>List, filter and download the files a web page and the pages it links to offer, politely and with robots.txt respected.</p></div>
-    <div class="card reveal"><div class="ic">🗓️</div><h3>Queues and scheduler</h3><p>Limit how many run at once, set speed caps, run only at night, and shut down when everything is done.</p></div>
-    <div class="card reveal"><div class="ic">🗂️</div><h3>Categories and rules</h3><p>Sort finished files into folders by type, and write rules: when a download matches this, do that.</p></div>
-    <div class="card reveal"><div class="ic">🛡️</div><h3>Safe by design</h3><p>Checksum verification, a virus scan after each download (Windows Defender or your own program), and private windows are never touched.</p></div>
-    <div class="card reveal"><div class="ic">🌐</div><h3>Many protocols</h3><p>HTTP(S), FTP/FTPS, SFTP, WebDAV, HLS and DASH streams, proxies and logins, multiple mirrors for one file.</p></div>
-    <div class="card reveal"><div class="ic">🖥️</div><h3>Desktop, CLI and API</h3><p>A tidy tray app, a scriptable <code>mohona</code> command, a local API with OpenAPI, and a web companion for your phone.</p></div>
-    <div class="card reveal"><div class="ic">🎨</div><h3>11 themes, 13 languages</h3><p>Light, dark and nine colourful themes; English, বাংলা, हिन्दी, اردو, العربية, 中文, 日本語 and more.</p></div>
-    <div class="card reveal"><div class="ic">🔄</div><h3>Stays up to date</h3><p>Checks GitHub Releases for a newer version and can install it for you with one click, after verifying its checksum.</p></div>
+    <div class="card reveal"><div class="ic">⚡</div><h3 data-i18n="f1_t">Faster downloads</h3><p data-i18n="f1_d">Splits each file over up to 32 connections, measures the server, and keeps only the connections that really help.</p></div>
+    <div class="card reveal"><div class="ic">🔁</div><h3 data-i18n="f2_t">Resume after anything</h3><p data-i18n="f2_d">Crash, power cut, dropped Wi-Fi: run it again and it continues. A download is never corrupted, and expired links are renewed from their page.</p></div>
+    <div class="card reveal"><div class="ic">🧩</div><h3 data-i18n="f3_t">Browser extension</h3><p data-i18n="f3_d">Takes over downloads in Chrome, Edge, Brave and Firefox, adds a button on videos, and saves files only your browser holds.</p></div>
+    <div class="card reveal"><div class="ic">🎬</div><h3 data-i18n="f4_t">Video and audio from the web</h3><p data-i18n="f4_d">YouTube, Vimeo and a thousand more sites. Choose quality, MP4/MKV/WebM/MOV/AVI — or sound only as MP3, M4A, OGG, FLAC or WAV.</p></div>
+    <div class="card reveal"><div class="ic">🧲</div><h3 data-i18n="f5_t">Torrents and magnets</h3><p data-i18n="f5_d">Look inside first, download only the files you want, set speed limits, and decide how long to keep sharing.</p></div>
+    <div class="card reveal"><div class="ic">☁️</div><h3 data-i18n="f6_t">Cloud links and folders</h3><p data-i18n="f6_d">Google Drive, Dropbox, OneDrive and GitHub share links become real downloads — Drive folders arrive as folders.</p></div>
+    <div class="card reveal"><div class="ic">🕸️</div><h3 data-i18n="f7_t">Site Grabber</h3><p data-i18n="f7_d">List, filter and download the files a web page and the pages it links to offer, politely and with robots.txt respected.</p></div>
+    <div class="card reveal"><div class="ic">🗓️</div><h3 data-i18n="f8_t">Queues and scheduler</h3><p data-i18n="f8_d">Limit how many run at once, set speed caps, run only at night, and shut down when everything is done.</p></div>
+    <div class="card reveal"><div class="ic">🗂️</div><h3 data-i18n="f9_t">Categories and rules</h3><p data-i18n="f9_d">Sort finished files into folders by type, and write rules: when a download matches this, do that.</p></div>
+    <div class="card reveal"><div class="ic">🛡️</div><h3 data-i18n="f10_t">Safe by design</h3><p data-i18n="f10_d">Checksum verification, a virus scan after each download (Windows Defender or your own program), and private windows are never touched.</p></div>
+    <div class="card reveal"><div class="ic">🌐</div><h3 data-i18n="f11_t">Many protocols</h3><p data-i18n="f11_d">HTTP(S), FTP/FTPS, SFTP, WebDAV, HLS and DASH streams, proxies and logins, multiple mirrors for one file.</p></div>
+    <div class="card reveal"><div class="ic">🖥️</div><h3 data-i18n="f12_t">Desktop, CLI and API</h3><p data-i18n="f12_d">A tidy tray app, a scriptable <code>mohona</code> command, a local API with OpenAPI, and a web companion for your phone.</p></div>
+    <div class="card reveal"><div class="ic">🎨</div><h3 data-i18n="f13_t">11 themes, 13 languages</h3><p data-i18n="f13_d">Light, dark and nine colourful themes; English, বাংলা, हिन्दी, اردو, العربية, 中文, 日本語 and more.</p></div>
+    <div class="card reveal"><div class="ic">🔄</div><h3 data-i18n="f14_t">Stays up to date</h3><p data-i18n="f14_d">Checks GitHub Releases for a newer version and can install it for you with one click, after verifying its checksum.</p></div>
   </div>
 </div></section>
 
 <section id="why" style="background:var(--panel);border-block:1px solid var(--line)"><div class="wrap">
-  <div class="eyebrow">Why Mohona</div>
-  <h2>Why choose it over another download manager?</h2>
+  <div class="eyebrow" data-i18n="nav_why">Why Mohona</div>
+  <h2 data-i18n="why_h">Why choose it over another download manager?</h2>
   <div class="reasons">
-    <div class="reason reveal"><b>It is free — really.</b><span>No trial, no licence key, no premium tier, no ads. The whole code is open under MIT or Apache-2.0.</span></div>
-    <div class="reason reveal"><b>You can check it.</b><span>Open source means anyone can read what it does. There is no telemetry, and nothing leaves your computer except the downloads you ask for.</span></div>
-    <div class="reason reveal"><b>Modern and safe.</b><span>Written in Rust: no memory bugs of the old kind, small and fast, with the engine separated from the interface.</span></div>
-    <div class="reason reveal"><b>One tool, not five.</b><span>Files, video sites, torrents, cloud folders and streams in one list, with one set of limits and rules.</span></div>
-    <div class="reason reveal"><b>Yours to automate.</b><span>A real command line and local API: script it, schedule it, put it on a server.</span></div>
-    <div class="reason reveal"><b>It speaks your language.</b><span>13 languages including right-to-left ones, and themes for every mood.</span></div>
+    <div class="reason reveal"><b data-i18n="r1_t">It is free — really.</b><span data-i18n="r1_d">No trial, no licence key, no premium tier, no ads. The whole code is open under MIT or Apache-2.0.</span></div>
+    <div class="reason reveal"><b data-i18n="r2_t">You can check it.</b><span data-i18n="r2_d">Open source means anyone can read what it does. There is no telemetry, and nothing leaves your computer except the downloads you ask for.</span></div>
+    <div class="reason reveal"><b data-i18n="r3_t">Modern and safe.</b><span data-i18n="r3_d">Written in Rust: no memory bugs of the old kind, small and fast, with the engine separated from the interface.</span></div>
+    <div class="reason reveal"><b data-i18n="r4_t">One tool, not five.</b><span data-i18n="r4_d">Files, video sites, torrents, cloud folders and streams in one list, with one set of limits and rules.</span></div>
+    <div class="reason reveal"><b data-i18n="r5_t">Yours to automate.</b><span data-i18n="r5_d">A real command line and local API: script it, schedule it, put it on a server.</span></div>
+    <div class="reason reveal"><b data-i18n="r6_t">It speaks your language.</b><span data-i18n="r6_d">13 languages including right-to-left ones, and themes for every mood.</span></div>
   </div>
   <div class="compare reveal">
     <table>
-      <thead><tr><th></th><th class="us">Mohona</th><th>Classic paid manager (e.g. IDM)</th><th>Browser's own downloader</th></tr></thead>
+      <thead><tr><th></th><th class="us">Mohona</th><th data-i18n="c_classic">Classic paid manager (e.g. IDM)</th><th data-i18n="c_browser">Browser's own downloader</th></tr></thead>
       <tbody>
-        <tr><td>Price</td><td class="us"><span class="yes">Free</span></td><td><span class="no">Paid licence after a trial</span></td><td><span class="yes">Free</span></td></tr>
-        <tr><td>Open source</td><td class="us"><span class="yes">Yes</span></td><td><span class="no">No</span></td><td><span class="mid">Partly</span></td></tr>
-        <tr><td>Several connections per file</td><td class="us"><span class="yes">Up to 32, self-tuning</span></td><td><span class="yes">Yes</span></td><td><span class="no">One, as a rule</span></td></tr>
-        <tr><td>Windows, macOS, Linux</td><td class="us"><span class="yes">All three</span><sup>*</sup></td><td><span class="no">Windows only</span></td><td><span class="yes">Yes</span></td></tr>
-        <tr><td>Torrents and magnet links</td><td class="us"><span class="yes">Yes</span></td><td><span class="no">No</span></td><td><span class="no">No</span></td></tr>
-        <tr><td>Video sites with quality and format choice</td><td class="us"><span class="yes">Yes, with sound-only option</span></td><td><span class="mid">Limited grabber</span></td><td><span class="no">No</span></td></tr>
-        <tr><td>Command line and local API</td><td class="us"><span class="yes">Yes</span></td><td><span class="no">No</span></td><td><span class="no">No</span></td></tr>
-        <tr><td>Resumes after crash or expired link</td><td class="us"><span class="yes">Yes</span></td><td><span class="yes">Yes</span></td><td><span class="mid">Sometimes</span></td></tr>
+        <tr><td data-i18n="c_price">Price</td><td class="us"><span class="yes" data-i18n="c_free">Free</span></td><td><span class="no" data-i18n="c_paid">Paid licence after a trial</span></td><td><span class="yes" data-i18n="c_free">Free</span></td></tr>
+        <tr><td data-i18n="c_open">Open source</td><td class="us"><span class="yes" data-i18n="c_yes">Yes</span></td><td><span class="no" data-i18n="c_no">No</span></td><td><span class="mid" data-i18n="c_partly">Partly</span></td></tr>
+        <tr><td data-i18n="c_conn">Several connections per file</td><td class="us"><span class="yes" data-i18n="c_conn_us">Up to 32, self-tuning</span></td><td><span class="yes" data-i18n="c_yes">Yes</span></td><td><span class="no" data-i18n="c_one">One, as a rule</span></td></tr>
+        <tr><td data-i18n="c_os">Windows, macOS, Linux</td><td class="us"><span class="yes" data-i18n="c_os_us">All three<sup>*</sup></span></td><td><span class="no" data-i18n="c_winonly">Windows only</span></td><td><span class="yes" data-i18n="c_yes">Yes</span></td></tr>
+        <tr><td data-i18n="c_torrent">Torrents and magnet links</td><td class="us"><span class="yes" data-i18n="c_yes">Yes</span></td><td><span class="no" data-i18n="c_no">No</span></td><td><span class="no" data-i18n="c_no">No</span></td></tr>
+        <tr><td data-i18n="c_video">Video sites with quality and format choice</td><td class="us"><span class="yes" data-i18n="c_video_us">Yes, with sound-only option</span></td><td><span class="mid" data-i18n="c_limited">Limited grabber</span></td><td><span class="no" data-i18n="c_no">No</span></td></tr>
+        <tr><td data-i18n="c_cli">Command line and local API</td><td class="us"><span class="yes" data-i18n="c_yes">Yes</span></td><td><span class="no" data-i18n="c_no">No</span></td><td><span class="no" data-i18n="c_no">No</span></td></tr>
+        <tr><td data-i18n="c_resume">Resumes after crash or expired link</td><td class="us"><span class="yes" data-i18n="c_yes">Yes</span></td><td><span class="yes" data-i18n="c_yes">Yes</span></td><td><span class="mid" data-i18n="c_sometimes">Sometimes</span></td></tr>
       </tbody>
     </table>
   </div>
-  <p class="fine">* Windows is the first-class, hand-tested platform; Linux and macOS builds are published with every release and are in beta. The comparison is general and from public information — features of other products change, so check them yourself.</p>
+  <p class="fine" data-i18n="why_fine">* Windows is the first-class, hand-tested platform; Linux and macOS builds are published with every release and are in beta. The comparison is general and from public information — features of other products change, so check them yourself.</p>
 </div></section>
 
 <section class="themes" id="themes"><div class="wrap">
-  <div class="eyebrow">Themes</div>
-  <h2>Eleven colour themes — this page wears them too</h2>
-  <p class="lead">Pick one: the page, and the screenshot in the hero, switch to match. The app and the browser extension use the very same themes.</p>
+  <div class="eyebrow" data-i18n="th_eyebrow">Themes</div>
+  <h2 data-i18n="th_h">Eleven colour themes — this page wears them too</h2>
+  <p class="lead" data-i18n="th_lead">Pick one: the page, and the screenshot in the hero, switch to match. The app and the browser extension use the very same themes.</p>
   <div class="swatches" id="swatches" role="group" aria-label="Colour themes"></div>
   <div class="frame reveal"><div class="chrome"><i></i><i></i><i></i></div><img id="theme-shot" src="shots/main-river.webp" alt="Mohona in the selected theme" loading="lazy" width="1280" height="800"></div>
 </div></section>
 
 <section id="screens"><div class="wrap">
-  <div class="eyebrow">Screenshots</div>
-  <h2>A closer look</h2>
+  <div class="eyebrow" data-i18n="nav_screens">Screenshots</div>
+  <h2 data-i18n="sc_h">A closer look</h2>
   <div class="tabs" role="tablist" id="tabs"></div>
   <div class="stage"><div class="frame" id="stage-frame"><div class="chrome"><i></i><i></i><i></i></div><img id="stage-img" alt="" width="1280" height="800"></div><p class="cap" id="stage-cap"></p></div>
 </div></section>
 
 <section id="download" class="dl"><div class="wrap">
-  <div class="eyebrow">Download</div>
+  <div class="eyebrow" data-i18n="nav_download">Download</div>
   <h2>Get Mohona <span id="ver"></span></h2>
-  <p class="lead">Installers for every system, straight from GitHub Releases. Each file comes with a checksum.</p>
-  <div class="assets" id="assets"><a class="asset main" href="https://github.com/arifulalam/mohona/releases/latest"><b>See all downloads</b><span>github.com/arifulalam/mohona/releases</span></a></div>
+  <p class="lead" data-i18n="dl_lead">Installers for every system, straight from GitHub Releases. Each file comes with a checksum.</p>
+  <div class="assets" id="assets"><a class="asset main" href="https://github.com/arifulalam/mohona/releases/latest"><b data-i18n="dl_all">See all downloads</b><span>github.com/arifulalam/mohona/releases</span></a></div>
   <pre>cargo install --git https://github.com/arifulalam/mohona mohona    # the command-line program only</pre>
-  <p class="small" id="dl-note">The Windows installer carries the browser extension too: Settings → Browsers opens its folder. Mohona also checks GitHub for newer versions and can install them for you.</p>
-  <h3 style="margin-top:36px;font-size:1.2rem">Browser extension</h3>
+  <p class="small" id="dl-note" data-i18n="dl_note">The Windows installer carries the browser extension too: Settings → Browsers opens its folder. Mohona also checks GitHub for newer versions and can install them for you.</p>
+  <h3 style="margin-top:36px;font-size:1.2rem" data-i18n="f3_t">Browser extension</h3>
   <div class="stores">
-    <a class="store" href="https://github.com/arifulalam/mohona/blob/main/docs/GUIDE.md#3-the-browser-extension">Chrome / Edge / Brave — load from the installer folder</a>
-    <span class="store">Chrome Web Store — coming soon</span><span class="store">Edge Add-ons — coming soon</span><span class="store">Firefox Add-ons — coming soon</span>
+    <a class="store" href="https://github.com/arifulalam/mohona/blob/main/docs/GUIDE.md#3-the-browser-extension" data-i18n="ext_load">Chrome / Edge / Brave — load from the installer folder</a>
+    <span class="store" data-i18n="ext_cws">Chrome Web Store — coming soon</span><span class="store" data-i18n="ext_edge">Edge Add-ons — coming soon</span><span class="store" data-i18n="ext_ff">Firefox Add-ons — coming soon</span>
   </div>
 </div></section>
 
 <section id="start"><div class="wrap">
-  <div class="eyebrow">Start in 4 steps</div>
-  <h2>From zero to downloading</h2>
+  <div class="eyebrow" data-i18n="st_eyebrow">Start in 4 steps</div>
+  <h2 data-i18n="st_h">From zero to downloading</h2>
   <ol class="steps">
-    <li class="reveal"><b>Install Mohona</b><span>Run the installer. It sets up the app, the tray icon and the browser connection.</span></li>
-    <li class="reveal"><b>Add the extension</b><span>Settings → Browsers → open the extension folder, then Load unpacked in your browser (or use the store when it is live).</span></li>
-    <li class="reveal"><b>Download</b><span>Click any download link, press the button on a video, or paste addresses into <code>+ Add</code>.</span></li>
-    <li class="reveal"><b>Tune it</b><span>Pick a theme and language, set categories, queues and limits. Or use the <code>mohona</code> command.</span></li>
+    <li class="reveal"><b data-i18n="s1_t">Install Mohona</b><span data-i18n="s1_d">Run the installer. It sets up the app, the tray icon and the browser connection.</span></li>
+    <li class="reveal"><b data-i18n="s2_t">Add the extension</b><span data-i18n="s2_d">Settings → Browsers → open the extension folder, then Load unpacked in your browser (or use the store when it is live).</span></li>
+    <li class="reveal"><b data-i18n="nav_download">Download</b><span data-i18n="s3_d">Click any download link, press the button on a video, or paste addresses into <code>+ Add</code>.</span></li>
+    <li class="reveal"><b data-i18n="s4_t">Tune it</b><span data-i18n="s4_d">Pick a theme and language, set categories, queues and limits. Or use the <code>mohona</code> command.</span></li>
   </ol>
-  <p style="margin-top:28px"><a class="btn solid" href="https://github.com/arifulalam/mohona/blob/main/docs/GUIDE.md">Read the full guide →</a></p>
+  <p style="margin-top:28px"><a class="btn solid" href="https://github.com/arifulalam/mohona/blob/main/docs/GUIDE.md" data-i18n="st_guide">Read the full guide →</a></p>
 </div></section>
 </main>
 
-<footer><div class="wrap row">
-  <div><b>Mohona</b> — an estuary for your downloads. MIT or Apache-2.0.</div>
-  <div style="display:flex;gap:20px;flex-wrap:wrap">
-    <a href="https://github.com/arifulalam/mohona">GitHub</a>
-    <a href="https://github.com/arifulalam/mohona/releases">Releases</a>
-    <a href="https://github.com/arifulalam/mohona/blob/main/docs/GUIDE.md">Guide</a>
-    <a href="https://github.com/arifulalam/mohona/blob/main/docs/privacy.md">Privacy</a>
-    <a href="https://github.com/arifulalam/mohona/issues">Report a problem</a>
+<footer class="sea">
+  <video class="tide" autoplay muted loop playsinline preload="metadata" poster="tide-poster.jpg" aria-hidden="true">
+    <source src="tide.webm" type="video/webm"><source src="tide.mp4" type="video/mp4">
+  </video>
+  <div class="shade"></div>
+  <div class="wrap row">
+    <div class="brandline"><img src="icon.svg" alt="" width="40" height="40"><div><b>Mohona</b> — <span data-i18n="ft_tag">an estuary for your downloads. MIT or Apache-2.0.</span></div></div>
+    <div class="flinks">
+      <a href="https://github.com/arifulalam/mohona" data-i18n="ft_gh">GitHub</a>
+      <a href="https://github.com/arifulalam/mohona/releases" data-i18n="ft_rel">Releases</a>
+      <a href="https://github.com/arifulalam/mohona/blob/main/docs/GUIDE.md" data-i18n="nav_guide">Guide</a>
+      <a href="https://github.com/arifulalam/mohona/blob/main/docs/privacy.md" data-i18n="ft_priv">Privacy</a>
+      <a href="https://github.com/arifulalam/mohona/issues" data-i18n="ft_issue">Report a problem</a>
+    </div>
   </div>
-</div></footer>
+  <div class="credit"><div class="wrap"><span data-i18n="credit_prompt">Prompted and planned by</span> <a href="https://syncmachine.com" rel="noopener">Ariful Alam</a> · <span data-i18n="credit_craft">crafted by</span> <a href="https://claude.ai" rel="noopener">Claude</a></div></div>
+</footer>
 <dialog class="lightbox" id="lb"><img alt=""></dialog>
 <script src="app.js"></script>
 </body>
